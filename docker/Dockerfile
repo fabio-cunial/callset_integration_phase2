@@ -116,7 +116,7 @@ RUN pip3 install truvari==${truvari_version} \
     && truvari --help
 
 # BEDTOOLS
-ARG bedtools_version=2.31.1
+ARG bedtools_version=2.31.0
 RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_version}/bedtools.static \
     && mv bedtools.static bedtools \
     && chmod +x bedtools \
