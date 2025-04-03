@@ -39,8 +39,8 @@ task ResolveImpl {
     }
     
     Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB")) ) + ceil(size(reference_fa,"GB")) + 50
-    String docker_dir = "/truvari_intrasample"
-    String work_dir = "/cromwell_root/truvari_intrasample"
+    String docker_dir = "/callset_integration"
+    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -91,7 +91,7 @@ task ResolveImpl {
         File resolved_tbi = work_dir + "/" + sample_id + ".resolved.vcf.gz.tbi"
     }
     runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/aou-lr/truvari_intrasample"
+        docker: "fcunial/callset_integration_phase2_resolve"
         cpu: 1
         memory: "128GB"
         disks: "local-disk " + disk_size_gb + " HDD"
