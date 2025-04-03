@@ -5,6 +5,11 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PAV2SVs.wdl
   testParameterFiles:
+- name: Resolve
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Resolve.wdl
+  testParameterFiles:
 - name: TruvariIntrasample
   subclass: wdl
   publish: True
