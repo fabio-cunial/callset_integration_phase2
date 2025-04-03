@@ -1,0 +1,7 @@
+version: 1.2
+workflows:
+- name: PAV2SVs
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PAV2SVs.wdl
+  testParameterFiles:    
