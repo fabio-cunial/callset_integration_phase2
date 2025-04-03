@@ -166,7 +166,7 @@ task TruvariIntrasampleImpl {
     	File bcftools_merged_idx = "~{work_dir}/~{sample_id}.bcftools_merged.vcf.gz.tbi"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2:latest"
         cpu: 1
         memory: "128GB"
         disks: "local-disk " + disk_size_gb + " HDD"
