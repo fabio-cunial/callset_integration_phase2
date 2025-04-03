@@ -75,12 +75,12 @@ if __name__ == '__main__':
                 n_header.contigs[ctg].remove_header()
     
     out = pysam.VariantFile("/dev/stdout", 'w', header=n_header)
-    seen = set()
+    # seen = set()
     for entry in vcf:
-        key = truvari.entry_to_hash(entry)
-        if key in seen:
-            continue
-        seen.add(key)
+        # key = truvari.entry_to_hash(entry)
+        # if key in seen:
+        #    continue
+        # seen.add(key)
 
         if REF_CLEAN and entry.chrom not in ref.references:
             continue
