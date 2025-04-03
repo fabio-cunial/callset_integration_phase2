@@ -15,23 +15,16 @@ workflow Resolve {
     call ResolveImpl {
         input:
             sample_id = sample_id,
-            pbsv_vcf_gz = pbsv_vcf_gz,
-            pbsv_vcf_gz_tbi = pbsv_vcf_gz_tbi,
-            sniffles_vcf_gz = sniffles_vcf_gz,
-            sniffles_vcf_gz_tbi = sniffles_vcf_gz_tbi,
-            pav_vcf_gz = pav_vcf_gz,
-            pav_vcf_gz_tbi = pav_vcf_gz_tbi,
+            vcf_gz = vcf_gz,
+            vcf_gz_tbi = vcf_gz_tbi,
             reference_fa = reference_fa
     }
     
     output {
-    	File truvari_collapsed = TruvariIntrasampleImpl.truvari_collapsed
-    	File truvari_collapsed_idx = TruvariIntrasampleImpl.truvari_collapsed_idx
-    	File bcftools_merged = TruvariIntrasampleImpl.bcftools_merged
-    	File bcftools_merged_idx = TruvariIntrasampleImpl.bcftools_merged_idx
+    	File resolved_vcf = ResolveImpl.resolved_vcf
+    	File resolved_tbi = ResolveImpl.resolved_tbi
     }
 }
-
 
 
 #
@@ -45,7 +38,7 @@ task ResolveImpl {
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB")) ) + ceil(size(reference_fa,"GB")) ) + 50
+    Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB")) ) + ceil(size(reference_fa,"GB")) + 50
     String docker_dir = "/truvari_intrasample"
     String work_dir = "/cromwell_root/truvari_intrasample"
     
