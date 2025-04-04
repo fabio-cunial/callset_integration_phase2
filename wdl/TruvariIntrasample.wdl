@@ -78,7 +78,7 @@ task TruvariIntrasampleImpl {
         # Pastes the samples together in the order of the preferred genotypes.
         # That is to say, this creates a three sample VCF with sample columns
         # from pbsv, sniffles, pav_sv
-        bcftools merge --threads ${N_THREADS} --merge none --force-samples -O z -o tmp.vcf.gz ~{pbsv_vcf_gz} ~{sniffles_vcf_gz} ~{pav_vcf_gz}
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples -O z -o tmp.vcf.gz ~{pbsv_vcf_gz} ~{sniffles_vcf_gz} ~{pav_vcf_gz}
         tabix -f tmp.vcf.gz
         
         # Step 2 - Removing multiallelic records. We observed that they are
@@ -89,12 +89,13 @@ task TruvariIntrasampleImpl {
         # 2024-03-19 20:52:28,548 [ERROR] line
         # chr4	137168756	pbsv.INS.2751;chr4-137168757-DEL-52	A   ACGTATGTGTATACGTATACATATACGCGTATATACATACGTATACATATACG,A	4	PASS	SVTYPE=INS;SVLEN=52;SVANN=TANDEM;ID=chr4-137168757-DEL-52;TIG_REGION=h2tg007223l:91206-91206;QUERY_STRAND=+;HOM_REF=0,23;HOM_TIG=0,23;INVScore=0.981132;AC=2,1	GT:AD:DP:SAC	1/1:1,8,.:9:1,0,3,5	./.:.:.:.	0|2:.:.:.
         #
-        bcftools norm --multiallelics - --output-type z tmp.vcf.gz > ~{sample_id}.bcftools_merged.vcf.gz
+        ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z tmp.vcf.gz > ~{sample_id}.bcftools_merged.vcf.gz
         tabix -f ~{sample_id}.bcftools_merged.vcf.gz
         rm -f tmp.vcf.gz*
 
         # Step 3 - Collapsing
-        truvari collapse -i ~{sample_id}.bcftools_merged.vcf.gz -c removed.vcf.gz --sizemin 0 --sizemax 1000000 -k maxqual --gt het --intra --pctseq 0.90 --pctsize 0.90 --refdist 500 | bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G -O z -o ~{sample_id}.truvari_collapsed.vcf.gz
+        ${TIME_COMMAND} truvari collapse -i ~{sample_id}.bcftools_merged.vcf.gz -c removed.vcf.gz --sizemin 0 --sizemax 1000000 -k maxqual --gt het --intra --pctseq 0.90 --pctsize 0.90 --refdist 500 --output tmp.vcf
+        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z tmp.vcf > ~{sample_id}.truvari_collapsed.vcf.gz
         tabix -f ~{sample_id}.truvari_collapsed.vcf.gz
     >>>
     
