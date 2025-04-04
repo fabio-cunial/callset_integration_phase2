@@ -13,7 +13,6 @@ workflow TruvariIntrasample {
         File sniffles_vcf_gz_tbi
         File pav_vcf_gz
         File pav_vcf_gz_tbi
-        File reference_fa
         Int ram_size_gb
     }
     parameter_meta {
@@ -28,7 +27,6 @@ workflow TruvariIntrasample {
             sniffles_vcf_gz_tbi = sniffles_vcf_gz_tbi,
             pav_vcf_gz = pav_vcf_gz,
             pav_vcf_gz_tbi = pav_vcf_gz_tbi,
-            reference_fa = reference_fa,
             ram_size_gb = ram_size_gb
     }
     
@@ -55,13 +53,12 @@ task TruvariIntrasampleImpl {
         File sniffles_vcf_gz_tbi
         File pav_vcf_gz
         File pav_vcf_gz_tbi
-        File reference_fa
         Int ram_size_gb
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*( ceil(size(pbsv_vcf_gz,"GB")) + ceil(size(sniffles_vcf_gz,"GB")) + ceil(size(pav_vcf_gz,"GB")) + ceil(size(reference_fa,"GB")) ) + 50
+    Int disk_size_gb = 10*( ceil(size(pbsv_vcf_gz,"GB")) + ceil(size(sniffles_vcf_gz,"GB")) + ceil(size(pav_vcf_gz,"GB")) ) + 50
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
