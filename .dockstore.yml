@@ -15,3 +15,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TruvariIntrasample.wdl
   testParameterFiles:
+- name: Kanpig
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Kanpig.wdl
+  testParameterFiles:
