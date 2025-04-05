@@ -89,7 +89,7 @@ task KanpigImpl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_MEM_GB=$(( ~{ram_size_gb} - 4 ))
+        EFFECTIVE_MEM_GB=$(( ~{ram_size_gb} - 2 ))
         df -h
         
         
