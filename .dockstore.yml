@@ -20,3 +20,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Kanpig.wdl
   testParameterFiles:
+- name: Dipcall2SVs
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Dipcall2SVs.wdl
+  testParameterFiles:
