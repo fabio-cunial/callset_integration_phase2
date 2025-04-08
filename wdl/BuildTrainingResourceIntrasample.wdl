@@ -41,8 +41,8 @@ task BuildTrainingResourceIntrasampleImpl {
     parameter_meta {
     }
     
-    String docker_dir = "/hgsvc2"
-    String work_dir = "/cromwell_root/hgsvc2"
+    String docker_dir = "/callset_integration"
+    String work_dir = "/cromwell_root/callset_integration"
     Int svlen_max = 1000000
     Int ram_gb = 32
     

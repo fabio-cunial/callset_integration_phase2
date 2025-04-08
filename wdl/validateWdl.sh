@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l FilterIntrasampleDevPhase2.wdl
 java -jar ${WOMTOOL_PATH} validate -l Kanpig.wdl
 java -jar ${WOMTOOL_PATH} validate -l TruvariIntrasample.wdl
 java -jar ${WOMTOOL_PATH} validate -l Resolve.wdl
