@@ -17,8 +17,6 @@ workflow FilterIntrasampleDevPhase2 {
     input {
         String sample_name
         
-        File truvari_collapsed_vcf_gz
-        File truvari_collapsed_vcf_gz_tbi
         File regenotyped_vcf_gz
         File regenotyped_vcf_gz_tbi
         
@@ -45,12 +43,8 @@ workflow FilterIntrasampleDevPhase2 {
     call PreprocessVCF {
         input:
             sample_name = sample_name,
-            truvari_collapsed_vcf_gz = truvari_collapsed_vcf_gz,
-            truvari_collapsed_vcf_gz_tbi = truvari_collapsed_vcf_gz_tbi,
             regenotyped_vcf_gz = regenotyped_vcf_gz,
             regenotyped_vcf_gz_tbi = regenotyped_vcf_gz_tbi,
-            training_resource_vcf_gz = training_resource_vcf_gz,
-            training_resource_vcf_gz_tbi = training_resource_vcf_gz_tbi,
             output_prefix = sample_name,
             monitoring_script = monitoring_script
     }
@@ -59,8 +53,8 @@ workflow FilterIntrasampleDevPhase2 {
         input:
             preprocessed_vcf_gz = PreprocessVCF.preprocessed_vcf_gz,
             preprocessed_vcf_gz_tbi = PreprocessVCF.preprocessed_vcf_gz_tbi,
-            preprocessed_training_resource_vcf_gz = PreprocessVCF.preprocessed_training_resource_vcf_gz,
-            preprocessed_training_resource_vcf_gz_tbi = PreprocessVCF.preprocessed_training_resource_vcf_gz_tbi,
+            preprocessed_training_resource_vcf_gz = training_resource_vcf_gz,
+            preprocessed_training_resource_vcf_gz_tbi = training_resource_vcf_gz_tbi,
             training_resource_bed = training_resource_bed,
             monitoring_script = monitoring_script
     }
@@ -123,12 +117,13 @@ workflow FilterIntrasampleDevPhase2 {
 }
 
 
-# Adds to the truvari-collapsed VCF a number of INFO fields whose values are
-# taken from the following FORMAT fields in the kanpig-regenotyped VCF:
+# Adds the following INFO fields to the kanpig VCF (using corresponding
+# FORMAT fields):
 #
 # KS_1, KS_2, SQ, GQ, DP, AD_NON_ALT, AD_ALL
 #
-# and from the following INFO fields in the kanpig-regenotyped VCF:
+# Remark: the kanpig VCF is assumed to already contain the following INFO
+# fields:
 #
 # SUPP_PAV, SUPP_SNIFFLES, SUPP_PBSV
 #
@@ -136,13 +131,8 @@ task PreprocessVCF {
     input {
         String sample_name
         
-        File truvari_collapsed_vcf_gz
-        File truvari_collapsed_vcf_gz_tbi
         File regenotyped_vcf_gz
         File regenotyped_vcf_gz_tbi
-        
-        File training_resource_vcf_gz
-        File training_resource_vcf_gz_tbi
         
         String output_prefix
 
@@ -150,9 +140,6 @@ task PreprocessVCF {
 
         RuntimeAttributes runtime_attributes = {}
     }
-
-    String truvari_collapsed_prefix = basename(truvari_collapsed_vcf_gz, ".vcf.gz")
-    String training_resource_prefix = basename(training_resource_vcf_gz, ".vcf.gz")
 
     command <<<
         set -euxo pipefail
@@ -165,11 +152,7 @@ task PreprocessVCF {
           bash ~{monitoring_script} > monitoring.log &
         fi
 
-        # The training resource is already correct
-        mv ~{training_resource_vcf_gz} ~{training_resource_prefix}.preprocessed.vcf.gz
-        mv ~{training_resource_vcf_gz_tbi} ~{training_resource_prefix}.preprocessed.vcf.gz.tbi
-
-        # Creating supplemental header
+        # Creating new header lines
         touch format.hdr.txt
         for format_annot in SQ GQ DP
         do
@@ -180,19 +163,14 @@ task PreprocessVCF {
         echo '##INFO=<ID=KS_1,Number=1,Type=Integer,Description="Kanpig score 1">' >> format.hdr.txt
         echo '##INFO=<ID=KS_2,Number=1,Type=Integer,Description="Kanpig score 2">' >> format.hdr.txt
         echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="GT converted into an int in {0,1,2}.">' >> format.hdr.txt
-        echo '##INFO=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by PAV">' >> format.hdr.txt
-        echo '##INFO=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by Sniffles2">' >> format.hdr.txt
-        echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> format.hdr.txt
 
         # Ensuring that every record has a unique ID. We need to join by
         # CHROM,POS,ID in what follows, since using CHROM,POS,REF,ALT makes
-        # bcftools annotate segfault.
-        bcftools view --header-only ~{truvari_collapsed_vcf_gz} > tmp.vcf
-        bcftools view --no-header ~{truvari_collapsed_vcf_gz} | awk 'BEGIN { i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }' >> tmp.vcf
-        bgzip --compress-level 1 tmp.vcf
+        # `bcftools annotate` segfault.
+        bcftools view --header-only ~{regenotyped_vcf_gz} > tmp.vcf
+        bcftools view --no-header ~{regenotyped_vcf_gz} | awk 'BEGIN { i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }' | bgzip --compress-level 1 >> tmp.vcf.gz
         tabix -f tmp.vcf.gz
         bcftools view --no-header tmp.vcf.gz | head -n 10 || echo "0"
-        echo 'Annotating ...'
         bcftools query -f '%CHROM\t%POS\t%ID\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' tmp.vcf.gz | awk '{ \
             KS_1=0; KS_2=0; \
             p=0; \
@@ -251,8 +229,6 @@ task PreprocessVCF {
     output {
         File preprocessed_vcf_gz = output_prefix+".vcf.gz"
         File preprocessed_vcf_gz_tbi = output_prefix+".vcf.gz.tbi"
-        File preprocessed_training_resource_vcf_gz = training_resource_prefix+".preprocessed.vcf.gz"
-        File preprocessed_training_resource_vcf_gz_tbi = training_resource_prefix+".preprocessed.vcf.gz.tbi"
         File? monitoring_log = "monitoring.log"
     }
 }
