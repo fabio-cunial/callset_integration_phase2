@@ -168,40 +168,41 @@ task PreprocessVCF {
         # CHROM,POS,ID in what follows, since using CHROM,POS,REF,ALT makes
         # `bcftools annotate` segfault.
         bcftools view --header-only ~{regenotyped_vcf_gz} > tmp.vcf
-        bcftools view --no-header ~{regenotyped_vcf_gz} | awk 'BEGIN { i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }' | bgzip --compress-level 1 >> tmp.vcf.gz
+        bcftools view --no-header ~{regenotyped_vcf_gz} | awk 'BEGIN { i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }' >> tmp.vcf
+        bgzip --compress-level 1 tmp.vcf
         tabix -f tmp.vcf.gz
         bcftools view --no-header tmp.vcf.gz | head -n 10 || echo "0"
         bcftools query -f '%CHROM\t%POS\t%ID\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' tmp.vcf.gz | awk '{ \
-            KS_1=0; KS_2=0; \
+            KS_1=-1; KS_2=-1; \
             p=0; \
             for (i=1; i<=length($4); i++) { \
                 if (substr($4,i,1)==",") { p=i; break; } \
             } \
             if (p==0) { KS_1=$4; KS_2=$4; } \
             else { KS_1=substr($4,1,p-1); KS_2=substr($4,p+1); } \
-            if (KS_1==".") KS_1=0; \
-            if (KS_2==".") KS_2=0; \
+            if (KS_1==".") KS_1=-1; \
+            if (KS_2==".") KS_2=-1; \
             \
             SQ=$5; \
-            if (SQ==".") SQ=0; \
+            if (SQ==".") SQ=-1; \
             \
             GQ=$6; \
-            if (GQ==".") GQ=0; \
+            if (GQ==".") GQ=-1; \
             \
             DP=$7; \
-            if (DP==".") DP=0; \
+            if (DP==".") DP=-1; \
             \
-            AD_NON_ALT=0; AD_ALL=0; \
+            AD_NON_ALT=-1; AD_ALL=1; \
             p=0; \
             for (i=1; i<=length($8); i++) { \
                 if (substr($8,i,1)==",") { p=i; break; } \
             } \
             if (p==0) { AD_NON_ALT=$8; AD_ALL=$8; } \
             else { AD_NON_ALT=substr($8,1,p-1); AD_ALL=substr($8,p+1); } \
-            if (AD_NON_ALT==".") AD_NON_ALT=0; \
-            if (AD_ALL==".") AD_ALL=0; \
+            if (AD_NON_ALT==".") AD_NON_ALT=-1; \
+            if (AD_ALL==".") AD_ALL=-1; \
             \
-            GT_COUNT=0; \
+            GT_COUNT=-1; \
             if ($9=="0/0" || $9=="0|0" || $9=="./."  || $9==".|." || $9=="./0" || $9==".|0" || $9=="0/." || $9=="0|.") GT_COUNT=0; \
             else if ($9=="0/1" || $9=="0|1" || $9=="1/0" || $9=="1|0" || $9=="./1" || $9==".|1" || $9=="1/." || $9=="1|.") GT_COUNT=1; \
             else if ($9=="1/1" || $9=="1|1") GT_COUNT=2; \
