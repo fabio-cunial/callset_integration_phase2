@@ -40,3 +40,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/FilterIntrasampleDevPhase2.wdl
   testParameterFiles:
+- name: DipcallPhase2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/DipcallPhase2.wdl
+  testParameterFiles:
