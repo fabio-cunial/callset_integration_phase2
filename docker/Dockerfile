@@ -101,6 +101,14 @@ RUN wget https://github.com/samtools/bcftools/releases/download/${bcftools_versi
     && cd ${work_dir} \
     && bcftools --help
 
+# SEQKIT
+ARG seqkit_version=2.10.0
+RUN wget https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_amd64.tar.gz \
+    && tar -xzvf seqkit_linux_amd64.tar.gz \
+    && rm -f seqkit_linux_amd64.tar.gz \
+    && chmod +x seqkit \
+    && ./seqkit --help
+
 # Latest version of kanpig
 ARG kanpig_version=1.0.2
 RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \

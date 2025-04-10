@@ -75,7 +75,7 @@ task ExtractHapsImpl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2:tag2"
         cpu: 1
         memory: "16GB"
         disks: "local-disk 500 HDD"
