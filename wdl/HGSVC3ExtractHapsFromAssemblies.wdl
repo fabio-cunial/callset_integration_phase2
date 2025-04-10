@@ -64,7 +64,7 @@ task ExtractHapsImpl {
             ID=${ID#*_}
             ID=${ID%%.*}
             ~{docker_dir}/seqkit grep --pattern-file contigs1.txt ${LOCAL_FILE} | bgzip --compress-level 1 > ${ID}_hap1.fna.gz &
-            ~{docker_dir}/seqkit grep --pattern-file contigs2.txt ${LOCAL_FILE} | bgzip --compress-level 2 > ${ID}_hap1.fna.gz &
+            ~{docker_dir}/seqkit grep --pattern-file contigs2.txt ${LOCAL_FILE} | bgzip --compress-level 1 > ${ID}_hap2.fna.gz &
             wait
             gsutil -m mv ${ID}_hap1.fna.gz ~{output_dir}
             gsutil -m mv ${ID}_hap2.fna.gz ~{output_dir}
