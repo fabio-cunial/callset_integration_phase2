@@ -23,21 +23,34 @@ workflow TruvariIntersamplePhase2 {
     }
 
     scatter (chr in chromosomes) {
-        call TruvariIntersampleImpl {
+        call BcftoolsMerge {
             input:
                 source_dir = source_dir,
-                filter_string = filter_string,
                 chromosome = chr,
+                filter_string = filter_string
+        }
+        call GetBed {
+            input:
+                chromosome = chr,
+                bcftools_merged_vcf_gz = BcftoolsMerge.bcftools_merged_vcf_gz,
+                bcftools_merged_tbi = BcftoolsMerge.bcftools_merged_tbi,
                 reference_fai = reference_fai,
                 density_counter_py = density_counter_py,
-                max_records_per_chunk = max_records_per_chunk,
+                max_records_per_chunk = max_records_per_chunk
+        }
+        call Truvari {
+            input:
+                chromosome = chr,
+                bcftools_merged_vcf_gz = BcftoolsMerge.bcftools_merged_vcf_gz,
+                bcftools_merged_tbi = BcftoolsMerge.bcftools_merged_tbi,
+                include_bed = GetBed.include_bed,
                 monitor_every_seconds = monitor_every_seconds
         }
     }
     call ConcatenateChromosomes {
         input:
-            chromosomes_vcf_gz = TruvariIntersampleImpl.collapsed_vcf_gz,
-            chromosomes_tbi = TruvariIntersampleImpl.collapsed_tbi,
+            chromosomes_vcf_gz = Truvari.collapsed_vcf_gz,
+            chromosomes_tbi = Truvari.collapsed_tbi,
             samples_file = samples_file
     }
     
@@ -48,21 +61,21 @@ workflow TruvariIntersamplePhase2 {
 }
 
 
+
+
 #
-task TruvariIntersampleImpl {
+task BcftoolsMerge {
     input {
         String source_dir
-        String filter_string
         String chromosome
-        File reference_fai
-        File density_counter_py
-        Int max_records_per_chunk
-        Int monitor_every_seconds
+        String filter_string
+        
+        Int n_cpu = 16
+        Int ram_size_gb = 128
     }
     parameter_meta {
     }
     
-    Int ram_size_gb = 128  # Arbitrary
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
@@ -110,15 +123,100 @@ task TruvariIntersampleImpl {
         tabix -f ~{chromosome}.merged.vcf.gz
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type z ~{chromosome}.merged.vcf.gz > ~{chromosome}.normed.vcf.gz
         tabix -f ~{chromosome}.normed.vcf.gz
+    >>>
+    
+    output {
+        File bcftools_merged_vcf_gz = work_dir + "/" + chromosome + ".normed.vcf.gz"
+        File bcftools_merged_tbi = work_dir + "/" + chromosome + ".normed.vcf.gz.tbi"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk 256 HDD"
+        preemptible: 0
+    }
+}
 
-        # Discarding chunks with too many records
-        python ~{density_counter_py} ~{chromosome}.normed.vcf.gz > ~{chromosome}.chunks.bed
+
+# Discards chunks with too many records
+#
+task GetBed {
+    input {
+        String chromosome
+        File bcftools_merged_vcf_gz
+        File bcftools_merged_tbi
+        Int max_records_per_chunk
+        File density_counter_py
+        File reference_fai
+    }
+    parameter_meta {
+    }
+    
+    String work_dir = "/cromwell_root/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
+        
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        python ~{density_counter_py} ~{bcftools_merged_vcf_gz} > ~{chromosome}.chunks.bed
         awk '$4 >= ~{max_records_per_chunk}' ~{chromosome}.chunks.bed > ~{chromosome}.excluded.bed
         bedtools complement -i ~{chromosome}.excluded.bed -g ~{reference_fai} > ~{chromosome}.included.bed
         bedtools sort -faidx ~{reference_fai} -i ~{chromosome}.included.bed > ~{chromosome}.included.sorted.bed
+    >>>
+    
+    output {
+        File include_bed = work_dir + "/" + chromosome + ".included.sorted.bed"
+        File chunks_bed = work_dir + "/" + chromosome + ".chunks.bed"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_resolve"
+        cpu: 1
+        memory: "16GB"
+        disks: "local-disk 256 HDD"
+        preemptible: 0
+    }
+}
+
+
+
+#
+task Truvari {
+    input {
+        String chromosome
+        File bcftools_merged_vcf_gz
+        File bcftools_merged_tbi
+        File include_bed
         
-        # TRUVARI
-        truvari collapse --input ~{chromosome}.normed.vcf.gz --collapsed-output removed.vcf.gz --sizemin 0 --sizemax 1000000 --keep common --bed ~{chromosome}.included.sorted.bed --gt all \
+        Int monitor_every_seconds
+    }
+    parameter_meta {
+    }
+    
+    Int ram_size_gb = 128  # Arbitrary
+    String work_dir = "/cromwell_root/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
+        
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --gt all \
             | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > ~{chromosome}.collapsed.vcf.gz &
         pid=$!
         while ps -p "${pid}" > /dev/null ; do 
@@ -134,7 +232,6 @@ task TruvariIntersampleImpl {
     output {
         File collapsed_vcf_gz = work_dir + "/" + chromosome + ".collapsed.vcf.gz"
         File collapsed_tbi = work_dir + "/" + chromosome + ".collapsed.vcf.gz.tbi"
-        File chunks_bed = work_dir + "/" + chromosome + ".chunks.bed"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"

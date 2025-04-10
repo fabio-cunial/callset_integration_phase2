@@ -26,6 +26,26 @@ workflow HGSVC3Dipcall2BAMs {
 }
 
 
+# Example content of dipcall's `.tar.gz` output:
+#
+# HG00096.fna.dip.bed
+# HG00096.fna.dip.vcf.gz
+# HG00096.fna.hap1.bam
+# HG00096.fna.hap1.bed
+# HG00096.fna.hap1.paf.gz
+# HG00096.fna.hap1.paf.gz.log
+# HG00096.fna.hap1.sam.gz.log
+# HG00096.fna.hap1.var.gz
+# HG00096.fna.hap1.var.gz.vst
+# HG00096.fna.hap2.bam
+# HG00096.fna.hap2.bed
+# HG00096.fna.hap2.paf.gz
+# HG00096.fna.hap2.paf.gz.log
+# HG00096.fna.hap2.sam.gz.log
+# HG00096.fna.hap2.var.gz
+# HG00096.fna.hap2.var.gz.vst
+# HG00096.fna.pair.vcf.gz
+# HG00096.fna.tmp.be
 #
 task HGSVC3Dipcall2BAMsImpl {
     input {

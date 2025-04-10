@@ -101,7 +101,16 @@ RUN wget https://github.com/samtools/bcftools/releases/download/${bcftools_versi
     && cd ${work_dir} \
     && bcftools --help
 
-# TRUVARI: a version (not the latest) that works with resolve.py
+# BEDTOOLS
+ARG bedtools_version=2.31.0
+RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_version}/bedtools.static \
+    && mv bedtools.static bedtools \
+    && chmod +x bedtools \
+    && mv bedtools /usr/local/bin \
+    && bedtools --help
+
+# TRUVARI: a version (not the latest) that works with `resolve.py` and
+# `density_counter.py`.
 ARG truvari_version=4.2.2
 RUN pip3 install truvari==${truvari_version} \
     && truvari --help
