@@ -45,3 +45,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/DipcallPhase2.wdl
   testParameterFiles:
+- name: HGSVC3ExtractHapsFromAssemblies
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/HGSVC3ExtractHapsFromAssemblies.wdl
+  testParameterFiles:
