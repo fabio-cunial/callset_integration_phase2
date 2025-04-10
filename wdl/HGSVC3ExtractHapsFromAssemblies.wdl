@@ -66,8 +66,8 @@ task ExtractHapsImpl {
             ~{docker_dir}/seqkit grep --pattern-file contigs1.txt ${LOCAL_FILE} | bgzip --compress-level 1 > ${ID}_hap1.fna.gz &
             ~{docker_dir}/seqkit grep --pattern-file contigs2.txt ${LOCAL_FILE} | bgzip --compress-level 2 > ${ID}_hap1.fna.gz &
             wait
-            gsutil -m mv ${ID}_hap1.fna.gz ${OUTPUT_DIR}
-            gsutil -m mv ${ID}_hap2.fna.gz ${OUTPUT_DIR}
+            gsutil -m mv ${ID}_hap1.fna.gz ~{output_dir}
+            gsutil -m mv ${ID}_hap2.fna.gz ~{output_dir}
             rm -f ${LOCAL_FILE}.fna.gz contigs*.txt
         done < assemblies.txt
     >>>
