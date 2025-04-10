@@ -60,3 +60,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/HGSVC3Dipcall2BAMs.wdl
   testParameterFiles:
+- name: TruvariIntersamplePhase2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/TruvariIntersamplePhase2.wdl
+  testParameterFiles:

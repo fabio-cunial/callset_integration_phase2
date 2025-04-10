@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l TruvariIntersamplePhase2.wdl
 java -jar ${WOMTOOL_PATH} validate -l HGSVC3Dipcall2BAMs.wdl
 java -jar ${WOMTOOL_PATH} validate -l Split.wdl
 java -jar ${WOMTOOL_PATH} validate -l HGSVC3ExtractHapsFromAssemblies.wdl
