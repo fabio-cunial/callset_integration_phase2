@@ -55,4 +55,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Split.wdl
   testParameterFiles:
-      
+- name: HGSVC3Dipcall2BAMs
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/HGSVC3Dipcall2BAMs.wdl
+  testParameterFiles:
