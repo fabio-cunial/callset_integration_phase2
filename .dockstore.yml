@@ -50,3 +50,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/HGSVC3ExtractHapsFromAssemblies.wdl
   testParameterFiles:
+- name: Split
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Split.wdl
+  testParameterFiles:
+      
