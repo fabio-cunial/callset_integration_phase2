@@ -58,8 +58,13 @@ workflow TruvariIntersamplePhase2 {
 }
 
 
-
-
+# Resource usage on 449 samples on chr1:
+#
+# SETTING     CPU       RAM     TIME
+# hg38<=0.7   150%      4G      1h30m
+# hg38<=0.9   160%      5G      2h
+# chm13<=0.7  130%      2G      1h10m
+# chm13<=0.9  140%      3G      1h40m
 #
 task BcftoolsMerge {
     input {
@@ -67,8 +72,8 @@ task BcftoolsMerge {
         String chromosome
         String filter_string
         
-        Int n_cpu = 16
-        Int ram_size_gb = 128
+        Int n_cpu = 2
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -177,14 +182,20 @@ task GetBed {
     runtime {
         docker: "fcunial/callset_integration_phase2_resolve"
         cpu: 1
-        memory: "16GB"
+        memory: "8GB"
         disks: "local-disk 256 HDD"
         preemptible: 0
     }
 }
 
 
-
+# Resource usage on 449 samples on chr1:
+#
+# SETTING     CPU       RAM     TIME
+# hg38<=0.7   
+# hg38<=0.9   
+# chm13<=0.7  
+# chm13<=0.9  
 #
 task Truvari {
     input {
@@ -192,11 +203,11 @@ task Truvari {
         File bcftools_merged_vcf_gz
         File bcftools_merged_tbi
         File include_bed
+        Int ram_size_gb = 64
     }
     parameter_meta {
     }
     
-    Int ram_size_gb = 128  # Arbitrary
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
@@ -230,12 +241,18 @@ task Truvari {
 }
 
 
+# Resource usage on 449 samples on chr1:
+#
+# SETTING     CPU       RAM     TIME
+# hg38<=0.7   270%      4G      4m
+# chm13<=0.7  200%      2G      4m
 #
 task ConcatenateChromosomes {
     input {
         Array[File] chromosomes_vcf_gz
         Array[File] chromosomes_tbi
         File samples_file
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -280,8 +297,8 @@ task ConcatenateChromosomes {
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
-        cpu: 16
-        memory: "128GB"
+        cpu: 4
+        memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
