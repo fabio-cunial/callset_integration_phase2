@@ -211,7 +211,7 @@ task Truvari {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        ${TIME_COMMAND} truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --refdist 500 --pctseq 0.7 --pctsize 0.7 --pctovl 0 --gt all --output tmp.vcf
+        ${TIME_COMMAND} truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --gt all --output tmp.vcf
         ${TIME_COMMAND} bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z tmp.vcf > ~{chromosome}.collapsed.vcf.gz
         tabix -f ~{chromosome}.collapsed.vcf.gz
     >>>
