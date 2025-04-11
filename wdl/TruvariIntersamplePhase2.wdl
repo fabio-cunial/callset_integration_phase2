@@ -192,9 +192,7 @@ task GetBed {
 # Resource usage on 449 samples on chr1:
 #
 # SETTING     CPU       RAM     TIME
-# hg38<=0.7   
 # hg38<=0.9   
-# chm13<=0.7  
 # chm13<=0.9  
 #
 task Truvari {
@@ -252,6 +250,8 @@ task ConcatenateChromosomes {
         Array[File] chromosomes_vcf_gz
         Array[File] chromosomes_tbi
         File samples_file
+        
+        Int n_cpu = 4
         Int ram_size_gb = 8
     }
     parameter_meta {
@@ -297,7 +297,7 @@ task ConcatenateChromosomes {
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
-        cpu: 4
+        cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
