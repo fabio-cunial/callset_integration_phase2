@@ -216,16 +216,7 @@ task Truvari {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --gt all \
-            | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > ~{chromosome}.collapsed.vcf.gz &
-        pid=$!
-        while ps -p "${pid}" > /dev/null ; do 
-            sleep ~{monitor_every_seconds}
-            date
-            ls
-            bcftools query -f "%CHROM\n" removed.vcf.gz | uniq -c 
-        done
-        wait
+        truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --gt all | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > ~{chromosome}.collapsed.vcf.gz
         tabix -f ~{chromosome}.collapsed.vcf.gz
     >>>
     
