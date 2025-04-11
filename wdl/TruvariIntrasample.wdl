@@ -93,7 +93,7 @@ task TruvariIntrasampleImpl {
         rm -f tmp.vcf.gz*
 
         # Step 3 - Collapsing
-        ${TIME_COMMAND} truvari collapse -i ~{sample_id}.bcftools_merged.vcf.gz -c removed.vcf.gz --sizemin 0 --sizemax 1000000 -k maxqual --gt het --intra --pctseq 0.90 --pctsize 0.90 --refdist 500 --output tmp.vcf
+        ${TIME_COMMAND} truvari collapse -i ~{sample_id}.bcftools_merged.vcf.gz -c removed.vcf.gz --sizemin 0 --sizemax 1000000 --keep maxqual --gt het --intra --refdist 500 --pctseq 0.90 --pctsize 0.90 --pctovl 0 --output tmp.vcf
         ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z tmp.vcf > ~{sample_id}.truvari_collapsed.vcf.gz
         tabix -f ~{sample_id}.truvari_collapsed.vcf.gz
     >>>

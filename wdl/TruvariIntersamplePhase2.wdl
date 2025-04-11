@@ -13,13 +13,11 @@ workflow TruvariIntersamplePhase2 {
         File reference_fai
         File density_counter_py
         Int max_records_per_chunk = 10000
-        Int monitor_every_seconds = 300
     }
     parameter_meta {
         source_dir: "Contains per-chromosome files built by `Split.wdl`."
         filter_string: "Apply this filter to every VCF before merging. 'none'=no filter."
         max_records_per_chunk: "Discards chunks that contain more than this many records. Setting it to 10k keeps 99.9% of all chunks in AoU Phase 1 (1027 samples) on CHM13."
-        monitor_every_seconds: "Print progress every X seconds"
     }
 
     scatter (chr in chromosomes) {
@@ -43,8 +41,7 @@ workflow TruvariIntersamplePhase2 {
                 chromosome = chr,
                 bcftools_merged_vcf_gz = BcftoolsMerge.bcftools_merged_vcf_gz,
                 bcftools_merged_tbi = BcftoolsMerge.bcftools_merged_tbi,
-                include_bed = GetBed.include_bed,
-                monitor_every_seconds = monitor_every_seconds
+                include_bed = GetBed.include_bed
         }
     }
     call ConcatenateChromosomes {
@@ -195,8 +192,6 @@ task Truvari {
         File bcftools_merged_vcf_gz
         File bcftools_merged_tbi
         File include_bed
-        
-        Int monitor_every_seconds
     }
     parameter_meta {
     }
@@ -216,7 +211,8 @@ task Truvari {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --gt all | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > ~{chromosome}.collapsed.vcf.gz
+        ${TIME_COMMAND} truvari collapse --input ~{bcftools_merged_vcf_gz} --sizemin 0 --sizemax 1000000 --keep common --bed ~{include_bed} --refdist 500 --pctseq 0.7 --pctsize 0.7 --pctovl 0 --gt all --output tmp.vcf
+        ${TIME_COMMAND} bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z tmp.vcf > ~{chromosome}.collapsed.vcf.gz
         tabix -f ~{chromosome}.collapsed.vcf.gz
     >>>
     
