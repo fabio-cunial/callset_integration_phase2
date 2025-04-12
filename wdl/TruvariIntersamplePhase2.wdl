@@ -191,9 +191,11 @@ task GetBed {
 
 # Resource usage on 449 samples on chr1:
 #
-# SETTING     CPU       RAM     TIME
-# hg38<=0.9   
-# chm13<=0.9  
+# SETTING     TOOL      CPU     RAM     TIME
+# hg38<=0.9   truvari   100%    800M    10h10m
+# hg38<=0.9   bcftools  100%    2G      1h10m
+# chm13<=0.9  truvari   
+# chm13<=0.9  bcftools  
 #
 task Truvari {
     input {
@@ -201,7 +203,9 @@ task Truvari {
         File bcftools_merged_vcf_gz
         File bcftools_merged_tbi
         File include_bed
-        Int ram_size_gb = 64
+        
+        Int n_cpu = 1
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -213,8 +217,6 @@ task Truvari {
         mkdir -p ~{work_dir}
         cd ~{work_dir}
         
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
@@ -231,7 +233,7 @@ task Truvari {
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
-        cpu: 8
+        cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk 256 HDD"
         preemptible: 0
