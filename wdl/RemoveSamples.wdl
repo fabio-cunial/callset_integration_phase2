@@ -32,6 +32,8 @@ task RemoveSamplesImpl {
     input {
         File intersample_vcf_gz
         File intersample_tbi
+        
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -69,7 +71,7 @@ task RemoveSamplesImpl {
     runtime {
         docker: "fcunial/callset_integration_phase2"
         cpu: 2
-        memory: "8GB"
+        memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
