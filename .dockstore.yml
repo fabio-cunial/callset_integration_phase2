@@ -70,3 +70,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/RemoveSamples.wdl
   testParameterFiles:
+- name: KanpigMerged
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/KanpigMerged.wdl
+  testParameterFiles:

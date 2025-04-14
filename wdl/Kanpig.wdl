@@ -19,7 +19,7 @@ workflow Kanpig {
         Int n_cpu = 16
         Int ram_size_gb = 64
         String kanpig_params_singlesample = "--sizemin 20 --sizemax 10000 --neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
-        String kanpig_params_multisample  = "--sizemin 50 --sizemax 10000 --neighdist  500 --gpenalty 0.04 --hapsim 0.97"
+        String kanpig_params_multisample  = "--sizemin 20 --sizemax 10000 --neighdist  500 --gpenalty 0.04 --hapsim 0.97"
     }
     parameter_meta {
         ram_size_gb: "Suggested 2*n_cpu"
