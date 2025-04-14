@@ -65,3 +65,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TruvariIntersamplePhase2.wdl
   testParameterFiles:
+- name: RemoveSamples
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/RemoveSamples.wdl
+  testParameterFiles:

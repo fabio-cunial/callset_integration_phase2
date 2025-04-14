@@ -194,8 +194,8 @@ task GetBed {
 # SETTING     TOOL      CPU     RAM     TIME
 # hg38<=0.9   truvari   100%    800M    10h10m
 # hg38<=0.9   bcftools  100%    2G      1h10m
-# chm13<=0.9  truvari   
-# chm13<=0.9  bcftools  
+# chm13<=0.9  truvari   100%    350M    6h10m
+# chm13<=0.9  bcftools  100%    2G      50m
 #
 task Truvari {
     input {
@@ -243,9 +243,11 @@ task Truvari {
 
 # Resource usage on 449 samples on chr1:
 #
-# SETTING     CPU       RAM     TIME
-# hg38<=0.7   270%      4G      4m
-# chm13<=0.7  200%      2G      4m
+# SETTING     CPU   RAM     TIME
+# hg38<=0.7   270%  4G      4m
+# chm13<=0.7  200%  2G      4m
+# hg38<=0.9   
+# chm13<=0.9     
 #
 task ConcatenateChromosomes {
     input {
