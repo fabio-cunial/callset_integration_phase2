@@ -42,13 +42,18 @@ workflow KanpigMerged {
     }
     
     output {
-        File output_vcf_gz = GetRegenotypedVcfImpl.output_vcf_gz
-        File output_tbi = GetRegenotypedVcfImpl.output_tbi
         File gts_txt = GetRegenotypedVcfImpl.gts_txt
     }
 }
 
 
+# Performance on 402 AoU 25x samples (on a machine with 16 cores and 64GB of
+# RAM):
+#
+# COMMAND               RUNTIME     N_CPUS      MAX_RSS
+# bcftools reheader     40s         1           10M
+# kanpig                8m          15          4.6G
+# bcftools sort         4m          1           5.2G
 #
 task GetRegenotypedVcfImpl {
     input {
@@ -68,8 +73,8 @@ task GetRegenotypedVcfImpl {
         
         String kanpig_params_multisample
         
-        Int n_cpu = 16
-        Int mem_gb = 64
+        Int n_cpu = 8
+        Int mem_gb = 8
     }
     parameter_meta {
         intersample_vcf_gz: "Assumed to have a single (artificial) sample column and all GTs equal to 0/1."
@@ -119,8 +124,6 @@ task GetRegenotypedVcfImpl {
     >>>
 
     output {
-        File output_vcf_gz = work_dir + "/" + output_prefix + ".vcf.gz"
-        File output_tbi = work_dir + "/" + output_prefix + ".vcf.gz.tbi"
         File gts_txt = work_dir + "/" + sample_id + "_gts.txt"
     }
     runtime {
