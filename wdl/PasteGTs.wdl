@@ -107,6 +107,9 @@ task Paste {
         echo ${INPUT_FILES} | tr ',' '\n' > files_list.txt
         N_ROWS=$(wc -l < files_list.txt)
         N_ROWS=$(( ${N_ROWS} / ${N_THREADS} ))
+        if [ ${N_ROWS} -eq 0 ]; then
+            N_ROWS=1
+        fi 
         split -d -l ${N_ROWS} files_list.txt list_
         COLUMNS_FILES=""; FIELDS_FILES=""
         for LIST_FILE in $(find . -maxdepth 1 -name 'list_*' | sort); do
