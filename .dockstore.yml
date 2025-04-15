@@ -75,3 +75,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/KanpigMerged.wdl
   testParameterFiles:
+- name: PasteGTs
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PasteGTs.wdl
+  testParameterFiles:

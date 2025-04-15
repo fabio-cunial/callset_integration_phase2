@@ -47,13 +47,13 @@ workflow KanpigMerged {
 }
 
 
-# Performance on 402 AoU 25x samples (on a machine with 16 cores and 64GB of
-# RAM):
+# Performance on 402 AoU 25x samples on GRCh38 (on a machine with 8 cores and
+# 32GB of RAM):
 #
-# COMMAND               RUNTIME     N_CPUS      MAX_RSS
-# bcftools reheader     40s         1           10M
-# kanpig                8m          15          4.6G
-# bcftools sort         4m          1           5.2G
+# DATASET                               RUNTIME     N_CPUS      MAX_RSS
+#  402 samples, 25x, GRCh38, <=0.7      32m         4           11G
+#  756 samples, 25x, GRCh38, <=0.7      40m         5           12G
+# 1234 samples, 12x, GRCh38, <=0.7      15m         7           10G 
 #
 task GetRegenotypedVcfImpl {
     input {
@@ -74,7 +74,7 @@ task GetRegenotypedVcfImpl {
         String kanpig_params_multisample
         
         Int n_cpu = 8
-        Int mem_gb = 8
+        Int mem_gb = 16
     }
     parameter_meta {
         intersample_vcf_gz: "Assumed to have a single (artificial) sample column and all GTs equal to 0/1."
