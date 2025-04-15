@@ -19,7 +19,8 @@ workflow PasteGTs {
         File intersample_tbi
         Array[File] sample_gts
         
-        Int n_cpus
+        Int n_cpus = 32
+        Int ram_size_gb = 64
     }
     parameter_meta {
     }
@@ -29,7 +30,8 @@ workflow PasteGTs {
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi,
             sample_gts = sample_gts,
-            n_cpus = n_cpus
+            n_cpus = n_cpus,
+            ram_size_gb = ram_size_gb
     }
     
     output {
@@ -46,6 +48,7 @@ task Paste {
         Array[File] sample_gts
         
         Int n_cpus
+        Int ram_size_gb
     }
     parameter_meta {
     }
@@ -136,6 +139,7 @@ task Paste {
     runtime {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpus
+        memory: ram_size_gb + "GB"
         disks: "local-disk 128 HDD"
         preemptible: 0
     }
