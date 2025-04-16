@@ -3,6 +3,10 @@ version 1.0
 
 # Re-genotypes an inter-sample VCF.
 #
+# Remark: the output VCF is globally sorted, so the order of the chromosomes in
+# this file might be different from the order of the chromosomes in the input
+# file `intersample_vcf_gz`.
+#
 workflow KanpigMerged {
     input {
         String sample_id
@@ -47,6 +51,10 @@ workflow KanpigMerged {
 }
 
 
+# Remark: the output VCF is globally sorted, so the order of the chromosomes in
+# this file might be different from the order of the chromosomes in the input
+# file `intersample_vcf_gz`.
+#
 # Performance on 402 AoU 25x samples on GRCh38 (on a machine with 8 cores and
 # 32GB of RAM):
 #
@@ -114,6 +122,8 @@ task GetRegenotypedVcfImpl {
         export RUST_BACKTRACE="full"
         ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input tmp1.vcf.gz --reads ~{alignments_bam} --out tmp2.vcf.gz
         rm -f tmp1.vcf.gz
+        
+        # - Globally sorting the output VCF
         ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_MEM_GB}G --output-type z tmp2.vcf.gz > ~{output_prefix}.vcf.gz
         tabix -f ~{output_prefix}.vcf.gz
         rm -f tmp2.vcf.gz

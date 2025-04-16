@@ -3,6 +3,9 @@ version 1.0
 
 # Runs a truvari inter-sample merge in parallel on every chromosome.
 #
+# Remark: in the output VCF, calls inside a chromosome are sorted, but the 
+# chromosomes might be in random order.
+#
 workflow TruvariIntersamplePhase2 {
     input {
         String source_dir
@@ -189,6 +192,9 @@ task GetBed {
 }
 
 
+# Remark: in the output VCF, which only contains one chromosome, calls are
+# sorted.
+#
 # Resource usage on 449 samples on chr1:
 #
 # SETTING     TOOL      CPU     RAM     TIME
@@ -241,6 +247,10 @@ task Truvari {
 }
 
 
+# Remark: in the output VCF, calls inside a chromosome are sorted, but the 
+# chromosomes might be in random order (since they are in the order in which
+# they appear in input array `chromosomes_vcf_gz`).
+#
 # Resource usage on 449 samples on chr1:
 #
 # SETTING     CPU   RAM     TIME

@@ -1,10 +1,11 @@
 version 1.0
 
 
-# Replaces all sample columns with a single sample column where all calls have
-# 0/1 GT. Assigns a unique integer ID to every call, moving the original ID to
-# the INFO field (this is necessary for kanpig, which otherwise complains
-# about duplicated IDs, which arise naturally from the previous steps of the 
+# - Replaces all sample columns with a single sample column where all calls have
+# FORMAT=GT and GT=0/1. 
+# - Assigns a unique integer ID to every call, moving the original ID to the
+# INFO field (this is necessary for kanpig, which otherwise complains about
+# duplicated IDs, which arise naturally from the previous steps of the
 # pipeline).
 #
 workflow RemoveSamples {

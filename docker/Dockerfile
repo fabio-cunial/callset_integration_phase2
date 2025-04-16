@@ -113,7 +113,7 @@ RUN wget https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_li
 ARG kanpig_version=1.0.2
 RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
     && tar xzf kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && ls -laht kanpig-v${kanpig_version}-x86_64-unknown-linux-musl \
+    && rm -f kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
     && mv ./kanpig-v${kanpig_version}-x86_64-unknown-linux-musl/kanpig . \
     && chmod +x ./kanpig \
     && ./kanpig --help
