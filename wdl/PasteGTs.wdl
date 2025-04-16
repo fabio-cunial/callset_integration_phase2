@@ -146,7 +146,7 @@ task Paste {
         INPUT_FILES=~{sep=',' sample_gts}
         echo ${INPUT_FILES} | tr ',' '\n' > files_list.txt
         while read FILE; do
-            N=$(wc -l ${FILE})
+            N=$(wc -l < ${FILE})
             N=$(( ${N} - 1 ))
             if [ ${N} -ne ${N_RECORDS} ]; then
                 echo "Error: file ${FILE} has ${N} records, but the intersample VCF has ${N_RECORDS} records."
