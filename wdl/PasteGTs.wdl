@@ -129,7 +129,7 @@ task Paste {
                 i=$(( ${i} + 1 ))
                 head -n 1 ${FILE} > ${THREAD_ID}_s_${i}.txt
                 LIST_FIELDS="${LIST_FIELDS} ${THREAD_ID}_s_${i}.txt"
-                tail -n +2 ${FILE} > ${THREAD_ID}_b_{i}.txt
+                tail -n +2 ${FILE} > ${THREAD_ID}_b_${i}.txt
                 LIST_BODIES="${LIST_BODIES} ${THREAD_ID}_b_{i}.txt"
             done < list_${THREAD_ID}
             paste ${LIST_FIELDS} > ${FIELDS_FILE}
@@ -171,6 +171,10 @@ task Paste {
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
         rm -f ${FIELDS_FILES} ${COLUMNS_FILES}
+        
+        cat fields_all.txt
+        head -n 10 body.txt
+        
         cat header.txt fields_all.txt body.txt > merged.vcf
         rm -f header.txt fields_all.txt body.txt
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} merged.vcf
