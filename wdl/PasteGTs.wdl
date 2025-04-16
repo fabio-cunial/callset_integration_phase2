@@ -161,7 +161,7 @@ task Paste {
         N_ROWS=$(wc -l < tmp.txt)
         head -n $(( ${N_ROWS} - 1 )) tmp.txt > header.txt
         tail -n 1 tmp.txt | cut -f 1,2,3,4,5,6,7,8,9 > fields.txt
-        bcftools view --threads ${N_THREADS} --no-header ~{intersample_vcf_gz} | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tGT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV",$1,$2,$3,$4,$5,$6,$7,$8); }' > calls.txt
+        bcftools view --threads ${N_THREADS} --no-header ~{intersample_vcf_gz} | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tGT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV\n",$1,$2,$3,$4,$5,$6,$7,$8); }' > calls.txt
         
         # - Pasting the GT files in parallel (the order among the files/samples
         # is not important at this stage).
