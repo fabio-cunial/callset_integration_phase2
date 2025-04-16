@@ -130,7 +130,7 @@ task Paste {
                 head -n 1 ${FILE} > ${THREAD_ID}_s_${i}.txt
                 LIST_FIELDS="${LIST_FIELDS} ${THREAD_ID}_s_${i}.txt"
                 tail -n +2 ${FILE} > ${THREAD_ID}_b_${i}.txt
-                LIST_BODIES="${LIST_BODIES} ${THREAD_ID}_b_{i}.txt"
+                LIST_BODIES="${LIST_BODIES} ${THREAD_ID}_b_${i}.txt"
             done < list_${THREAD_ID}
             paste ${LIST_FIELDS} > ${FIELDS_FILE}
             ${TIME_COMMAND} paste ${LIST_BODIES} > ${OUTPUT_FILE}
