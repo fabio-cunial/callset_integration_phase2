@@ -125,6 +125,12 @@ task Paste {
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
         rm -f columns_*.txt
+        
+        
+        cat header.txt
+        cat fields_all.txt
+        head -n 10 body.txt
+        
         cat header.txt fields_all.txt body.txt > merged.vcf
         rm -f header.txt fields_all.txt body.txt
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} merged.vcf
