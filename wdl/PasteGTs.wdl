@@ -91,6 +91,11 @@ task Sort {
 }
 
 
+# TOOL                      CPU     RAM     TIME
+# paste global      
+# bcftools view samples
+# CopyFormat                
+#
 task Paste {
     input {
         File intersample_vcf_gz
@@ -200,7 +205,8 @@ task Paste {
         
         # - Copying from `intersample_vcf_gz` the FORMAT fields that are
         # missing in `merged_prime.vcf.gz`.
-        ${TIME_COMMAND} java -Xmx${EFFECTIVE_MEM_GB}G -cp ~{docker_dir} CopyFormat ~{intersample_vcf_gz} merged_prime.vcf.gz output.vcf.gz
+        ${TIME_COMMAND} java -Xmx${EFFECTIVE_MEM_GB}G -cp ~{docker_dir} CopyFormat ~{intersample_vcf_gz} merged_prime.vcf.gz > output.vcf
+        ${TIME_COMMAND} bgzip -@ ${N_THREADS} output.vcf
         tabix -f output.vcf.gz
     >>>
 
