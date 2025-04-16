@@ -100,7 +100,7 @@ task Paste {
         # Initializing the output VCF with the input VCF
         bcftools view --header-only ~{intersample_vcf_gz} > tmp.txt
         N_ROWS=$(wc -l < tmp.txt)
-        head -n $(( ${N_ROWS} - 1 )) ~{intersample_vcf_gz} > header.txt
+        head -n $(( ${N_ROWS} - 1 )) tmp.txt > header.txt
         tail -n 1 tmp.txt | cut -f 1,2,3,4,5,6,7,8,9 > fields.txt
         bcftools view --no-header ~{intersample_vcf_gz} | cut -f 1,2,3,4,5,6,7,8,9 > calls.txt
         rm -f ~{intersample_vcf_gz}
