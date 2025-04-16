@@ -123,7 +123,6 @@ task Paste {
         done
         wait
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
-        rm -f fields_*.txt
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
         rm -f columns_*.txt
         cat header.txt fields_all.txt body.txt > merged.vcf
