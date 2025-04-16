@@ -141,6 +141,19 @@ task Paste {
         
         # Main program
         
+        # - Preliminary checks
+        N_RECORDS=$(bcftools index --nrecords ~{intersample_tbi})
+        INPUT_FILES=~{sep=',' sample_gts}
+        echo ${INPUT_FILES} | tr ',' '\n' > files_list.txt
+        while read FILE; do
+            N=$(wc -l ${FILE})
+            N=$(( ${N} - 1 ))
+            if [ ${N} -ne ${N_RECORDS} ]; then
+                echo "Error: file ${FILE} has ${N} records, but the intersample VCF has ${N_RECORDS} records."
+                exit 1
+            fi
+        done < files_list.txt
+        
         # - Initializing the output VCF with the input VCF.
         # Remark: this implies that call IDs in the output are identical to
         # truvari's, so they might not be all distinct.
