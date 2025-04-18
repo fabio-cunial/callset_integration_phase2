@@ -85,3 +85,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InterCenterMerge.wdl
   testParameterFiles:
+- name: InterCenterBench
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InterCenterBench.wdl
+  testParameterFiles:
