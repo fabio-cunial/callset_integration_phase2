@@ -64,24 +64,25 @@ task Merge {
         INPUT_FILES=~{sep=',' center_vcf_gz}
         echo ${INPUT_FILES} | tr ',' '\n' | sort > list.txt
         rm -f list_filtered.txt
+        i="0"
         while read FILE; do
-            ID=$(basename ${FILE} .vcf.gz)
+            i=$(( ${i} + 1 ))
             bcftools view --header-only ${FILE} > header.txt
             N_ROWS=$(wc -l < header.txt)
-            head -n $(( ${N_ROWS} - 1 )) header.txt > ${ID}_~{chromosome}.vcf
+            head -n $(( ${N_ROWS} - 1 )) header.txt > ${i}_~{chromosome}.vcf
             tail -n 1 header.txt | awk '{ \
                 printf("%s",$1); \
                 for (i=2; i<=9; i++) printf("\t%s",$i); \
                 printf("\tSAMPLE\n"); \
-            }' >> ${ID}_~{chromosome}.vcf
+            }' >> ${i}_~{chromosome}.vcf
             bcftools view --threads ${N_THREADS} --no-header --output-type v ${FILE} ~{chromosome} | awk '{ \
                 printf("%s",$1); \
                 for (i=2; i<=8; i++) printf("\t%s",$i); \
                 printf("\tGT\t0/1\n"); \
-            }' >> ${ID}_~{chromosome}.vcf
-            bgzip -@ ${N_THREADS} --compress-level 1 ${ID}_~{chromosome}.vcf
-            tabix -f ${ID}_~{chromosome}.vcf.gz
-            echo ${ID}_~{chromosome}.vcf.gz >> list_filtered.txt
+            }' >> ${i}_~{chromosome}.vcf
+            bgzip -@ ${N_THREADS} --compress-level 1 ${i}_~{chromosome}.vcf
+            tabix -f ${i}_~{chromosome}.vcf.gz
+            echo ${i}_~{chromosome}.vcf.gz >> list_filtered.txt
             rm -f ${FILE}*
         done < list.txt
         rm -f list.txt
