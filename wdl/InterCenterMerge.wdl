@@ -62,7 +62,7 @@ task Merge {
         
         # Filtering by chromosome
         INPUT_FILES=~{sep=',' center_vcf_gz}
-        INPUT_FILES=$(echo ${INPUT_FILES} | tr ',' '\n') > list.txt
+        echo ${INPUT_FILES} | tr ',' '\n' | sort > list.txt
         rm -f list_filtered.txt
         while read FILE; do
             ID=$(basename ${FILE} .vcf.gz)
