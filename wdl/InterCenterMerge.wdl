@@ -40,8 +40,8 @@ task Merge {
         Array[File] center_vcf_gz
         Array[File] center_tbi
         
-        Int n_cpu = 2
-        Int ram_size_gb = 8
+        Int n_cpu = 8
+        Int ram_size_gb = 16
     }
     parameter_meta {
     }
