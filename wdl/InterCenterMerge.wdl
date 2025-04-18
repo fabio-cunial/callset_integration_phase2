@@ -96,7 +96,7 @@ task Merge {
         rm -f ~{chromosome}.merged.vcf.gz
         
         # TRUVARI
-        ${TIME_COMMAND} truvari collapse --input ~{chromosome}.normed.vcf.gz --sizemin 0 --sizemax 1000000 --keep common --gt off --output tmp.vcf
+        ${TIME_COMMAND} truvari collapse --input ~{chromosome}.normed.vcf.gz --sizemin 0 --sizemax 1000000 --keep common --gt all --output tmp.vcf
         ${TIME_COMMAND} bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z tmp.vcf > ~{chromosome}.collapsed.vcf.gz
         tabix -f ~{chromosome}.collapsed.vcf.gz
     >>>
