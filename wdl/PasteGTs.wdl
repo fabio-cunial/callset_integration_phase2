@@ -91,10 +91,12 @@ task Sort {
 }
 
 
+# Performance on 402 samples, 25x, GRCh38, <=0.7:
+#
 # TOOL                      CPU     RAM     TIME
-# paste global      
-# bcftools view samples
-# CopyFormat                
+# paste global              1       2M      1m
+# bcftools view samples     3       3G      4m
+# CopyFormat                1       2.3G    21m
 #
 task Paste {
     input {
@@ -218,7 +220,7 @@ task Paste {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpus
         memory: ram_size_gb + "GB"
-        disks: "local-disk 128 HDD"
+        disks: "local-disk 512 SSD"
         preemptible: 0
     }
 }
