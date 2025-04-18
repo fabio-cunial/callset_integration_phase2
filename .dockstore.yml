@@ -80,3 +80,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PasteGTs.wdl
   testParameterFiles:
+- name: InterCenterMerge
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InterCenterMerge.wdl
+  testParameterFiles:
