@@ -69,8 +69,32 @@ task Bench {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
+        # Forces exactly one sample with all GTs equal to 0/1
+        function filter() {
+            local INPUT_VCF_GZ=$1
+            local OUTPUT_VCF=$2
+            
+            bcftools view --header-only ${INPUT_VCF_GZ} > header.txt
+            N_ROWS=$(wc -l < header.txt)
+            head -n $(( ${N_ROWS} - 1 )) header.txt > ${OUTPUT_VCF}
+            tail -n 1 header.txt | awk '{ \
+                printf("%s",$1); \
+                for (i=2; i<=9; i++) printf("\t%s",$i); \
+                printf("\tSAMPLE\n"); \
+            }' >> ${OUTPUT_VCF}
+            bcftools view --threads ${N_THREADS} --no-header --output-type v ${INPUT_VCF_GZ} | awk '{ \
+                printf("%s",$1); \
+                for (i=2; i<=8; i++) printf("\t%s",$i); \
+                printf("\tGT\t0/1\n"); \
+            }' >> ${OUTPUT_VCF}
+            bgzip -@ ${N_THREADS} --compress-level 1 ${OUTPUT_VCF}
+            tabix -f ${OUTPUT_VCF}.gz
+        }
         
-        ${TIME_COMMAND} truvari bench -b ~{center1_vcf_gz} -c ~{center2_vcf_gz} -o ./truvari/
+        # Main program
+        filter ~{center1_vcf_gz} center1.vcf
+        filter ~{center2_vcf_gz} center2.vcf
+        ${TIME_COMMAND} truvari bench -b center1.vcf.gz -c center2.vcf.gz -o ./truvari/
         mv ./truvari/summary.json .
     >>>
     
