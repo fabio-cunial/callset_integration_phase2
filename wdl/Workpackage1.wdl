@@ -89,15 +89,15 @@ task Workpackage1Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            ALIGNED_BAI=$(echo ${LINE} | cut -f 3)
-            ALIGNED_BAM=$(echo ${LINE} | cut -f 4)
-            PAV_BED=$(echo ${LINE} | cut -f 5)
-            PAV_TBI=$(echo ${LINE} | cut -f 6)
-            PAV_VCF_GZ=$(echo ${LINE} | cut -f 7)
-            PBSV_TBI=$(echo ${LINE} | cut -f 8)
-            PBSV_VCF_GZ=$(echo ${LINE} | cut -f 9)
-            SNIFFLES_TBI=$(echo ${LINE} | cut -f 10)
-            SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -f 11)
+            ALIGNED_BAI=$(cut -f 3 ${LINE})
+            ALIGNED_BAM=$(cut -f 4 ${LINE})
+            PAV_BED=$(cut -f 5 ${LINE})
+            PAV_TBI=$(cut -f 6 ${LINE})
+            PAV_VCF_GZ=$(cut -f 7 ${LINE})
+            PBSV_TBI=$(cut -f 8 ${LINE})
+            PBSV_VCF_GZ=$(cut -f 9 ${LINE})
+            SNIFFLES_TBI=$(cut -f 10 ${LINE})
+            SNIFFLES_VCF_GZ=$(cut -f 11 ${LINE})
             
             while : ; do
                 TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
@@ -345,8 +345,8 @@ task Workpackage1Impl {
         # ---------------------------- Main program ----------------------------
         
         while read LINE; do
-            SAMPLE_ID=$(echo ${LINE} | cut -f 1)
-            SEX=$(echo ${LINE} | cut -f 2)
+            SAMPLE_ID=$(cut -f 1 ${LINE})
+            SEX=$(cut -f 2 ${LINE})
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
             
