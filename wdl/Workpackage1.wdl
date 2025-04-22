@@ -89,15 +89,15 @@ task Workpackage1Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            ALIGNED_BAI=$(cut -f 3 ${LINE})
-            ALIGNED_BAM=$(cut -f 4 ${LINE})
-            PAV_BED=$(cut -f 5 ${LINE})
-            PAV_TBI=$(cut -f 6 ${LINE})
-            PAV_VCF_GZ=$(cut -f 7 ${LINE})
-            PBSV_TBI=$(cut -f 8 ${LINE})
-            PBSV_VCF_GZ=$(cut -f 9 ${LINE})
-            SNIFFLES_TBI=$(cut -f 10 ${LINE})
-            SNIFFLES_VCF_GZ=$(cut -f 11 ${LINE})
+            ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
+            ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+            PAV_BED=$(echo ${LINE} | cut -d , -f 5)
+            PAV_TBI=$(echo ${LINE} | cut -d , -f 6)
+            PAV_VCF_GZ=$(echo ${LINE} | cut -d , -f 7)
+            PBSV_TBI=$(echo ${LINE} | cut -d , -f 8)
+            PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 9)
+            SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 10)
+            SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 11)
             
             while : ; do
                 TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
@@ -344,9 +344,10 @@ task Workpackage1Impl {
         
         # ---------------------------- Main program ----------------------------
         
+        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
-            SAMPLE_ID=$(cut -f 1 ${LINE})
-            SEX=$(cut -f 2 ${LINE})
+            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+            SEX=$(echo ${LINE} | cut -d , -f 2)
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
             
@@ -368,7 +369,7 @@ task Workpackage1Impl {
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ~{remote_outdir}
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
-        done < ~{sv_integration_chunk_tsv}
+        done < chunk.csv
     >>>
     
     output {
