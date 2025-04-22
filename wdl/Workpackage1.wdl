@@ -353,7 +353,7 @@ task Workpackage1Impl {
             
             PAV2SVs ${SAMPLE_ID} ${SAMPLE_ID}_pav.vcf.gz
             rm -f ${SAMPLE_ID}_pav.vcf.gz*
-            conda activate truvari4
+            source activate truvari4
             Resolve ${SAMPLE_ID} pbsv ${SAMPLE_ID}_pbsv.vcf.gz
             rm -f ${SAMPLE_ID}_pbsv.vcf.gz*
             Resolve ${SAMPLE_ID} sniffles ${SAMPLE_ID}_sniffles.vcf.gz
@@ -361,7 +361,7 @@ task Workpackage1Impl {
             Resolve ${SAMPLE_ID} pav ${SAMPLE_ID}_pav_sv.vcf.gz
             rm -f ${SAMPLE_ID}_pav_sv.vcf.gz*
             conda deactivate
-            conda activate truvari5
+            source activate truvari5
             TruvariIntrasample ${SAMPLE_ID} ${SAMPLE_ID}_pbsv_resolved.vcf.gz ${SAMPLE_ID}_sniffles_resolved.vcf.gz ${SAMPLE_ID}_pav_resolved.vcf.gz
             conda deactivate
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_truvari_collapsed.vcf.gz ${ALIGNED_BAM}
