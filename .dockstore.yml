@@ -90,3 +90,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InterCenterBench.wdl
   testParameterFiles:
+- name: Workpackage1
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Workpackage1.wdl
+  testParameterFiles:
