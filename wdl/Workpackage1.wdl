@@ -240,7 +240,7 @@ task Workpackage1Impl {
         
         
         function TruvariIntrasample() {
-            local SAMPLE_ID=1
+            local SAMPLE_ID=$1
             local PBSV_VCF_GZ=$2
             local SNIFFLES_VCF_GZ=$3
             local PAV_VCF_GZ=$4
