@@ -314,7 +314,7 @@ task Workpackage1Impl {
                 mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_formatted.vcf.gz
                 mv ${INPUT_VCF_GZ}.tbi ${SAMPLE_ID}_formatted.vcf.gz.tbi
             else
-                transferSupp ${SAMPLE_ID} ${INPUT_VCF_GZ} ${SAMPLE_ID}_formatted.vcf.gz
+                TransferSupp ${SAMPLE_ID} ${INPUT_VCF_GZ} ${SAMPLE_ID}_formatted.vcf.gz
             fi
 
             # Making sure there is just one occurrence of '##fileformat=' in the
