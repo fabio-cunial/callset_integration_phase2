@@ -15,8 +15,8 @@ workflow Workpackage1 {
         File ploidy_bed_female
         File ploidy_bed_male
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 6
+        Int ram_size_gb = 8
         Int disk_size_gb = 100
         String kanpig_params_singlesample = "--sizemin 20 --sizemax 10000 --neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
     }
