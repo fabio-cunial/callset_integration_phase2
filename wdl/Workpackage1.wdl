@@ -87,7 +87,8 @@ task Workpackage1Impl {
         
         function LocalizeSample() {
             local SAMPLE_ID=$1
-            local LINE=$2
+            local MODE=$2  # 1=Everything except BAM. 2=BAM only.
+            local LINE=$3
             
             ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
             ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
@@ -99,78 +100,81 @@ task Workpackage1Impl {
             SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 10)
             SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 11)
             
-            while : ; do
-                TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${PAV_VCF_GZ}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${PAV_TBI}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${PBSV_VCF_GZ}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${PBSV_TBI}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${SNIFFLES_VCF_GZ}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil -m cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${SNIFFLES_TBI}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
+            if [ ${MODE} -eq 2 ]; then
+                while : ; do
+                    TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+            else
+                while : ; do
+                    TEST=$(gsutil -m cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${PAV_VCF_GZ}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${PAV_TBI}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${PBSV_VCF_GZ}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${PBSV_TBI}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${SNIFFLES_VCF_GZ}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${SNIFFLES_TBI}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+            fi
         }
         
         
@@ -349,8 +353,7 @@ task Workpackage1Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
-            LocalizeSample ${SAMPLE_ID} ${LINE}
-            
+            LocalizeSample ${SAMPLE_ID} 1 ${LINE}
             PAV2SVs ${SAMPLE_ID} ${SAMPLE_ID}_pav.vcf.gz
             rm -f ${SAMPLE_ID}_pav.vcf.gz*
             source activate truvari4
@@ -364,9 +367,11 @@ task Workpackage1Impl {
             source activate truvari5
             TruvariIntrasample ${SAMPLE_ID} ${SAMPLE_ID}_pbsv_resolved.vcf.gz ${SAMPLE_ID}_sniffles_resolved.vcf.gz ${SAMPLE_ID}_pav_resolved.vcf.gz
             conda deactivate
-            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_truvari_collapsed.vcf.gz ${ALIGNED_BAM}
             
+            LocalizeSample ${SAMPLE_ID} 2 ${LINE}
+            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_truvari_collapsed.vcf.gz ${SAMPLE_ID}_aligned.bam
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ~{remote_outdir}
+            
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
