@@ -338,7 +338,7 @@ task Workpackage1Impl {
             fi
             export RUST_BACKTRACE="full"
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --reference ~{reference_fa} --input ${SAMPLE_ID}_cleaned.vcf.gz --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_tmp1.vcf.gz
-            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_MEM_GB}G --output-type z ${SAMPLE_ID}_tmp1.vcf.gz > ${SAMPLE_ID}_kanpig.vcf.gz
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_tmp1.vcf.gz > ${SAMPLE_ID}_kanpig.vcf.gz
             tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
             rm -f ${SAMPLE_ID}_tmp1.vcf.gz*
         }
