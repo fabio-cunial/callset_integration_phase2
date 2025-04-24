@@ -82,16 +82,9 @@ task Workpackage3Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        export GATK_LOCAL_JAR="/root/gatk.jar"
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
-        GCLOUD_VERSION="517.0.0"
-        pip3 install --no-cache-dir -U crcmod
-        wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz \
-            && tar -xf google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz \
-            && rm -f google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz \
-            && yes | ./google-cloud-sdk/install.sh
-        export PATH=~{work_dir}/google-cloud-sdk/bin:${PATH}
+        export GATK_LOCAL_JAR="/root/gatk.jar"
         
         
         # ----------------------- Steps of the pipeline ------------------------
@@ -101,7 +94,7 @@ task Workpackage3Impl {
             local REMOTE_DIR=$2
             
             while : ; do
-                TEST=$(gsutil -m -o GSUtil:check_hashes=if_fast_else_fail cp ${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -110,7 +103,7 @@ task Workpackage3Impl {
                 fi
             done
             while : ; do
-                TEST=$(gsutil -m -o GSUtil:check_hashes=if_fast_else_fail cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
