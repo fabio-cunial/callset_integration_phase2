@@ -74,6 +74,7 @@ task Workpackage3Impl {
     
     command <<<
         set -euxo pipefail
+        export GATK_LOCAL_JAR="/root/gatk.jar"
         mkdir -p ~{work_dir}
         cd ~{work_dir}
         
@@ -84,8 +85,6 @@ task Workpackage3Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
-        export GATK_LOCAL_JAR="/root/gatk.jar"
-        pip3 install --no-cache-dir -U crcmod
         
         
         # ----------------------- Steps of the pipeline ------------------------
@@ -95,7 +94,7 @@ task Workpackage3Impl {
             local REMOTE_DIR=$2
             
             while : ; do
-                TEST=$(gsutil -m cp ${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gsutil -m -o GSUtil:check_hashes=if_fast_else_fail cp ${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -104,7 +103,7 @@ task Workpackage3Impl {
                 fi
             done
             while : ; do
-                TEST=$(gsutil -m cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gsutil -m -o GSUtil:check_hashes=if_fast_else_fail cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
