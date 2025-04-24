@@ -17,8 +17,8 @@ workflow Workpackage2 {
         String identify_training_sites_extra_args = "--sizemin 20 --sizemax 1000000 --sizefilt 20 --pctsize 0.9 --pctseq 0.9 --pick multi"
         
         Int n_cpu = 4
-        Int ram_size_gb = 12
-        Int disk_size_gb = 100
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
     }
     parameter_meta {
     }
@@ -55,9 +55,9 @@ task Workpackage2Impl {
 
         String identify_training_sites_extra_args
         
-        Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
+        Int n_cpu
+        Int ram_size_gb
+        Int disk_size_gb
     }
     parameter_meta {
     }
@@ -215,6 +215,8 @@ task Workpackage2Impl {
             PreprocessVCF ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             IdentifyTrainingSites ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz
             
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz ~{remote_outdir}
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz.tbi ~{remote_outdir}
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz.tbi ~{remote_outdir}
             DelocalizeSample ${SAMPLE_ID}
