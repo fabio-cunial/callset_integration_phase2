@@ -215,10 +215,10 @@ task Workpackage2Impl {
             PreprocessVCF ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             IdentifyTrainingSites ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz
             
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz ~{remote_outdir}
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz.tbi ~{remote_outdir}
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz.tbi ~{remote_outdir}
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_preprocessed.vcf.gz
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_preprocessed.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_preprocessed.vcf.gz.tbi
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_training.vcf.gz
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_training.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_training.vcf.gz.tbi
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
