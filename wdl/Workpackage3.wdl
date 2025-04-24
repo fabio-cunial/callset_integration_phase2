@@ -77,7 +77,6 @@ task Workpackage3Impl {
         mkdir -p ~{work_dir}
         cd ~{work_dir}
         
-        TIME_COMMAND="time"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
@@ -128,16 +127,16 @@ task Workpackage3Impl {
             local INPUT_VCF_GZ=$2
             local RESOURCE_VCF_GZ=$3
             
-            ${TIME_COMMAND} gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} ~{extract_extra_args}            
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} ~{extract_extra_args}            
             # Output:
             # ${SAMPLE_ID}_extract.annot.hdf5
             # ${SAMPLE_ID}_extract.unlabeled.annot.hdf5
             # ${SAMPLE_ID}_extract.vcf.gz
             # ${SAMPLE_ID}_extract.vcf.gz.tbi
-            ${TIME_COMMAND} gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 ${SAMPLE_ID}_extract.annot.hdf5 --unlabeled-annotations-hdf5 ${SAMPLE_ID}_extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train ~{train_extra_args}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 ${SAMPLE_ID}_extract.annot.hdf5 --unlabeled-annotations-hdf5 ${SAMPLE_ID}_extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train ~{train_extra_args}
             # Output: 
             # ${SAMPLE_ID}.train.*
-            ${TIME_COMMAND} gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} ~{score_extra_args}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} ~{score_extra_args}
             # Output:
             # ${SAMPLE_ID}_score.vcf.gz
             # ${SAMPLE_ID}_score.vcf.gz.tbi
@@ -159,7 +158,7 @@ task Workpackage3Impl {
             # copy SCORE INFO to FORMAT
             bcftools query -f '%CHROM\t%POS\t%ID\t%SCORE\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.score.tsv.gz
             tabix -s1 -b2 -e2 ${SAMPLE_ID}_format.score.tsv.gz
-            ${TIME_COMMAND} bcftools annotate -a ${SAMPLE_ID}_format.score.tsv.gz -h ${SAMPLE_ID}_format.hdr.txt -c CHROM,POS,ID,FORMAT/SCORE ${INPUT_VCF_GZ} -Oz -o ${SAMPLE_ID}_postprocessed.vcf.gz
+            bcftools annotate -a ${SAMPLE_ID}_format.score.tsv.gz -h ${SAMPLE_ID}_format.hdr.txt -c CHROM,POS,ID,FORMAT/SCORE ${INPUT_VCF_GZ} -Oz -o ${SAMPLE_ID}_postprocessed.vcf.gz
             bcftools index -t ${SAMPLE_ID}_postprocessed.vcf.gz
             
             # Removing temporary files
