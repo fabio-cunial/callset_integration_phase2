@@ -128,15 +128,21 @@ task Workpackage3Impl {
             local RESOURCE_VCF_GZ=$3
             
             gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} ~{extract_extra_args}            
+            ls -laht
+            tree
             # Output:
             # ${SAMPLE_ID}_extract.annot.hdf5
             # ${SAMPLE_ID}_extract.unlabeled.annot.hdf5
             # ${SAMPLE_ID}_extract.vcf.gz
             # ${SAMPLE_ID}_extract.vcf.gz.tbi
             gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 ${SAMPLE_ID}_extract.annot.hdf5 --unlabeled-annotations-hdf5 ${SAMPLE_ID}_extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train ~{train_extra_args}
+            ls -laht
+            tree
             # Output: 
             # ${SAMPLE_ID}.train.*
             gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} ~{score_extra_args}
+            ls -laht
+            tree
             # Output:
             # ${SAMPLE_ID}_score.vcf.gz
             # ${SAMPLE_ID}_score.vcf.gz.tbi
