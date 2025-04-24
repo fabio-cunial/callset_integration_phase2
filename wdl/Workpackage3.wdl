@@ -177,8 +177,8 @@ task Workpackage3Impl {
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             PostprocessVCF ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
             
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_postprocessed.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_scored.vcf.gz
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_postprocessed.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_scored.vcf.gz.tbi
+            gcloud storage mv ${SAMPLE_ID}_postprocessed.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_scored.vcf.gz
+            gcloud storage mv ${SAMPLE_ID}_postprocessed.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_scored.vcf.gz.tbi
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
