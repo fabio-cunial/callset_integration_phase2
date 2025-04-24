@@ -85,6 +85,7 @@ task Workpackage3Impl {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export GATK_LOCAL_JAR="/root/gatk.jar"
+        pip3 install --no-cache-dir -U crcmod
         
         
         # ----------------------- Steps of the pipeline ------------------------
