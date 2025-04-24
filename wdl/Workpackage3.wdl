@@ -9,14 +9,13 @@ workflow Workpackage3 {
         File sv_integration_chunk_tsv
         String remote_indir
         String remote_outdir
+        
+        File training_resource_bed
 
         Array[String] annotations = ["KS_1","KS_2","SQ","GQ","DP","AD_NON_ALT","AD_ALL","GT_COUNT","SUPP_PAV","SUPP_SNIFFLES","SUPP_PBSV","SVLEN"]
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
-        String extract_extra_args = "--mode INDEL"
-        String train_extra_args = "--mode INDEL --verbosity DEBUG"
-        String score_extra_args = "--mode INDEL --mnp-type INDEL --verbosity DEBUG"
         
         Int n_cpu = 4
         Int ram_size_gb = 12
@@ -30,13 +29,11 @@ workflow Workpackage3 {
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
+            training_resource_bed = training_resource_bed,
             annotations = annotations,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
-            extract_extra_args = extract_extra_args,
-            train_extra_args = train_extra_args,
-            score_extra_args = score_extra_args,
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb,
             disk_size_gb = disk_size_gb
@@ -53,14 +50,13 @@ task Workpackage3Impl {
         File sv_integration_chunk_tsv
         String remote_indir
         String remote_outdir
+        
+        File training_resource_bed
 
         Array[String] annotations
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
-        String extract_extra_args
-        String train_extra_args
-        String score_extra_args
         
         Int n_cpu
         Int ram_size_gb
@@ -127,22 +123,19 @@ task Workpackage3Impl {
             local INPUT_VCF_GZ=$2
             local RESOURCE_VCF_GZ=$3
             
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} ~{extract_extra_args}            
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}
             ls -laht
-            tree
             # Output:
             # ${SAMPLE_ID}_extract.annot.hdf5
             # ${SAMPLE_ID}_extract.unlabeled.annot.hdf5
             # ${SAMPLE_ID}_extract.vcf.gz
             # ${SAMPLE_ID}_extract.vcf.gz.tbi
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 ${SAMPLE_ID}_extract.annot.hdf5 --unlabeled-annotations-hdf5 ${SAMPLE_ID}_extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train ~{train_extra_args}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 ${SAMPLE_ID}_extract.annot.hdf5 --unlabeled-annotations-hdf5 ${SAMPLE_ID}_extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train --mode INDEL --verbosity DEBUG
             ls -laht
-            tree
             # Output: 
             # ${SAMPLE_ID}.train.*
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} ~{score_extra_args}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --verbosity DEBUG
             ls -laht
-            tree
             # Output:
             # ${SAMPLE_ID}_score.vcf.gz
             # ${SAMPLE_ID}_score.vcf.gz.tbi
