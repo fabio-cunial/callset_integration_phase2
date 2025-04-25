@@ -7,7 +7,7 @@ version 1.0
 workflow Workpackage4 {
     input {
         File sv_integration_chunk_tsv
-        File split_for_bcftools_merge_bed
+        File split_for_bcftools_merge_csv
         String remote_indir
         String remote_outdir
         
@@ -16,13 +16,13 @@ workflow Workpackage4 {
         Int disk_size_gb = 20
     }
     parameter_meta {
-        split_for_bcftools_merge_bed: "A partition that covers all chromosomes. Every line is a 0-based, half-open, consecutive chunk of a chromosome. Lines are assumed to be sorted."
+        split_for_bcftools_merge_csv: "A partition that covers all chromosomes. Every line is a 0-based, half-open, consecutive chunk of a chromosome. Lines are assumed to be sorted."
     }
     
     call Workpackage4Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
-            split_for_bcftools_merge_bed = split_for_bcftools_merge_bed,
+            split_for_bcftools_merge_csv = split_for_bcftools_merge_csv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             n_cpu = n_cpu,
@@ -39,7 +39,7 @@ workflow Workpackage4 {
 task Workpackage4Impl {
     input {
         File sv_integration_chunk_tsv
-        File split_for_bcftools_merge_bed
+        File split_for_bcftools_merge_csv
         String remote_indir
         String remote_outdir
         
@@ -104,8 +104,16 @@ task Workpackage4Impl {
                 ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 tabix -f ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 i=$(( ${i} + 1 ))
-            done < ~{split_for_bcftools_merge_bed}
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/
+            done < ~{split_for_bcftools_merge_csv}
+            while : ; do
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+                if [ ${TEST} -eq 1 ]; then
+                    echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
+                    sleep ${GSUTIL_DELAY_S}
+                else
+                    break
+                fi
+            done
         }
         
         
