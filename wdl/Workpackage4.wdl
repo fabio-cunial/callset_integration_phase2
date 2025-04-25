@@ -100,7 +100,7 @@ task Workpackage4Impl {
             
             i="0"
             while read INTERVAL; do
-                echo ${INTERVAL} > ${SAMPLE_ID}.bed
+                echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 tabix -f ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 i=$(( ${i} + 1 ))

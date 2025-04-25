@@ -30,7 +30,7 @@ public class SplitForBcftoolsMerge {
             chrLength=Integer.parseInt(tokens[1]);
             i=0;
             while (i<chrLength) {
-                System.out.println(tokens[0]+"\t"+i+"\t"+Math.min(i+CHUNK_LENGH_BP,chrLength));
+                System.out.println(tokens[0]+","+i+","+Math.min(i+CHUNK_LENGH_BP,chrLength));
                 i+=CHUNK_LENGH_BP;
             }
             str=br.readLine();
