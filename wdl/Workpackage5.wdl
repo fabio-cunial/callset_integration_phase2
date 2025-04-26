@@ -14,7 +14,7 @@ workflow Workpackage5 {
         String remote_outdir
         
         Int n_cpu = 4
-        Int ram_size_gb = 128
+        Int ram_size_gb = 36
         Int disk_size_gb = 100
     }
     parameter_meta {
@@ -38,13 +38,13 @@ workflow Workpackage5 {
 }
 
 
-# Performance on 10'070 samples, one chunk, 15x, GRCh38:
+# Performance on 10'070 samples, 15x, GRCh38, 0-th chunk:
 #
-# CAL_SENS  TOOL                      CPU     RAM     TIME
-# <=0.7     bcftools merge            150%    26G     1h30m
-# <=0.7     bcftools norm             150%    5G      20m
-# <=0.9     bcftools merge            
-# <=0.9     bcftools norm             
+# CAL_SENS  TOOL               CPU     RAM     TIME
+# <=0.7     bcftools merge     150%    26G     1h30m
+# <=0.9     bcftools merge     150%    32G     4h
+# <=0.7     bcftools norm      150%    5G      20m
+# <=0.9     bcftools norm      150%    8.7G    40m
 #
 task Workpackage5Impl {
     input {
@@ -55,9 +55,9 @@ task Workpackage5Impl {
         String remote_indir
         String remote_outdir
         
-        Int n_cpu = 4
-        Int ram_size_gb = 128
-        Int disk_size_gb = 100
+        Int n_cpu
+        Int ram_size_gb
+        Int disk_size_gb
     }
     parameter_meta {
     }

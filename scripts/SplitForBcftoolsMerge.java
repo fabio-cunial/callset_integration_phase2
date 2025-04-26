@@ -3,7 +3,7 @@ import java.io.*;
 /**
  * Splits every chromosome into consecutive intervals of fixed size.
  *
- * Remark: the output is a 0-based, half-open BED. To split a single-sample VCF
+ * Remark: the output is a 0-based, half-open CSV. To split a single-sample VCF
  * in preparation of a parallel bcftools merge, one should use the BED as 
  * follows:
  *
