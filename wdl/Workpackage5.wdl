@@ -38,6 +38,13 @@ workflow Workpackage5 {
 }
 
 
+# Performance on 10'070 samples, one chunk, 15x, GRCh38:
+#
+# CAL_SENS  TOOL                      CPU     RAM     TIME
+# <=0.7     bcftools merge            150%    26G     1h30m
+# <=0.7     bcftools norm             150%    5G      20m
+# <=0.9     bcftools merge            
+# <=0.9     bcftools norm             
 #
 task Workpackage5Impl {
     input {
@@ -119,8 +126,8 @@ task Workpackage5Impl {
         ls -laht ~{chunk_id}_merged.vcf.gz
         
         # Uploading
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ~{chunk_id}_normed.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ~{chunk_id}_normed.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz.tbi
+        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ~{chunk_id}_normed.vcf.gz ~{remote_outdir}/chunk_~{chunk_id}.vcf.gz
+        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ~{chunk_id}_normed.vcf.gz.tbi ~{remote_outdir}/chunk_~{chunk_id}.vcf.gz.tbi
     >>>
     
     output {
