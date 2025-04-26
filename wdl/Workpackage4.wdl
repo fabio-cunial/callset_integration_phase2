@@ -94,6 +94,28 @@ task Workpackage4Impl {
         }
         
         
+        # Transfers INFO annotations to FORMAT, so that they are preserved by
+        # the inter-sample merge later.
+        #
+        # Remark: SCORE has already been transfered to FORMAT by
+        # `Workpackage3.wdl`
+        #
+        function TransferAnnotations() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            
+            echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' > ${SAMPLE_ID}_header.txt
+            echo '##FORMAT=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
+            echo '##FORMAT=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by sniffles">' >> ${SAMPLE_ID}_header.txt
+            echo '##FORMAT=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' >> ${SAMPLE_ID}_header.txt
+            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%CALIBRATION_SENSITIVITY\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,ID,REF,ALT,FORMAT/CALIBRATION_SENSITIVITY,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV ${INPUT_VCF_GZ} --output-type z > ${SAMPLE_ID}_transfered.vcf.gz
+            tabix -f ${SAMPLE_ID}_transfered.vcf.gz
+        }
+        
+        
         function Filter() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -125,7 +147,8 @@ task Workpackage4Impl {
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
-            Filter ${SAMPLE_ID} ${SAMPLE_ID}_scored.vcf.gz
+            TransferAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_scored.vcf.gz
+            Filter ${SAMPLE_ID} ${SAMPLE_ID}_transfered.vcf.gz
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
