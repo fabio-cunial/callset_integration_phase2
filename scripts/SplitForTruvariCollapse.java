@@ -32,7 +32,7 @@ public class SplitForTruvariCollapse {
         final int SLACK = Integer.parseInt(args[4]);
         
         int i;
-        int from, to, currentFrom, currentTo, nInputChunks, chrLength;
+        int chrLength, from, to, currentFrom, currentTo, nInputChunks, nOutputChunks;
         String str;
         BufferedReader br;
         String[] tokens;
@@ -67,20 +67,25 @@ public class SplitForTruvariCollapse {
         
         // Computing output chunks
         br = new BufferedReader(new FileReader(INPUT_BED));
-        currentFrom=0; currentTo=0; tokens=null;
+        currentFrom=0; currentTo=0; tokens=null; nOutputChunks=0;
         for (i=0; i<nInputChunks; i++) {
             str=br.readLine();
             tokens=str.split("\t");
             from=Integer.parseInt(tokens[1]); to=Integer.parseInt(tokens[2]);
             if (to>currentTo) currentTo=to;
             if (currentTo-currentFrom>=CHUNK_LENGTH_BP) {
+                nOutputChunks++;
                 if (i==nInputChunks-1) currentTo=chrLength;
                 System.out.println(tokens[0]+","+currentFrom+","+(currentTo+SLACK));
                 currentFrom=currentTo+SLACK; currentTo=currentFrom;
             }
         }
         br.close();
-        if (currentTo<chrLength) System.out.println(tokens[0]+","+currentFrom+","+chrLength);
+        if (currentTo<chrLength) {
+            nOutputChunks++;
+            System.out.println(tokens[0]+","+currentFrom+","+chrLength);
+        }
+        System.err.println("Created "+nOutputChunks+" truvari chunks for "+CHROMOSOME);
     }
     
 }

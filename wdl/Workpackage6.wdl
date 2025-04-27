@@ -5,28 +5,40 @@ version 1.0
 #
 workflow Workpackage6 {
     input {
-        Int chunk_id
-        String filter_string
-        File sample_ids
+        String chromosome_id
+        String bcftools_chunks
         
         String remote_indir
         String remote_outdir
         
+        File reference_fai
+        File density_counter_py
+        Int max_records_per_chunk = 10000
+        Int truvari_chunk_length = 3000000
+        Int slack_bp = 2
+        
         Int n_cpu = 4
-        Int ram_size_gb = 128
+        Int ram_size_gb = 8
         Int disk_size_gb = 100
     }
     parameter_meta {
-        sample_ids: "Speficies the order of the samples used by bcftools merge."
+        bcftools_chunks: "Comma-separated. Chunks must be sorted by POS."
+        max_records_per_chunk: "Chunks with more records than this are excluded from truvari collapse."
+        truvari_chunk_length: "Min number of bps that a truvari collapse chunk should have."
+        slack_bp: "Extend a chunk [start,end) emitted by `density_counter_py` to [start,end+slack_bp), just for boundary safety."
     }
     
-    call Workpackage5Impl {
+    call Workpackage6Impl {
         input:
-            chunk_id = chunk_id,
-            filter_string = filter_string,
-            sample_ids = sample_ids,
+            chromosome_id = chromosome_id,
+            bcftools_chunks = bcftools_chunks,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
+            reference_fai = reference_fai,
+            density_counter_py = density_counter_py,
+            max_records_per_chunk = max_records_per_chunk,
+            truvari_chunk_length = truvari_chunk_length,
+            slack_bp = slack_bp,
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb,
             disk_size_gb = disk_size_gb
@@ -35,14 +47,6 @@ workflow Workpackage6 {
     output {
     }
 }
-
-
-
-
-
-
-
-
 
 
 #
@@ -56,19 +60,18 @@ task Workpackage6Impl {
         
         File reference_fai
         File density_counter_py
-        Int truvari_chunk_length = 3000000
-        Int slack = 2
+        Int max_records_per_chunk
+        Int truvari_chunk_length
+        Int slack_bp
         
-        Int n_cpu = 4
-        Int ram_size_gb = 128
-        Int disk_size_gb = 100
+        Int n_cpu
+        Int ram_size_gb
+        Int disk_size_gb
     }
     parameter_meta {
-        bcftools_chunks: "Comma-separated. Order is important."
-        slack: ""
     }
     
-    String docker_dir = "/root"
+    String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
@@ -104,26 +107,52 @@ task Workpackage6Impl {
         
         # Creating truvari collapse chunks
         ${TIME_COMMAND} python ~{density_counter_py} ~{chromosome_id}.vcf.gz > ~{chromosome_id}_tmp.bed
-        bedtools sort -i ~{chromosome_id}_tmp.bed > ~{chromosome_id}_chunks.bed
+        ${TIME_COMMAND} bedtools sort -i ~{chromosome_id}_tmp.bed > ~{chromosome_id}_chunks.bed
         rm -f ~{chromosome_id}_tmp.bed
+        java -cp ~{docker_dir} ChunkHistogram ~{chromosome_id}_chunks.bed
         awk '$4 >= ~{max_records_per_chunk}' ~{chromosome_id}_chunks.bed > ~{chromosome_id}_excluded.bed
         cat ~{chromosome_id}_excluded.bed
-        bedtools complement -i ~{chromosome_id}_excluded.bed -g ~{reference_fai} > ~{chromosome_id}_tmp.bed
-        bedtools sort -i ~{chromosome_id}_tmp.bed > ~{chromosome_id}_included.bed
+        ${TIME_COMMAND} bedtools complement -i ~{chromosome_id}_excluded.bed -g ~{reference_fai} > ~{chromosome_id}_tmp.bed
+        ${TIME_COMMAND} bedtools sort -i ~{chromosome_id}_tmp.bed > ~{chromosome_id}_included.bed
         rm -f ~{chromosome_id}_tmp.bed
-        ${TIME_COMMAND} java SplitForTruvariCollapse ~{chromosome_id} ~{chromosome_id}_chunks.bed ~{reference_fai} ~{truvari_chunk_length} ~{slack} > ~{chromosome_id}_truvari_chunks.csv
+        ${TIME_COMMAND} java -cp ~{docker_dir} SplitForTruvariCollapse ~{chromosome_id} ~{chromosome_id}_chunks.bed ~{reference_fai} ~{truvari_chunk_length} ~{slack_bp} > ~{chromosome_id}_truvari_chunks.csv
+        
+        # Partitioning the chromosome VCF
         i="0"
+        N_RECORDS_BEFORE=$( bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi )
+        N_RECORDS_AFTER="0"
         while read INTERVAL; do
             echo ${INTERVAL} | tr ',' '\t' > tmp.bed
             ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file tmp.bed --regions-overlap pos --output-type z ~{chromosome_id}.vcf.gz > ~{chromosome_id}_chunk_${i}.vcf.gz
             tabix -f ~{chromosome_id}_chunk_${i}.vcf.gz
+            N=$( bcftools index --nrecords ~{chromosome_id}_chunk_${i}.vcf.gz.tbi )
+            N_RECORDS_AFTER=$(( ${N_RECORDS_AFTER} + ${N} ))
             i=$(( ${i} + 1 ))
         done < ~{chromosome_id}_truvari_chunks.csv
+        if [ ${N_RECORDS_AFTER} -ne ${N_RECORDS_BEFORE} ]; then
+            echo "ERROR: the truvari collapse chunks contain ${N_RECORDS_AFTER} total records, but the chromosome VCF contains ${N_RECORDS_BEFORE} records."
+            exit 1
+        fi
         
         # Uploading the truvari collapse chunks and the BED files
-        gsutil -m cp ~{chromosome_id}_excluded.bed ~{remote_outdir}
-        gsutil -m cp ~{chromosome_id}_included.bed ~{remote_outdir}
-        gsutil -m cp ~{chromosome_id}_chunk_'*'.vcf.'gz*' ~{remote_outdir}
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading truvari collapse chunks. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}_'*'.bed ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading BED files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
     >>>
     
     output {

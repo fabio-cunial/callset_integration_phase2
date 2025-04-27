@@ -115,3 +115,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Workpackage5.wdl
   testParameterFiles:
+- name: Workpackage6
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Workpackage6.wdl
+  testParameterFiles:

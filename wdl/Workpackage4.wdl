@@ -50,7 +50,7 @@ task Workpackage4Impl {
     parameter_meta {
     }
     
-    String docker_dir = "/root"
+    String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
