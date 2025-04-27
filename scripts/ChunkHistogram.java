@@ -28,6 +28,7 @@ public class ChunkHistogram {
             if (i<0) i=-i-1;
             if (i==BINS.length) i=BINS.length-1;
             histogram[i]++;
+            str=br.readLine();
         }
         br.close();
         for (i=0; i<BINS.length; i++) System.out.println(BINS[i]+","+histogram[i]);
