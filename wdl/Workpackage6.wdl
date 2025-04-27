@@ -1,7 +1,8 @@
 version 1.0
 
 
-# 
+# For a given chromosome, computes truvari collapse chunks from bcftools merge
+# chunks.
 #
 workflow Workpackage6 {
     input {
@@ -49,6 +50,12 @@ workflow Workpackage6 {
 }
 
 
+# Performance on 10'070 samples, 15x, GRCh38, chr1:
+#
+# CAL_SENS  TOOL                    CPU     RAM     TIME
+# <=0.7     bcftools concat         
+# <=0.7     density_counter_py      
+# <=0.7     bcftools view          
 #
 task Workpackage6Impl {
     input {
@@ -106,7 +113,9 @@ task Workpackage6Impl {
         rm -f chunk_*.vcf.gz*
         
         # Creating truvari collapse chunks
+        source activate truvari4
         ${TIME_COMMAND} python ~{density_counter_py} ~{chromosome_id}.vcf.gz > ~{chromosome_id}_tmp.bed
+        conda deactivate
         ${TIME_COMMAND} bedtools sort -i ~{chromosome_id}_tmp.bed > ~{chromosome_id}_chunks.bed
         rm -f ~{chromosome_id}_tmp.bed
         java -cp ~{docker_dir} ChunkHistogram ~{chromosome_id}_chunks.bed
