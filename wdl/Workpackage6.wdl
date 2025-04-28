@@ -49,13 +49,7 @@ workflow Workpackage6 {
     }
 }
 
-
-# Performance on 10'070 samples, 15x, GRCh38, chr1:
-#
-# CAL_SENS  TOOL                    CPU     RAM     TIME
-# <=0.7     bcftools concat         
-# <=0.7     density_counter_py      
-# <=0.7     bcftools view          
+   
 #
 task Workpackage6Impl {
     input {
