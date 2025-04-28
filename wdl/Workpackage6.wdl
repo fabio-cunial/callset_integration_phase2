@@ -97,14 +97,16 @@ task Workpackage6Impl {
         
         # Localizing all the bcftools merge chunks of the given chromosome
         for CHUNK in $(echo ~{bcftools_chunks} | tr ',' ' '); do
-            TEST=$(gsutil -m cp ~{remote_indir}/chunk_${CHUNK}.vcf.'gz*' . && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error downloading chunk ${CHUNK}. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                echo chunk_${CHUNK}.vcf.gz >> list.txt
-                break
-            fi
+            while : ; do
+                TEST=$(gsutil -m cp ~{remote_indir}/chunk_${CHUNK}.vcf.'gz*' . && echo 0 || echo 1)
+                if [ ${TEST} -eq 1 ]; then
+                    echo "Error downloading chunk ${CHUNK}. Trying again..."
+                    sleep ${GSUTIL_DELAY_S}
+                else
+                    echo chunk_${CHUNK}.vcf.gz >> list.txt
+                    break
+                fi
+            done
         done
         
         # Concatenating all the bcftools merge chunks
@@ -154,9 +156,9 @@ task Workpackage6Impl {
             fi
         done
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}_'*'.bed ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}_'*'.bed ~{chromosome_id}_'*'.csv ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading BED files. Trying again..."
+                echo "Error uploading BED/CSV files. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
             else
                 break
