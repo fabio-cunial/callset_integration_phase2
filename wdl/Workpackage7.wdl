@@ -72,7 +72,7 @@ task Workpackage7Impl {
         
         # Localizing the truvari collapse chunk
         while : ; do
-            TEST=$(gsutil -m cp ~{chromosome_id}_chunk_~{chunk_id}.vcf.'gz*' . && echo 0 || echo 1)
+            TEST=$(gsutil -m cp ~{remote_indir}/~{chromosome_id}_chunk_~{chunk_id}.vcf.'gz*' . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading ~{chromosome_id} chunk ~{chunk_id}. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -82,7 +82,7 @@ task Workpackage7Impl {
         done
         if ~{use_bed} ; then
             while : ; do
-                TEST=$(gsutil -m cp ~{chromosome_id}_included.bed . && echo 0 || echo 1)
+                TEST=$(gsutil -m cp ~{remote_indir}/~{chromosome_id}_included.bed . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading ~{chromosome_id} included BED. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
