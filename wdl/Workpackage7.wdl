@@ -8,7 +8,7 @@ workflow Workpackage7 {
         String chromosome_id
         Int chunk_id
         Boolean use_bed
-        String truvari_flags = "--sizemin 0 --sizemax 1000000 --keep common --gt all"
+        String truvari_flags = "--sizemin 0 --sizemax 1000000 --keep first --gt off"
         Boolean drop_gts = false
         
         String remote_indir
@@ -20,6 +20,8 @@ workflow Workpackage7 {
     }
     parameter_meta {
         remote_indir: "Contains chunks of a bcftools merge VCF that need to be collapsed with truvari."
+        drop_gts: "Remove all the sample GT fields from the VCF before running truvari collapse. This was suggested e.g. in https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
+        truvari_flags: "`--gt all` is very slow for 10k samples. See e.g. https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
     }
     
     call Workpackage7Impl {

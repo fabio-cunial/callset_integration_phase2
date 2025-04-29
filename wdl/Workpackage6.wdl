@@ -25,7 +25,7 @@ workflow Workpackage6 {
     parameter_meta {
         bcftools_chunks: "Comma-separated. Chunks must be sorted by POS."
         max_records_per_chunk: "Chunks with more records than this are excluded from truvari collapse."
-        truvari_chunk_length: "Min number of bps that a truvari collapse chunk should have."
+        truvari_chunk_length: "Min number of bps that a truvari collapse chunk should have. On 10k samples, setting this to 1M gives ~3k chunks for CAL_SENS<=0.7."
         slack_bp: "Extend a chunk [start,end) emitted by `density_counter_py` to [start,end+slack_bp), just for boundary safety."
     }
     
