@@ -15,7 +15,7 @@ workflow Workpackage6 {
         File reference_fai
         File density_counter_py
         Int max_records_per_chunk = 10000
-        Int truvari_chunk_length = 3000000
+        Int truvari_chunk_length = 1000000
         Int slack_bp = 2
         
         Int n_cpu = 4
