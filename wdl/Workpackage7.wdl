@@ -9,6 +9,7 @@ workflow Workpackage7 {
         Int chunk_id
         Boolean use_bed
         String truvari_flags = "--sizemin 0 --sizemax 1000000 --keep common --gt all"
+        Boolean drop_gts = false
         
         String remote_indir
         String remote_outdir
@@ -27,6 +28,7 @@ workflow Workpackage7 {
             chunk_id = chunk_id,
             use_bed = use_bed,
             truvari_flags = truvari_flags,
+            drop_gts = drop_gts,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             n_cpu = n_cpu,
@@ -46,6 +48,7 @@ task Workpackage7Impl {
         Int chunk_id
         Boolean use_bed
         String truvari_flags
+        Boolean drop_gts
         
         String remote_indir
         String remote_outdir
@@ -96,6 +99,14 @@ task Workpackage7Impl {
             BED_FLAGS="--bed ~{chromosome_id}_included.bed"
         else 
             BED_FLAGS=" "
+        fi
+        
+        # Removing GTs
+        if ~{drop_gts}; then
+            ${TIME_COMMAND} bcftools view --drop-genotypes ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz --output-type z > tmp.vcf.gz
+            rm -f ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz*
+            mv tmp.vcf.gz ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz
+            tabix -f ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz
         fi
         
         # Collapsing
