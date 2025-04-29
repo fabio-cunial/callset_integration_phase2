@@ -13,7 +13,6 @@ workflow Workpackage7 {
         String remote_indir
         String remote_outdir
         
-        Boolean verbose_logging = false
         Int n_cpu = 2
         Int ram_size_gb = 16
         Int disk_size_gb = 100
@@ -30,7 +29,6 @@ workflow Workpackage7 {
             truvari_flags = truvari_flags,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
-            verbose_logging = verbose_logging,
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb,
             disk_size_gb = disk_size_gb
