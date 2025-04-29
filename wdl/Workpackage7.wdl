@@ -8,6 +8,7 @@ workflow Workpackage7 {
         String chromosome_id
         Int chunk_id
         Boolean use_bed
+        String truvari_flags = "--sizemin 0 --sizemax 1000000 --keep common --gt all"
         
         String remote_indir
         String remote_outdir
@@ -26,6 +27,7 @@ workflow Workpackage7 {
             chromosome_id = chromosome_id,
             chunk_id = chunk_id,
             use_bed = use_bed,
+            truvari_flags = truvari_flags,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             verbose_logging = verbose_logging,
@@ -45,11 +47,11 @@ task Workpackage7Impl {
         String chromosome_id
         Int chunk_id
         Boolean use_bed
+        String truvari_flags
         
         String remote_indir
         String remote_outdir
         
-        Boolean verbose_logging
         Int n_cpu
         Int ram_size_gb
         Int disk_size_gb
@@ -93,19 +95,14 @@ task Workpackage7Impl {
                     break
                 fi
             done
-            BED_ARGS="--bed ~{chromosome_id}_included.bed"
+            BED_FLAGS="--bed ~{chromosome_id}_included.bed"
         else 
-            BED_ARGS=" "
+            BED_FLAGS=" "
         fi
         
         # Collapsing
-        if ~{verbose_logging} ; then
-            VERBOSE_FLAG="--debug"
-        else
-            VERBOSE_FLAG=" "
-        fi
         source activate truvari5
-        ${TIME_COMMAND} truvari collapse --input ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz --sizemin 0 --sizemax 1000000 --keep common ${BED_ARGS} --gt all ${VERBOSE_FLAG} --output tmp.vcf
+        ${TIME_COMMAND} truvari collapse --input ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz ~{truvari_flags} ${BED_FLAGS} --output tmp.vcf
         ${TIME_COMMAND} bcftools sort --max-mem $(( ~{ram_size_gb} - 2 ))G --output-type z tmp.vcf > ~{chromosome_id}_chunk_~{chunk_id}_truvari.vcf.gz
         tabix -f ~{chromosome_id}_chunk_~{chunk_id}_truvari.vcf.gz
         
