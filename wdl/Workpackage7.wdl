@@ -9,7 +9,7 @@ workflow Workpackage7 {
         Int chunk_id
         Boolean use_bed
         String truvari_flags = "--sizemin 0 --sizemax 1000000 --gt off --keep maxqual"
-        Boolean drop_gts = false
+        Boolean drop_gts = true
         
         String remote_indir
         String remote_outdir
