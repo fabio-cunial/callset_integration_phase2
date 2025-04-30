@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l Workpackage8.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage7.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage6.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage5.wdl

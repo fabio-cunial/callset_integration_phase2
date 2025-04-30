@@ -1,7 +1,8 @@
 version 1.0
 
 
-# 
+# Runs truvari collapse on a small chunk of a bcftools merged cohort VCF.
+# Default arguments are optimal for 10k samples.
 #
 workflow Workpackage7 {
     input {
