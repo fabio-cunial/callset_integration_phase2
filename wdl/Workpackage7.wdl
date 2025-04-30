@@ -21,7 +21,7 @@ workflow Workpackage7 {
     parameter_meta {
         remote_indir: "Contains chunks of a bcftools merge VCF that need to be collapsed with truvari."
         drop_gts: "Remove all the sample GT fields from the VCF before running truvari collapse. This was suggested e.g. in https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
-        truvari_flags: "`--gt all` is very slow on 10k samples. See e.g. https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
+        truvari_flags: "`--gt all` is very slow on 10k samples. `--keep maxqual` simulates `--keep common` since we write AC in the QUAL field. See https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
     }
     
     call Workpackage7Impl {
@@ -105,10 +105,11 @@ task Workpackage7Impl {
         fi
         N_RECORDS=$( bcftools index --nrecords ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz.tbi )
         
-        # Writing AF in the QUAL field
-        ${TIME_COMMAND} bcftools +fill-tags ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz -Oz -o tmp.vcf.gz -- -t AF
+        # Writing AC in the QUAL field, as suggested in:
+        # https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205
+        ${TIME_COMMAND} bcftools +fill-tags ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz -Oz -o tmp.vcf.gz -- -t AC
         tabix -f tmp.vcf.gz
-        bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AF\n' tmp.vcf.gz | bgzip -c > annotations.tsv.gz
+        bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AC\n' tmp.vcf.gz | bgzip -c > annotations.tsv.gz
         tabix -s1 -b2 -e2 annotations.tsv.gz
         rm -f tmp.vcf.gz*
         ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,QUAL ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz --output-type z > tmp.vcf.gz
