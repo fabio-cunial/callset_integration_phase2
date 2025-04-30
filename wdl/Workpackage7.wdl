@@ -9,7 +9,7 @@ workflow Workpackage7 {
         Int chunk_id
         Boolean use_bed
         String truvari_flags = "--sizemin 0 --sizemax 1000000 --gt off --keep maxqual"
-        Boolean drop_gts = true
+        Boolean drop_gts = false
         
         String remote_indir
         String remote_outdir
@@ -20,7 +20,7 @@ workflow Workpackage7 {
     }
     parameter_meta {
         remote_indir: "Contains chunks of a bcftools merge VCF that need to be collapsed with truvari."
-        drop_gts: "Remove all the sample GT fields from the VCF before running truvari collapse. This was suggested e.g. in https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
+        drop_gts: "Remove all the sample GT fields from the VCF before running truvari collapse. WARNING: this discards SUPP fields that were moved to FORMAT by previous steps of the pipeline. It was suggested e.g. in https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
         truvari_flags: "`--gt all` is very slow on 10k samples. `--keep maxqual` simulates `--keep common` since we write AC in the QUAL field. See https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
     }
     
