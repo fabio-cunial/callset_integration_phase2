@@ -8,20 +8,20 @@ workflow Workpackage7 {
         String chromosome_id
         Int chunk_id
         Boolean use_bed
-        String truvari_flags = "--sizemin 0 --sizemax 1000000 --keep first --gt off"
+        String truvari_flags = "--sizemin 0 --sizemax 1000000 --gt off --keep maxqual"
         Boolean drop_gts = false
         
         String remote_indir
         String remote_outdir
         
         Int n_cpu = 2
-        Int ram_size_gb = 16
+        Int ram_size_gb = 8
         Int disk_size_gb = 100
     }
     parameter_meta {
         remote_indir: "Contains chunks of a bcftools merge VCF that need to be collapsed with truvari."
         drop_gts: "Remove all the sample GT fields from the VCF before running truvari collapse. This was suggested e.g. in https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
-        truvari_flags: "`--gt all` is very slow for 10k samples. See e.g. https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
+        truvari_flags: "`--gt all` is very slow on 10k samples. See e.g. https://github.com/ACEnglish/truvari/issues/220#issuecomment-2830920205"
     }
     
     call Workpackage7Impl {
@@ -77,6 +77,7 @@ task Workpackage7Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.21/plugins"
         
         # Localizing the truvari collapse chunk
         while : ; do
@@ -102,6 +103,18 @@ task Workpackage7Impl {
         else 
             BED_FLAGS=" "
         fi
+        N_RECORDS=$( bcftools index --nrecords ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz.tbi )
+        
+        # Writing AF in the QUAL field
+        ${TIME_COMMAND} bcftools +fill-tags ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz -Oz -o tmp.vcf.gz -- -t AF
+        tabix -f tmp.vcf.gz
+        bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AF\n' tmp.vcf.gz | bgzip -c > annotations.tsv.gz
+        tabix -s1 -b2 -e2 annotations.tsv.gz
+        rm -f tmp.vcf.gz*
+        ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,QUAL ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz --output-type z > tmp.vcf.gz
+        rm -f ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz*
+        mv tmp.vcf.gz ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz
+        tabix -f ~{chromosome_id}_chunk_~{chunk_id}.vcf.gz*
         
         # Removing GTs
         if ~{drop_gts}; then
