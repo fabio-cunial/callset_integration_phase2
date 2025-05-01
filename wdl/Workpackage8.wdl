@@ -1,7 +1,11 @@
 version 1.0
 
 
-# 
+# Concatenates chunks of the truvari collapse output. Prepares the concatenated
+# file for kanpig, by dropping all genotypes and by assigning a unique integer
+# ID to every call (moving the original ID to the INFO field): this is
+# necessary, otherwise kanpig complains about duplicated IDs, which arise
+# naturally from the previous steps of the pipeline.
 #
 workflow Workpackage8 {
     input {
