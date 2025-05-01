@@ -136,8 +136,8 @@ task Workpackage9Impl {
             tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
 
             # Building the GT-only output file
-            echo ${SAMPLE_ID} > ${SAMPLE_ID}_gts.txt
-            bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf.gz | cut -f 10 >> ${SAMPLE_ID}_gts.txt
+            echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts.txt
+            bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf.gz | cut -f 3,10 >> ${SAMPLE_ID}_gts.txt
             rm -f ${SAMPLE_ID}_kanpig.vcf.gz*
         }
         

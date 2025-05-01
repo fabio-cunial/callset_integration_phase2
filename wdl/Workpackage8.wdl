@@ -15,8 +15,8 @@ workflow Workpackage8 {
         Array[String] chromosomes = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY"]
         
         Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 1000
+        Int ram_size_gb = 16
+        Int disk_size_gb = 200
     }
     parameter_meta {
         chromosomes: "The order of the chromosomes becomes their order in the output VCF."
@@ -37,6 +37,12 @@ workflow Workpackage8 {
 }
 
 
+# Performance on 10'070 samples, 15x, GRCh38:
+#
+# CAL_SENS  TOOL                                CPU     RAM     TIME
+# <=0.7     bcftools concat                     7%      300M    10m
+# <=0.7     bcftools view --drop-genotypes      100%    8G      2h
+# <=0.7     bgzip                               >
 #
 task Workpackage8Impl {
     input {
@@ -136,7 +142,7 @@ task Workpackage8Impl {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
