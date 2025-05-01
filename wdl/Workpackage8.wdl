@@ -41,8 +41,9 @@ workflow Workpackage8 {
 #
 # CAL_SENS  TOOL                                CPU     RAM     TIME
 # <=0.7     bcftools concat                     50%     300M    2m
+# <=0.7     tabix                               >>>>
 # <=0.7     bcftools view --drop-genotypes      >>>>100%    8G      2h
-# <=0.7     bgzip                               >
+# <=0.7     bgzip                               >>>>
 #
 task Workpackage8Impl {
     input {
@@ -98,21 +99,18 @@ task Workpackage8Impl {
         
         # Concatenating all the truvari collapsed chunks
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type z > truvari_collapsed.vcf.gz
-        tabix -f truvari_collapsed.vcf.gz
+        ${TIME_COMMAND} tabix -f truvari_collapsed.vcf.gz
         df -h
         
         # Preparing the inter-sample VCF for kanpig
-        ${TIME_COMMAND} bcftools view --drop-genotypes truvari_collapsed.vcf.gz --output-type z > truvari_collapsed_no_gts.vcf.gz
-        tabix -f truvari_collapsed_no_gts.vcf.gz
-        ${TIME_COMMAND} bcftools view --header-only truvari_collapsed_no_gts.vcf.gz > header.txt
+        ${TIME_COMMAND} bcftools view --header-only truvari_collapsed.vcf.gz > header.txt
         N_ROWS=$(wc -l < header.txt)
         head -n $(( ${N_ROWS} - 1 )) header.txt > truvari_collapsed_for_kanpig.vcf
         echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> truvari_collapsed_for_kanpig.vcf
-        echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> truvari_collapsed_for_kanpig.vcf
-        bcftools view --no-header truvari_collapsed_no_gts.vcf.gz | awk 'BEGIN { i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' >> truvari_collapsed_for_kanpig.vcf
-        rm -f truvari_collapsed_no_gts.vcf.gz*
+        echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" >> truvari_collapsed_for_kanpig.vcf
+        bcftools view --no-header truvari_collapsed.vcf.gz | awk 'BEGIN { i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' >> truvari_collapsed_for_kanpig.vcf
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} truvari_collapsed_for_kanpig.vcf
-        tabix -f truvari_collapsed_for_kanpig.vcf.gz
+        ${TIME_COMMAND} tabix -f truvari_collapsed_for_kanpig.vcf.gz
         df -h
         
         # Uploading
