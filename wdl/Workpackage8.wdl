@@ -84,10 +84,12 @@ task Workpackage8Impl {
         done < chr_list.txt
         rm -f chr_list.txt
         cat chunk_list.txt
+        df -h
         
         # Concatenating all the truvari collapsed chunks
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type z > truvari_collapsed.vcf.gz
         tabix -f truvari_collapsed.vcf.gz
+        df -h
         
         # Preparing the inter-sample VCF for kanpig
         ${TIME_COMMAND} bcftools view --drop-genotypes truvari_collapsed.vcf.gz --output-type z > truvari_collapsed_nogts.vcf.gz
@@ -101,6 +103,7 @@ task Workpackage8Impl {
         rm -f truvari_collapsed_no_gts.vcf.gz*
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} truvari_collapsed_for_kanpig.vcf
         tabix -f truvari_collapsed_for_kanpig.vcf.gz
+        df -h
         
         # Uploading
         while : ; do
