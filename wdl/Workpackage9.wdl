@@ -1,7 +1,7 @@
 version 1.0
 
 
-# 
+# Re-genotypes an inter-sample VCF using the reads of every sample.
 #
 workflow Workpackage9 {
     input {
@@ -15,7 +15,7 @@ workflow Workpackage9 {
         File ploidy_bed_male
         
         Int n_cpu = 6
-        Int ram_size_gb = 8
+        Int ram_size_gb = 16
         Int disk_size_gb = 100
         String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
@@ -138,7 +138,6 @@ task Workpackage9Impl {
             # Building the GT-only output file
             echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts.txt
             bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf.gz | cut -f 3,10 >> ${SAMPLE_ID}_gts.txt
-            rm -f ${SAMPLE_ID}_kanpig.vcf.gz*
         }
         
         

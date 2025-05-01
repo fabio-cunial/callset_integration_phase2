@@ -37,11 +37,11 @@ workflow Workpackage8 {
 }
 
 
-# Performance on 10'070 samples, 15x, GRCh38:
+# Performance on 10'070 samples, 15x, GRCh38, SSD:
 #
 # CAL_SENS  TOOL                                CPU     RAM     TIME
-# <=0.7     bcftools concat                     7%      300M    10m
-# <=0.7     bcftools view --drop-genotypes      100%    8G      2h
+# <=0.7     bcftools concat                     50%     300M    2m
+# <=0.7     bcftools view --drop-genotypes      >>>>100%    8G      2h
 # <=0.7     bgzip                               >
 #
 task Workpackage8Impl {
