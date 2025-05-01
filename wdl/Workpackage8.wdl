@@ -96,9 +96,9 @@ task Workpackage8Impl {
         df -h
         
         # Preparing the inter-sample VCF for kanpig
-        ${TIME_COMMAND} bcftools view --drop-genotypes truvari_collapsed.vcf.gz --output-type z > truvari_collapsed_nogts.vcf.gz
-        tabix -f truvari_collapsed_nogts.vcf.gz
-        ${TIME_COMMAND} bcftools view --header-only truvari_collapsed_nogts.vcf.gz > header.txt
+        ${TIME_COMMAND} bcftools view --drop-genotypes truvari_collapsed.vcf.gz --output-type z > truvari_collapsed_no_gts.vcf.gz
+        tabix -f truvari_collapsed_no_gts.vcf.gz
+        ${TIME_COMMAND} bcftools view --header-only truvari_collapsed_no_gts.vcf.gz > header.txt
         N_ROWS=$(wc -l < header.txt)
         head -n $(( ${N_ROWS} - 1 )) header.txt > truvari_collapsed_for_kanpig.vcf
         echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> truvari_collapsed_for_kanpig.vcf
