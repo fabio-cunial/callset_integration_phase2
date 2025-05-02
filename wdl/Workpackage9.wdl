@@ -43,6 +43,10 @@ workflow Workpackage9 {
 }
 
 
+# Performance on 10'070 samples, 15x, GRCh38:
+#
+# CAL_SENS  CPU     RAM     TIME
+# <=0.7     500%    16G     20m
 #
 task Workpackage9Impl {
     input {
@@ -132,12 +136,11 @@ task Workpackage9Impl {
                 PLOIDY_BED=$(echo ~{ploidy_bed_female})
             fi
             export RUST_BACKTRACE="full"
-            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input truvari_collapsed_for_kanpig.vcf.gz --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf.gz
-            tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
+            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input truvari_collapsed_for_kanpig.vcf.gz --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf
 
             # Building the GT-only output file
             echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts.txt
-            bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf.gz | cut -f 3,10 >> ${SAMPLE_ID}_gts.txt
+            bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf | cut -f 3,10 >> ${SAMPLE_ID}_gts.txt
         }
         
         
