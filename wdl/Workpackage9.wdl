@@ -165,7 +165,7 @@ task Workpackage9Impl {
             LocalizeSample ${SAMPLE_ID} ${LINE}
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_aligned.bam
             while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_gts.txt ~{remote_outdir}/ . && echo 0 || echo 1)
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_gts.txt ~{remote_outdir}/${SAMPLE_ID}_gts.txt . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error uploading the GT file. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
