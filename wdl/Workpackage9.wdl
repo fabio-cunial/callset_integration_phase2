@@ -15,7 +15,7 @@ workflow Workpackage9 {
         File ploidy_bed_male
         
         Int n_cpu = 6
-        Int ram_size_gb = 16
+        Int ram_size_gb = 20
         Int disk_size_gb = 100
         String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
@@ -162,19 +162,23 @@ task Workpackage9Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
-            LocalizeSample ${SAMPLE_ID} ${LINE}
-            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_aligned.bam
-            while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_gts.txt ~{remote_outdir}/ && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error uploading the GT file. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            DelocalizeSample ${SAMPLE_ID}
-            ls -laht
+            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_gts.txt && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                # Proceeding only if genotypes have not already been computed
+                LocalizeSample ${SAMPLE_ID} ${LINE}
+                Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_aligned.bam
+                while : ; do
+                    TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_gts.txt ~{remote_outdir}/ && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error uploading the GT file. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                DelocalizeSample ${SAMPLE_ID}
+                ls -laht
+            fi
         done < chunk.csv
     >>>
     
