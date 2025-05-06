@@ -1,11 +1,12 @@
 version 1.0
 
 
-# Assume that we have built an inter-sample-merged VCF, that we have
-# subsequently kept just one column of it (setting it to all 0/1), and that we
-# have re-genotyped this single-column VCF using the BAM of every sample. The
-# program pastes all the GT columns of such re-genotyped VCFs into an
-# inter-sample VCF with updated genotypes.
+# Pastes all the GT column files coming from the inter-sample-re-genotyped VCF
+# into a new inter-sample VCF that holds the updated genotypes.
+#
+# Remark: all GT column files have the same number of records, and records
+# appear in the same order, which is identical to their order in
+# `truvari_collapse_intersample_vcf_gz`.
 #
 workflow Workpackage11 {
     input {
@@ -21,9 +22,9 @@ workflow Workpackage11 {
         Int disk_size_gb = 512
     }
     parameter_meta {
-        sample_gts: "The output of `KanpigMerged.wdl`. Remark: all such files have the same number of records; for every file, records appear in the order induced by a global sort of `intersample_vcf_gz`."
-        intersample_vcf_gz: "The output of `TruvariIntersamplePhase2.wdl`. Remark: since this file may not have been globally sorted, the order of the records in this file might be different from the order of the records in each file of `sample_gts`."
-        samples_file: "Order in which to store the samples in the output."
+        truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`."
+        remote_indir: "Contains GT column files, whose rows are in the same order as `truvari_collapse_intersample_vcf_gz`."
+        samples_file: "Order in which to store the samples in the output VCF."
     }
     
     call Workpackage11Impl {
