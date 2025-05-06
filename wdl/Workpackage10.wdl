@@ -10,8 +10,8 @@ workflow Workpackage10 {
         String remote_outdir
         
         Int n_cpu = 2
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
+        Int ram_size_gb = 1
+        Int disk_size_gb = 2
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
@@ -35,7 +35,7 @@ workflow Workpackage10 {
 # Performance on 10'070 samples, 15x, GRCh38:
 #
 # CPU     RAM     TIME
-# 
+# 150%    300M    2s
 #
 task Workpackage10Impl {
     input {
