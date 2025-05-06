@@ -103,7 +103,7 @@ task Workpackage10Impl {
             
             echo "${SAMPLE_ID}" > ${SAMPLE_ID}_sorted.txt
             tail -n +2 ${SAMPLE_ID}_gts.txt > ${SAMPLE_ID}_tmp1.txt
-            ${TIME_COMMAND} sort --numeric-sort -t '\t' -k 1,1 ${SAMPLE_ID}_tmp1.txt > ${SAMPLE_ID}_tmp2.txt
+            ${TIME_COMMAND} sort --numeric-sort -k 1,1 ${SAMPLE_ID}_tmp1.txt > ${SAMPLE_ID}_tmp2.txt
             rm -f ${SAMPLE_ID}_tmp1.txt
             cut -f 2 ${SAMPLE_ID}_tmp2.txt >> ${SAMPLE_ID}_sorted.txt
             rm -f ${SAMPLE_ID}_tmp2.txt
