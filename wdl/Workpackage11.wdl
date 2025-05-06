@@ -88,9 +88,9 @@ task Workpackage11Impl {
             local SAMPLE_ID=$1
             
             while : ; do
-                TEST=$(gsutil -m cp ~{remote_indir}/${SAMPLE_ID}_gts_sorted.txt . && echo 0 || echo 1)
+                TEST=$(gsutil -m cp ~{remote_indir}/${SAMPLE_ID}_sorted.txt . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${SAMPLE_ID}_gts_sorted.txt>. Trying again..."
+                    echo "Error downloading file <${SAMPLE_ID}_sorted.txt>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
                 else
                     break
@@ -105,11 +105,11 @@ task Workpackage11Impl {
             OUTPUT_FILE="columns_${THREAD_ID}.txt"; touch ${OUTPUT_FILE}
             FIELDS_FILE="fields_${THREAD_ID}.txt"; touch ${FIELDS_FILE}
             LIST_FIELDS=""; LIST_BODIES=""; i="0";
-            while read FILE; do
+            while read SAMPLE_ID; do
                 i=$(( ${i} + 1 ))
-                head -n 1 ${FILE} > ${THREAD_ID}_s_${i}.txt
+                head -n 1 ${SAMPLE_ID}_sorted.txt > ${THREAD_ID}_s_${i}.txt
                 LIST_FIELDS="${LIST_FIELDS} ${THREAD_ID}_s_${i}.txt"
-                tail -n +2 ${FILE} > ${THREAD_ID}_b_${i}.txt
+                tail -n +2 ${SAMPLE_ID}_sorted.txt > ${THREAD_ID}_b_${i}.txt
                 LIST_BODIES="${LIST_BODIES} ${THREAD_ID}_b_${i}.txt"
             done < list_${THREAD_ID}
             paste ${LIST_FIELDS} > ${FIELDS_FILE}
@@ -125,10 +125,10 @@ task Workpackage11Impl {
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
         while read SAMPLE_ID; do
             LocalizeSample ${SAMPLE_ID}
-            N=$(wc -l < ${SAMPLE_ID}_gts_sorted.txt)
+            N=$(wc -l < ${SAMPLE_ID}_sorted.txt)
             N=$(( ${N} - 1 ))
             if [ ${N} -ne ${N_RECORDS} ]; then
-                echo "Error: file ${SAMPLE_ID}_gts_sorted.txt has ${N} records, but the intersample VCF has ${N_RECORDS} records."
+                echo "Error: file ${SAMPLE_ID}_sorted.txt has ${N} records, but the intersample VCF has ${N_RECORDS} records."
                 exit 1
             fi
         done < ~{samples_file}
