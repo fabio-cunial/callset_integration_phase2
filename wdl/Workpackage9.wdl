@@ -162,8 +162,8 @@ task Workpackage9Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
-            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_gts.txt && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
+            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_gts.txt && echo "" || echo "ERROR")
+            if [ ${TEST} = "ERROR" ]; then
                 # Proceeding only if genotypes have not already been computed
                 LocalizeSample ${SAMPLE_ID} ${LINE}
                 Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_aligned.bam
