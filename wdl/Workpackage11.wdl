@@ -161,7 +161,9 @@ task Workpackage11Impl {
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
         rm -f ${FIELDS_FILES}
         cat fields_all.txt
-        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 > calls.txt        
+        date
+        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 > calls.txt
+        date
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
         rm -f ${COLUMNS_FILES}
         head -n 10 body.txt
