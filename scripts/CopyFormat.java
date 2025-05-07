@@ -30,7 +30,7 @@ public class CopyFormat {
         }
         while (str1!=null) {
             tokens1=str1.split("\t"); tokens2=str2.split("\t");
-            if (tokens1.length!=tokens1.length) {
+            if (tokens1.length!=tokens2.length) {
                 System.err.println("ERROR: different number of columns in the two files:");
                 System.err.println(str1);
                 System.err.println(str2);
