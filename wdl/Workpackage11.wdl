@@ -103,13 +103,13 @@ task Workpackage11Impl {
                 echo "Error: file ${SAMPLE_ID}_sorted.txt has ${N} records, but the intersample VCF has ${N_RECORDS} records."
                 exit 1
             fi
-            head -n 1 ${SAMPLE_ID}_sorted.txt > s_${i}.txt
-            FIELDS_FILES="${FIELDS_FILES} s_${i}.txt"
-            tail -n +2 ${SAMPLE_ID}_sorted.txt > b_${i}.txt
-            COLUMNS_FILES="${COLUMNS_FILES} b_${i}.txt"
+            head -n 1 ${SAMPLE_ID}_sorted.txt > s.${i}.txt
+            tail -n +2 ${SAMPLE_ID}_sorted.txt > b.${i}.txt
             rm -f ${SAMPLE_ID}_sorted.txt
             i=$(( ${i} + 1 ))
         done < ~{samples_file}
+        FIELDS_FILES=$( ls s.*.txt | sort --version-sort | tr '\n' ' ' )
+        COLUMNS_FILES=$( ls b.*.txt | sort --version-sort | tr '\n' ' ' )
         
         # Pasting the GT files sequentially
         bcftools view --header-only ~{truvari_collapse_intersample_vcf_gz} > tmp.txt
