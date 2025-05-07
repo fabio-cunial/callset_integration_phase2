@@ -17,7 +17,7 @@ workflow Workpackage11 {
         String remote_outdir
         File samples_file
         
-        Int n_cpu = 64
+        Int n_cpu = 4
         Int ram_size_gb = 128
         Int disk_size_gb = 512
     }
@@ -84,28 +84,6 @@ task Workpackage11Impl {
         EFFECTIVE_MEM_GB=$(( ${EFFECTIVE_MEM_GB} - 4 ))
         
         
-        function pasteThread() {
-            local THREAD_ID=$1
-            
-            OUTPUT_FILE="columns_${THREAD_ID}.txt"; touch ${OUTPUT_FILE}
-            FIELDS_FILE="fields_${THREAD_ID}.txt"; touch ${FIELDS_FILE}
-            LIST_FIELDS=""; LIST_BODIES=""; i="0";
-            while read SAMPLE_ID; do
-                i=$(( ${i} + 1 ))
-                head -n 1 ${SAMPLE_ID}_sorted.txt > ${THREAD_ID}_s_${i}.txt
-                LIST_FIELDS="${LIST_FIELDS} ${THREAD_ID}_s_${i}.txt"
-                tail -n +2 ${SAMPLE_ID}_sorted.txt > ${THREAD_ID}_b_${i}.txt
-                LIST_BODIES="${LIST_BODIES} ${THREAD_ID}_b_${i}.txt"
-            done < list_${THREAD_ID}
-            paste ${LIST_FIELDS} > ${FIELDS_FILE}
-            ${TIME_COMMAND} paste ${LIST_BODIES} > ${OUTPUT_FILE}
-            rm -f ${LIST_FIELDS}
-            rm -f ${LIST_BODIES}
-        }
-        
-        
-        # Main program
-        
         # Downloading and checking GT files
         while : ; do
             TEST=$(gsutil -m cp ~{remote_indir}/'*_sorted.txt' . && echo 0 || echo 1)
@@ -126,31 +104,19 @@ task Workpackage11Impl {
             fi
         done < ~{samples_file}
         
-        # Initializing the output VCF with the input VCF.
-        # Remark: this implies that call IDs in the output are identical to
-        # truvari's, so they might not be all distinct.
+        # Pasting the GT files sequentially
         bcftools view --header-only ~{truvari_collapse_intersample_vcf_gz} > tmp.txt
         N_ROWS=$(wc -l < tmp.txt)
         head -n $(( ${N_ROWS} - 1 )) tmp.txt > header.txt
         tail -n 1 tmp.txt | cut -f 1-9 > fields.txt
-        
-        # Pasting the GT files in parallel
-        N_ROWS=$(wc -l < ~{samples_file})
-        N_ROWS=$(( ${N_ROWS} / ${N_THREADS} ))
-        if [ ${N_ROWS} -eq 0 ]; then
-            N_ROWS=1
-        fi 
-        split -d -l ${N_ROWS} ~{samples_file} list_
         COLUMNS_FILES=""; FIELDS_FILES=""
-        for LIST_FILE in $(find . -maxdepth 1 -name 'list_*' | sort); do
-            ID=${LIST_FILE#./list_}
-            pasteThread ${ID} &
-            COLUMNS_FILES="${COLUMNS_FILES} columns_${ID}.txt"
-            FIELDS_FILES="${FIELDS_FILES} fields_${ID}.txt"
-        done
-        wait
-        
-        # Final paste
+        while read SAMPLE_ID; do
+            head -n 1 ${SAMPLE_ID}_sorted.txt > s_${i}.txt
+            FIELDS_FILES="${FIELDS_FILES} s_${i}.txt"
+            tail -n +2 ${SAMPLE_ID}_sorted.txt > b_${i}.txt
+            COLUMNS_FILES="${COLUMNS_FILES} b_${i}.txt"
+            rm -f ${SAMPLE_ID}_sorted.txt
+        done < ~{samples_file}
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
         rm -f ${FIELDS_FILES}
         cat fields_all.txt
