@@ -19,7 +19,7 @@ workflow Workpackage11 {
         
         Int n_cpu = 4
         Int ram_size_gb = 128
-        Int disk_size_gb = 512
+        Int disk_size_gb = 1500
     }
     parameter_meta {
         truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
@@ -95,6 +95,7 @@ task Workpackage11Impl {
             fi
         done
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
+        COLUMNS_FILES=""; FIELDS_FILES=""
         while read SAMPLE_ID; do
             N=$(wc -l < ${SAMPLE_ID}_sorted.txt)
             N=$(( ${N} - 1 ))
@@ -102,6 +103,11 @@ task Workpackage11Impl {
                 echo "Error: file ${SAMPLE_ID}_sorted.txt has ${N} records, but the intersample VCF has ${N_RECORDS} records."
                 exit 1
             fi
+            head -n 1 ${SAMPLE_ID}_sorted.txt > s_${i}.txt
+            FIELDS_FILES="${FIELDS_FILES} s_${i}.txt"
+            tail -n +2 ${SAMPLE_ID}_sorted.txt > b_${i}.txt
+            COLUMNS_FILES="${COLUMNS_FILES} b_${i}.txt"
+            rm -f ${SAMPLE_ID}_sorted.txt
         done < ~{samples_file}
         
         # Pasting the GT files sequentially
@@ -109,14 +115,6 @@ task Workpackage11Impl {
         N_ROWS=$(wc -l < tmp.txt)
         head -n $(( ${N_ROWS} - 1 )) tmp.txt > header.txt
         tail -n 1 tmp.txt | cut -f 1-9 > fields.txt
-        COLUMNS_FILES=""; FIELDS_FILES=""
-        while read SAMPLE_ID; do
-            head -n 1 ${SAMPLE_ID}_sorted.txt > s_${i}.txt
-            FIELDS_FILES="${FIELDS_FILES} s_${i}.txt"
-            tail -n +2 ${SAMPLE_ID}_sorted.txt > b_${i}.txt
-            COLUMNS_FILES="${COLUMNS_FILES} b_${i}.txt"
-            rm -f ${SAMPLE_ID}_sorted.txt
-        done < ~{samples_file}
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
         rm -f ${FIELDS_FILES}
         cat fields_all.txt
