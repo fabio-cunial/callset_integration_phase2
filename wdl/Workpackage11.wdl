@@ -84,21 +84,6 @@ task Workpackage11Impl {
         EFFECTIVE_MEM_GB=$(( ${EFFECTIVE_MEM_GB} - 4 ))
         
         
-        function LocalizeSample() {
-            local SAMPLE_ID=$1
-            
-            while : ; do
-                TEST=$(gsutil -m cp ~{remote_indir}/${SAMPLE_ID}_sorted.txt . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${SAMPLE_ID}_sorted.txt>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-        }
-        
-        
         function pasteThread() {
             local THREAD_ID=$1
             
@@ -121,10 +106,18 @@ task Workpackage11Impl {
         
         # Main program
         
-        # Preliminary checks
+        # Downloading and checking GT files
+        while : ; do
+            TEST=$(gsutil -m cp ~{remote_indir}/'*_sorted.txt' . && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error downloading files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
         while read SAMPLE_ID; do
-            LocalizeSample ${SAMPLE_ID}
             N=$(wc -l < ${SAMPLE_ID}_sorted.txt)
             N=$(( ${N} - 1 ))
             if [ ${N} -ne ${N_RECORDS} ]; then
