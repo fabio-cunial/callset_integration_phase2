@@ -22,7 +22,7 @@ workflow Workpackage11 {
         Int disk_size_gb = 512
     }
     parameter_meta {
-        truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`."
+        truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
         remote_indir: "Contains GT column files, whose rows are in the same order as `truvari_collapse_intersample_vcf_gz`."
         samples_file: "Order in which to store the samples in the output VCF."
     }
@@ -139,8 +139,7 @@ task Workpackage11Impl {
         bcftools view --header-only ~{truvari_collapse_intersample_vcf_gz} > tmp.txt
         N_ROWS=$(wc -l < tmp.txt)
         head -n $(( ${N_ROWS} - 1 )) tmp.txt > header.txt
-        tail -n 1 tmp.txt | cut -f 1,2,3,4,5,6,7,8,9 > fields.txt
-        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tGT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV\n",$1,$2,$3,$4,$5,$6,$7,$8); }' > calls.txt
+        tail -n 1 tmp.txt | cut -f 1-9 > fields.txt
         
         # Pasting the GT files in parallel
         N_ROWS=$(wc -l < ~{samples_file})
@@ -157,13 +156,15 @@ task Workpackage11Impl {
             FIELDS_FILES="${FIELDS_FILES} fields_${ID}.txt"
         done
         wait
+        
+        # Final paste
         paste fields.txt ${FIELDS_FILES} > fields_all.txt
-        ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
-        rm -f ${FIELDS_FILES} ${COLUMNS_FILES}
-        
+        rm -f ${FIELDS_FILES}
         cat fields_all.txt
+        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 > calls.txt        
+        ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
+        rm -f ${COLUMNS_FILES}
         head -n 10 body.txt
-        
         cat header.txt fields_all.txt body.txt > merged.vcf
         rm -f header.txt fields_all.txt body.txt
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} merged.vcf
