@@ -95,7 +95,7 @@ task Workpackage11Impl {
             fi
         done
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
-        COLUMNS_FILES=""; FIELDS_FILES=""
+        i="0"; COLUMNS_FILES=""; FIELDS_FILES="";
         while read SAMPLE_ID; do
             N=$(wc -l < ${SAMPLE_ID}_sorted.txt)
             N=$(( ${N} - 1 ))
@@ -108,6 +108,7 @@ task Workpackage11Impl {
             tail -n +2 ${SAMPLE_ID}_sorted.txt > b_${i}.txt
             COLUMNS_FILES="${COLUMNS_FILES} b_${i}.txt"
             rm -f ${SAMPLE_ID}_sorted.txt
+            i=$(( ${i} + 1 ))
         done < ~{samples_file}
         
         # Pasting the GT files sequentially
