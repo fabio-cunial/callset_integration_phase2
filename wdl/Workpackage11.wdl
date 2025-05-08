@@ -17,9 +17,9 @@ workflow Workpackage11 {
         String remote_outdir
         File samples_file
         
-        Int n_cpu = 4
-        Int ram_size_gb = 128
-        Int disk_size_gb = 1500
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+        Int disk_size_gb = 3000
     }
     parameter_meta {
         truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
@@ -47,6 +47,7 @@ workflow Workpackage11 {
 # Performance on 10023 samples, 15x, GRCh38, <=0.7:
 #
 # TOOL                      CPU     RAM     TIME
+# bcftools view | cut                       3.5h
 # paste global              
 # bgzip 1
 # CopyFormat                
@@ -121,19 +122,19 @@ task Workpackage11Impl {
         cat fields_all.txt
         date
         bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 > calls.txt
+        ls -lh calls.txt
         date
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
-        rm -f ${COLUMNS_FILES}
+        rm -f calls.txt ${COLUMNS_FILES}
         head -n 10 body.txt
-        cat header.txt fields_all.txt body.txt > merged.vcf
+        ${TIME_COMMAND} cat header.txt fields_all.txt body.txt > merged.vcf
         rm -f header.txt fields_all.txt body.txt
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} merged.vcf
-        tabix -f merged.vcf.gz
         
         # Copying from `truvari_collapse_intersample_vcf_gz` the FORMAT fields
-        # that are missing in `merged.vcf.gz`.
-        ${TIME_COMMAND} java -Xmx${EFFECTIVE_MEM_GB}G -cp ~{docker_dir} CopyFormat ~{truvari_collapse_intersample_vcf_gz} merged.vcf.gz > truvari_collapse_intersample_regenotyped.vcf
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} truvari_collapse_intersample_regenotyped.vcf
+        # that are missing in `merged.vcf`.
+        ${TIME_COMMAND} java -Xmx${EFFECTIVE_MEM_GB}G -cp ~{docker_dir} CopyFormat ~{truvari_collapse_intersample_vcf_gz} merged.vcf > truvari_collapse_intersample_regenotyped.vcf
+        rm -f merged.vcf
+        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 1 truvari_collapse_intersample_regenotyped.vcf
         tabix -f truvari_collapse_intersample_regenotyped.vcf.gz
         
         # Uploading

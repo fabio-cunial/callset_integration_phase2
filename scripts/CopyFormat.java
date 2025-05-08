@@ -11,7 +11,7 @@ public class CopyFormat {
      */
     public static void main(String[] args) throws IOException {
         final String VCF_GZ_1 = args[0];
-        final String VCF_GZ_2 = args[1];
+        final String VCF_2 = args[1];
         
         int i, j, p, q;
         int length, count;
@@ -20,7 +20,7 @@ public class CopyFormat {
         String[] tokens1, tokens2;
         
         br1 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(VCF_GZ_1))));
-        br2 = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(VCF_GZ_2))));
+        br2 = new BufferedReader(new FileReader(VCF_2));
         str1=br1.readLine();
         while (str1.charAt(0)=='#') str1=br1.readLine();
         str2=br2.readLine();
