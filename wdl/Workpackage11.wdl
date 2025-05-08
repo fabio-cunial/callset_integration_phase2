@@ -48,8 +48,9 @@ workflow Workpackage11 {
 #
 # TOOL                      CPU     RAM     TIME
 # bcftools view | cut                       3.5h
-# paste global              
-# bgzip 1
+# paste global              100%    50M     1.5h
+# cat all                   50%     2M      30m
+# bgzip 1                   
 # CopyFormat                
 # bgzip 2
 #
@@ -152,7 +153,7 @@ task Workpackage11Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
