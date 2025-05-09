@@ -50,10 +50,12 @@ workflow Workpackage11 {
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
 # bcftools view | cut                       3.5h                    6h
 # paste global              100%    50M     1.5h    100%    50M     3h
+# split                     
+# bcftools query            
+# split                     
+#
+#
 # cat all                   50%     2M      40m     
-# split
-# bcftools query
-# split
 #
 task Workpackage11Impl {
     input {
