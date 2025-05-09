@@ -25,6 +25,7 @@ workflow Workpackage11 {
         truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
         remote_indir: "Contains GT column files, whose rows are in the same order as `truvari_collapse_intersample_vcf_gz`."
         samples_file: "Order in which to store the samples in the output VCF."
+        disk_size_gb: "3TB for stringent and 4TB for lenient suffice."
     }
     
     call Workpackage11Impl {
@@ -44,15 +45,15 @@ workflow Workpackage11 {
 }
 
 
-# Performance on 10023 samples, 15x, GRCh38, <=0.7:
+# Performance on 10'070 samples, 15x, GRCh38, stringent (_S) and lenient (_L):
 #
-# TOOL                      CPU     RAM     TIME
-# bcftools view | cut                       3.5h
-# paste global              100%    50M     1.5h
-# cat all                   50%     2M      30m
-# bgzip 1                   
-# CopyFormat                
-# bgzip 2
+# TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
+# bcftools view | cut                       3.5h                    6h
+# paste global              100%    50M     1.5h    100%    50M     3h
+# cat all                   50%     2M      40m     
+# split
+# bcftools query
+# split
 #
 task Workpackage11Impl {
     input {
@@ -62,6 +63,7 @@ task Workpackage11Impl {
         String remote_indir
         String remote_outdir
         File samples_file
+        Int n_chunks
         
         Int n_cpu
         Int ram_size_gb
@@ -128,21 +130,34 @@ task Workpackage11Impl {
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
         rm -f calls.txt ${COLUMNS_FILES}
         head -n 10 body.txt
-        ${TIME_COMMAND} cat header.txt fields_all.txt body.txt > merged.vcf
-        rm -f header.txt fields_all.txt body.txt
-        
-        # Copying from `truvari_collapse_intersample_vcf_gz` the FORMAT fields
-        # that are missing in `merged.vcf`.
-        ${TIME_COMMAND} java -Xmx${EFFECTIVE_MEM_GB}G -cp ~{docker_dir} CopyFormat ~{truvari_collapse_intersample_vcf_gz} merged.vcf > truvari_collapse_intersample_regenotyped.vcf
-        rm -f merged.vcf
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 1 truvari_collapse_intersample_regenotyped.vcf
-        tabix -f truvari_collapse_intersample_regenotyped.vcf.gz
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp truvari_collapse_intersample_regenotyped.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp header.txt fields_all.txt ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading the regenotyped file. Trying again..."
+                echo "Error uploading header. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        N_ROWS=$(( ${N_RECORDS} / ~{n_chunks} ))
+        ${TIME_COMMAND} split -l ${N_ROWS} -d body.txt chunk_to_
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv 'chunk_to_*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading chunks. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' ~{truvari_collapse_intersample_vcf_gz} > calls.txt
+        ${TIME_COMMAND} split -l ${N_ROWS} -d calls.txt chunk_from_
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv 'chunk_from_*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading chunks. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
             else
                 break
