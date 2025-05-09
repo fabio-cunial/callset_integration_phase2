@@ -88,6 +88,8 @@ task Workpackage11Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_MEM_GB=~{ram_size_gb}
         EFFECTIVE_MEM_GB=$(( ${EFFECTIVE_MEM_GB} - 4 ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         
         # Downloading and checking GT files
