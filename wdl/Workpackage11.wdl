@@ -98,7 +98,7 @@ task ChunkOld {
         date
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
         N_ROWS=$(( ${N_RECORDS} / ~{n_chunks} ))
-        ${TIME_COMMAND} split -l ${N_ROWS} -d calls.txt chunk_old_
+        ${TIME_COMMAND} split -l ${N_ROWS} -d -a 5 calls.txt chunk_old_
         
         # Uploading
         while : ; do
@@ -276,7 +276,7 @@ task ChunkNew {
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} --decompress body.txt.gz
         N_RECORDS=$(wc -l < body.txt)
         N_ROWS=$(( ${N_RECORDS} / ~{n_chunks} ))
-        ${TIME_COMMAND} split -l ${N_ROWS} -d body.txt chunk_new_
+        ${TIME_COMMAND} split -l ${N_ROWS} -d -a 5 body.txt chunk_new_
         
         # Uploading
         while : ; do
