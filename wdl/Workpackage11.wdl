@@ -21,7 +21,7 @@ workflow Workpackage11 {
         Int n_chunks
     }
     parameter_meta {
-        truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
+        truvari_collapse_intersample_vcf_gz: "The output of `Workpackage8.wdl`. The FORMAT field of this file is assumed to be already the correct one for the output: `GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV`."
         remote_indir: "Contains GT column files, whose rows are in the same order as `truvari_collapse_intersample_vcf_gz`."
         samples_file: "Order in which to store the samples in the output VCF."
     }
@@ -60,7 +60,7 @@ workflow Workpackage11 {
 # Performance on 10'070 samples, 15x, GRCh38, stringent (_S) and lenient (_L):
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
-# bcftools query
+# bcftools view | cut                       3.5h                    6h
 # split
 #
 task ChunkOld {
@@ -90,9 +90,11 @@ task ChunkOld {
         GSUTIL_DELAY_S="600"
         
         # Splitting
+        date
+        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 10- > calls.txt
+        date
         N_RECORDS=$(bcftools index --nrecords ~{truvari_collapse_intersample_tbi})
         N_ROWS=$(( ${N_RECORDS} / ~{n_chunks} ))
-        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' ~{truvari_collapse_intersample_vcf_gz} > calls.txt
         ${TIME_COMMAND} split -l ${N_ROWS} -d calls.txt chunk_old_
         
         # Uploading
@@ -202,6 +204,7 @@ task PasteGTs {
         ls -lh calls.txt
         date
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
+        rm -f calls.txt ${COLUMNS_FILES}
         
         # Uploading
         while : ; do
