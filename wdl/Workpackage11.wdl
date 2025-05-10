@@ -43,7 +43,7 @@ workflow Workpackage11 {
     }
     call ChunkNew {
         input:
-            body_txt = PasteGTs.body_txt,
+            body_txt_gz = PasteGTs.body_txt_gz,
             n_chunks = n_chunks,
             remote_outdir = remote_outdir
     }
@@ -143,8 +143,8 @@ task PasteGTs {
         String remote_outdir
         File samples_file
         
-        Int n_cpu = 4
-        Int ram_size_gb = 4
+        Int n_cpu = 16
+        Int ram_size_gb = 64
         Int disk_size_gb = 3000
     }
     parameter_meta {
@@ -207,7 +207,9 @@ task PasteGTs {
         ls -lh calls.txt
         date
         ${TIME_COMMAND} paste calls.txt ${COLUMNS_FILES} > body.txt
+        ls -lh body.txt
         rm -f calls.txt ${COLUMNS_FILES}
+        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 1 body.txt
         
         # Uploading
         while : ; do
@@ -222,7 +224,7 @@ task PasteGTs {
     >>>
 
     output {
-        File body_txt = work_dir + "/body.txt"
+        File body_txt_gz = work_dir + "/body.txt.gz"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
@@ -243,7 +245,7 @@ task PasteGTs {
 #
 task ChunkNew {
     input {
-        File body_txt
+        File body_txt_gz
         Int n_chunks
         String remote_outdir
         
@@ -270,9 +272,11 @@ task ChunkNew {
         GSUTIL_DELAY_S="600"
         
         # Splitting
-        N_RECORDS=$(wc -l < ~{body_txt})
+        mv ~{body_txt_gz} ./body.txt.gz
+        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --decompress body.txt.gz
+        N_RECORDS=$(wc -l < body.txt)
         N_ROWS=$(( ${N_RECORDS} / ~{n_chunks} ))
-        ${TIME_COMMAND} split -l ${N_ROWS} -d ~{body_txt} chunk_new_
+        ${TIME_COMMAND} split -l ${N_ROWS} -d body.txt chunk_new_
         
         # Uploading
         while : ; do
