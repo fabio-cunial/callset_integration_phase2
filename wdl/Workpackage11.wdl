@@ -72,11 +72,11 @@ task ChunkOld {
         
         Int n_cpu = 1
         Int ram_size_gb = 16
+        Int disk_size_gb = 3000
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 50*ceil(size(truvari_collapse_intersample_vcf_gz,"GB"))
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
@@ -246,11 +246,11 @@ task ChunkNew {
         
         Int n_cpu = 1
         Int ram_size_gb = 16
+        Int disk_size_gb = 3000
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 5*ceil(size(body_txt,"GB"))
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
