@@ -60,8 +60,8 @@ workflow Workpackage11 {
 # Performance on 10'070 samples, 15x, GRCh38, stringent (_S) and lenient (_L):
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
-# bcftools view | cut                       3.5h                    6h
-# split
+# bcftools view | cut                       4.5h                    7h
+# split                     20%     2M      2h      20%     2M      3h
 #
 task ChunkOld {
     input {
@@ -132,7 +132,8 @@ task ChunkOld {
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
 # bcftools view | cut                       3.5h                    6h
-# paste                     100%    50M     1.5h    100%    50M     3h
+# paste                     100%    50M     2h      100%    50M     3h
+# bgzip                     200%    20M     1h      200%    20M     2h
 #
 task PasteGTs {
     input {
@@ -241,7 +242,8 @@ task PasteGTs {
 # Remark: the output contains the entire rows of the new VCF, not just the GTs.
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
-# split
+# bgzip                     100%    10M     1h      100%    10M     2h
+# split                     20%     2M      2h      20%     2M      3.5h
 #
 task ChunkNew {
     input {
