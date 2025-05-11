@@ -14,7 +14,7 @@ workflow Workpackage12 {
         remote_indir: "Containing both input chunks."
     }
     
-    call Workpackage11Impl {
+    call Workpackage12Impl {
         input:
             chunk_id = chunk_id,
             remote_indir = remote_indir,
@@ -27,7 +27,7 @@ workflow Workpackage12 {
 
 
 #
-task Workpackage11Impl {
+task Workpackage12Impl {
     input {
         String chunk_id
         String remote_indir
@@ -58,7 +58,7 @@ task Workpackage11Impl {
         
         # Localizing chunks
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{remote_indir}/chunk_old_~{chunk_id} . && echo 0 || echo 1)
+            TEST=$(gsutil -m cp ~{remote_indir}/chunk_old_~{chunk_id} . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading chunk. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -67,7 +67,7 @@ task Workpackage11Impl {
             fi
         done
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{remote_indir}/chunk_new_~{chunk_id} . && echo 0 || echo 1)
+            TEST=$(gsutil -m cp ~{remote_indir}/chunk_new_~{chunk_id} . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading chunk. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
