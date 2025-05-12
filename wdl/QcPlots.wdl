@@ -15,11 +15,11 @@ workflow QcPlots {
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi
     }
-    call SampleVsType as geq0 {
+    call SampleVsType as geq1 {
         input:
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi,
-            min_sv_length = 0
+            min_sv_length = 1
     }
     call SampleVsType as geq50 {
         input:
@@ -30,7 +30,7 @@ workflow QcPlots {
     
     output {
         File type_length_tsv = TypeVsLength.out_tsv
-        File sample_type_all = geq0.out_tsv
+        File sample_type_all = geq1.out_tsv
         File sample_type_50 = geq50.out_tsv
     }
 }
