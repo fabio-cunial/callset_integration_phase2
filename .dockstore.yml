@@ -155,3 +155,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Workpackage13.wdl
   testParameterFiles:
+- name: QcPlots
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/QcPlots.wdl
+  testParameterFiles:      

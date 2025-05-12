@@ -34,7 +34,8 @@ workflow Workpackage13 {
 # Performance on 10'070 samples, 15x, GRCh38, stringent (_S) and lenient (_L):
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
-# cat all                   50%     2M      40m     
+# cat | bgzip                               1h                      2h     
+# tabix                                     1h                      1.5h
 #
 task Workpackage13Impl {
     input {
