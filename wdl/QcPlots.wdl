@@ -98,8 +98,8 @@ task SampleVsType {
         File intersample_tbi
         Int min_sv_length
         
-        Int n_cpu = 16
-        Int ram_size_gb = 32
+        Int n_cpu = 8
+        Int ram_size_gb = 16
         Int disk_size_gb = 500
     }
     parameter_meta {
@@ -121,7 +121,7 @@ task SampleVsType {
         GSUTIL_DELAY_S="600"
         
         QUERY_STRING="GT==\"alt\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})"
-        ${TIME_COMMAND} bcftools query -i ${QUERY_STRING} -f '[%SAMPLE\t%SVTYPE\n]' ~{intersample_vcf_gz} > tmp1.txt
+        ${TIME_COMMAND} bcftools query -i "${QUERY_STRING}" -f '[%SAMPLE\t%SVTYPE\n]' ~{intersample_vcf_gz} > tmp1.txt
         ${TIME_COMMAND} sort --parallel ${N_THREADS} tmp1.txt > tmp2.txt
         rm -f tmp1.txt
         ${TIME_COMMAND} uniq -c tmp2.txt > out.tsv
