@@ -160,3 +160,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/QcPlots.wdl
   testParameterFiles:      
+- name: PlotHwe
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PlotHwe.wdl
+  testParameterFiles:      
