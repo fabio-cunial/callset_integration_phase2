@@ -132,7 +132,7 @@ task FilterByLengthAndType {
         for CHR in $(seq 1 22); do
             echo "chr${CHR}\t0\t3000000000" >> list.bed
         done
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.txt ${INCLUDE_PREFIX} ${INCLUDE_STR} ~{vcf_gz} --output-type z > filtered.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed ${INCLUDE_PREFIX} ${INCLUDE_STR} ~{vcf_gz} --output-type z > filtered.vcf.gz
         ${TIME_COMMAND} tabix -f filtered.vcf.gz
     >>>
 
