@@ -181,7 +181,7 @@ task SelectBiallelic {
         
         source activate truvari5
         date
-        truvari anno numneigh --sizemin 1 --refdist ~{max_distance_bp} ~{vcf_gz} | bcftools view --include 'INFO/NumNeighbors == 0' | bgzip --compression-level 2 > biallelic.vcf.gz
+        truvari anno numneigh --sizemin 1 --refdist ~{max_distance_bp} ~{vcf_gz} | bcftools view --include 'INFO/NumNeighbors == 0' | bgzip -@ ${N_THREADS} --compress-level 2 > biallelic.vcf.gz
         date
         ${TIME_COMMAND} tabix -f biallelic.vcf.gz
         date
