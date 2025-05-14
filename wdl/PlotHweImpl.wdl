@@ -120,19 +120,16 @@ task FilterByLengthAndType {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         if [ ~{sv_type} -eq 0 ]; then
-            INCLUDE_PREFIX=" "
-            INCLUDE_STR=" "
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed ~{vcf_gz} --output-type z > filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
-            INCLUDE_PREFIX="--include"
-            INCLUDE_STR="SVTYPE==\"DEL\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})"
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"DEL\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})" ~{vcf_gz} --output-type z > filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
-            INCLUDE_PREFIX="--include"
-            INCLUDE_STR="SVTYPE==\"INS\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})"
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"INS\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})" ~{vcf_gz} --output-type z > filtered.vcf.gz
         fi
         for CHR in $(seq 1 22); do
             echo -e "chr${CHR}\t0\t3000000000" >> list.bed
         done
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed "${INCLUDE_PREFIX}" "${INCLUDE_STR}" ~{vcf_gz} --output-type z > filtered.vcf.gz
+        
         ${TIME_COMMAND} tabix -f filtered.vcf.gz
     >>>
 
