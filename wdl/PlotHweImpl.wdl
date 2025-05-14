@@ -11,7 +11,6 @@ workflow PlotHweImpl {
         Int max_distance_bp = 10
         
         File? plothw_r
-        String out_file_name
     }
     
     # All

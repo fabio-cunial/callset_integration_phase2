@@ -16,7 +16,7 @@ public class PlotHwFast {
         
         final char FIELD_SEPARATOR = '\t';
         final char GT_SEPARATOR = ':';
-        final int QUANTUM = 100;  // Arbitrary
+        final int QUANTUM = 1000;  // Arbitrary
         
         boolean onLeft, onRight;
         int i, p;
