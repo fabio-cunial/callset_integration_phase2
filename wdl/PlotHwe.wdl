@@ -12,6 +12,8 @@ workflow PlotHwe {
         
         Int min_allele_count = 2
         Int max_distance_bp = 10
+        
+        File? plothw_r
     }
     
     # Main categories
@@ -50,7 +52,8 @@ workflow PlotHwe {
             intersample_tbi = all.out_tbi,
             tandem_track_bed = tandem_track_bed,
             min_allele_count = 2,
-            max_distance_bp = 10
+            max_distance_bp = 10,
+            plothw_r = plothw_r
     }
     call impl.PlotHweImpl as all_50_impl {
         input:
@@ -58,7 +61,8 @@ workflow PlotHwe {
             intersample_tbi = all_50.out_tbi,
             tandem_track_bed = tandem_track_bed,
             min_allele_count = 2,
-            max_distance_bp = 10
+            max_distance_bp = 10,
+            plothw_r = plothw_r
     }
     call impl.PlotHweImpl as biallelic_impl {
         input:
@@ -66,7 +70,8 @@ workflow PlotHwe {
             intersample_tbi = biallelic.out_tbi,
             tandem_track_bed = tandem_track_bed,
             min_allele_count = 2,
-            max_distance_bp = 10
+            max_distance_bp = 10,
+            plothw_r = plothw_r
     }
     call impl.PlotHweImpl as biallelic_50_impl {
         input:
@@ -74,7 +79,8 @@ workflow PlotHwe {
             intersample_tbi = biallelic_50.out_tbi,
             tandem_track_bed = tandem_track_bed,
             min_allele_count = 2,
-            max_distance_bp = 10
+            max_distance_bp = 10,
+            plothw_r = plothw_r
     }
     
     output {

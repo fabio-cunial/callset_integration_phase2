@@ -9,6 +9,9 @@ workflow PlotHweImpl {
         
         Int min_allele_count = 2
         Int max_distance_bp = 10
+        
+        File? plothw_r
+        String out_file_name
     }
     
     # All
@@ -17,9 +20,10 @@ workflow PlotHweImpl {
             vcf_gz = intersample_vcf_gz,
             vcf_tbi = intersample_tbi
     }
-    call Counts2Plot as pdf {
+    call Counts2Plot as plot {
         input:
-            gt_counts = counts.gt_counts
+            gt_counts = counts.gt_counts,
+            out_file_name = "all.png"
     }
     
     # DEL
@@ -35,9 +39,10 @@ workflow PlotHweImpl {
             vcf_gz = del.out_vcf_gz,
             vcf_tbi = del.out_tbi
     }
-    call Counts2Plot as del_pdf {
+    call Counts2Plot as del_plot {
         input:
-            gt_counts = del_counts.gt_counts
+            gt_counts = del_counts.gt_counts,
+            out_file_name = "del.png"
     }
     
     # INS
@@ -53,13 +58,22 @@ workflow PlotHweImpl {
             vcf_gz = ins.out_vcf_gz,
             vcf_tbi = ins.out_tbi
     }
-    call Counts2Plot as ins_pdf {
+    call Counts2Plot as ins_plot {
         input:
-            gt_counts = ins_counts.gt_counts
+            gt_counts = ins_counts.gt_counts,
+            out_file_name = "ins.png"
     }
     
-    # Not in TRs
+    # TRs
     call SelectTRs as trs {
+        input:
+            vcf_gz = intersample_vcf_gz,
+            vcf_tbi = intersample_tbi,
+            tandem_track_bed = tandem_track_bed,
+            mode = 1
+    }
+    # Not TRs
+    call SelectTRs as not_trs {
         input:
             vcf_gz = intersample_vcf_gz,
             vcf_tbi = intersample_tbi,
@@ -71,9 +85,22 @@ workflow PlotHweImpl {
             vcf_gz = trs.out_vcf_gz,
             vcf_tbi = trs.out_tbi
     }
-    call Counts2Plot as trs_pdf {
+    call Counts2Plot as trs_plot {
         input:
-            gt_counts = trs_counts.gt_counts
+            gt_counts = trs_counts.gt_counts,
+            out_file_name = "trs.png",
+            plothw_r = plothw_r
+    }
+    call Vcf2Counts as not_trs_counts {
+        input:
+            vcf_gz = not_trs.out_vcf_gz,
+            vcf_tbi = not_trs.out_tbi
+    }
+    call Counts2Plot as not_trs_plot {
+        input:
+            gt_counts = not_trs_counts.gt_counts,
+            out_file_name = "not_trs.png",
+            plothw_r = plothw_r
     }
     
     # Frequent
@@ -261,7 +288,7 @@ task SelectTRs {
         Int ram_size_gb = 16
     }
     parameter_meta {
-        mode: "0=outside the track; 1=inside the track."
+        mode: "Keep only calls that: 0=do not overlap with the track; 1=overlap with the track."
     }
     
     String docker_dir = "/callset_integration"
@@ -354,6 +381,11 @@ task Vcf2Counts {
 task Counts2Plot {
     input {
         File gt_counts
+        File out_file_name
+        File? plothw_r
+    }
+    parameter_meta {
+        plothw_r: "Custom R script to use for plotting."
     }
     
     Int disk_size_gb = 10*ceil(size(gt_counts,"GB"))
@@ -361,11 +393,15 @@ task Counts2Plot {
     command <<<
         set -euxo pipefail
 
-        Rscript /hwe/PlotHW.r ~{gt_counts} hwe_plot.pdf
+        if [ ~{defined(plothw_r)} ]; then
+            Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}
+        else
+            Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}
+        fi
     >>>
 
     output {
-        File out_pdf = "hwe_plot.pdf"
+        File out_image = out_file_name
     }
 
     runtime {
