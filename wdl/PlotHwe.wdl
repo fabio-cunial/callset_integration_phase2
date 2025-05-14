@@ -26,8 +26,8 @@ workflow PlotHwe {
     }
     call impl.FilterByLengthAndType as all_50 {
         input:
-            vcf_gz = all.out_vcf_gz,
-            vcf_tbi = all.out_tbi,
+            vcf_gz = intersample_vcf_gz,
+            vcf_tbi = intersample_tbi,
             min_sv_length = 50,
             sv_type = 0
     }
@@ -37,12 +37,11 @@ workflow PlotHwe {
             vcf_tbi = all.out_tbi,
             max_distance_bp = 10
     }
-    call impl.FilterByLengthAndType as biallelic_50 {
+    call impl.SelectBiallelic as biallelic_50 {
         input:
-            vcf_gz = biallelic.out_vcf_gz,
-            vcf_tbi = biallelic.out_tbi,
-            min_sv_length = 50,
-            sv_type = 0
+            vcf_gz = all_50.out_vcf_gz,
+            vcf_tbi = all_50.out_tbi,
+            max_distance_bp = 10
     }
     
     # Analyzing each main category
