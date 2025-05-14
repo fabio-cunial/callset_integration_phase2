@@ -399,10 +399,13 @@ task Counts2Plot {
         plothw_r: "Custom R script to use for plotting."
     }
     
+    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*ceil(size(gt_counts,"GB"))
 
     command <<<
         set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
 
         if [ ~{defined(plothw_r)} ]; then
             Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}
@@ -412,7 +415,7 @@ task Counts2Plot {
     >>>
 
     output {
-        File out_image = out_file_name
+        File out_image = work_dir + "/" + out_file_name
     }
 
     runtime {
