@@ -392,7 +392,7 @@ task Vcf2Counts {
 task Counts2Plot {
     input {
         File gt_counts
-        File out_file_name
+        String out_file_name
         File? plothw_r
     }
     parameter_meta {
