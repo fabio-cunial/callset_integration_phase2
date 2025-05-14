@@ -103,12 +103,24 @@ workflow PlotHweImpl {
     }
     
     # Frequent
-    call FilterByAc {
+    call FilterByAc as ac {
         input:
             vcf_gz = intersample_vcf_gz,
             vcf_tbi = intersample_tbi,
             min_count = 2
     }
+    call Vcf2Counts as ac_counts {
+        input:
+            vcf_gz = ac.out_vcf_gz,
+            vcf_tbi = ac.out_tbi
+    }
+    call Counts2Plot as ac_plot {
+        input:
+            gt_counts = ac_counts.gt_counts,
+            out_file_name = "ac.png",
+            plothw_r = plothw_r
+    }
+    
     
     output {
     }
