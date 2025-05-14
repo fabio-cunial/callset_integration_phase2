@@ -407,7 +407,8 @@ task Counts2Plot {
         mkdir -p ~{work_dir}
         cd ~{work_dir}
 
-        if [ ~{defined(plothw_r)} ]; then
+        if ~{defined(plothw_r)}
+        then
             Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}
         else
             Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}
