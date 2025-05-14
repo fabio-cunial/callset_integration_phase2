@@ -123,7 +123,7 @@ task FilterByLengthAndType {
             echo -e "chr${CHR}\t0\t3000000000" >> list.bed
         done
         if [ ~{sv_type} -eq 0 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed ~{vcf_gz} --output-type z > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length}" ~{vcf_gz} --output-type z > filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"DEL\" && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})" ~{vcf_gz} --output-type z > filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
