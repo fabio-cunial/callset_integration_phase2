@@ -22,7 +22,8 @@ workflow PlotHweImpl {
     call Counts2Plot as plot {
         input:
             gt_counts = counts.gt_counts,
-            out_file_name = "all.png"
+            out_file_name = "all.png",
+            plothw_r = plothw_r
     }
     
     # DEL
@@ -41,7 +42,8 @@ workflow PlotHweImpl {
     call Counts2Plot as del_plot {
         input:
             gt_counts = del_counts.gt_counts,
-            out_file_name = "del.png"
+            out_file_name = "del.png",
+            plothw_r = plothw_r
     }
     
     # INS
@@ -60,7 +62,8 @@ workflow PlotHweImpl {
     call Counts2Plot as ins_plot {
         input:
             gt_counts = ins_counts.gt_counts,
-            out_file_name = "ins.png"
+            out_file_name = "ins.png",
+            plothw_r = plothw_r
     }
     
     # TRs
@@ -195,7 +198,7 @@ task SelectBiallelic {
         Int max_distance_bp = 10
         
         Int n_cpu = 2
-        Int ram_size_gb = 16
+        Int ram_size_gb = 64
     }
     
     String docker_dir = "/callset_integration"
