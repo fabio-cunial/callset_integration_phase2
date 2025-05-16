@@ -165,3 +165,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PlotHwe.wdl
   testParameterFiles:      
+- name: CheckMendelian
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/CheckMendelian.wdl
+  testParameterFiles:
