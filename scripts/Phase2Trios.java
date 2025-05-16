@@ -78,7 +78,7 @@ public class Phase2Trios {
                 continue;
             }
             coverageMother=coverages[i];
-            System.out.println(tokens[0]+","+child+","+father+","+mother+","+sexChild+","+coverageChild+","+coverageFather+","+coverageMother);
+            System.out.println(tokens[0]+"\t"+child+"\t"+father+"\t"+mother+"\t"+sexChild+"\t"+coverageChild+"\t"+coverageFather+"\t"+coverageMother);
             str=br.readLine();
         }
         br.close();
