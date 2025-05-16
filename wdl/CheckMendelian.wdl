@@ -7,6 +7,7 @@ workflow CheckMendelian {
         File intersample_vcf_gz
         File intersample_tbi
         File ped_csv
+        String? include
         
         Int n_cpu = 2
         Int ram_size_gb = 16
@@ -20,6 +21,7 @@ workflow CheckMendelian {
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi,
             ped_csv = ped_csv,
+            include = include,
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb
     }
@@ -40,6 +42,7 @@ task CheckMendelianImpl {
         File intersample_vcf_gz
         File intersample_tbi
         File ped_csv
+        String? include
         
         Int n_cpu = 2
         Int ram_size_gb = 16
@@ -62,7 +65,13 @@ task CheckMendelianImpl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         export BCFTOOLS_PLUGINS=~{docker_dir}/bcftools-1.21/plugins
-        ${TIME_COMMAND} bcftools +mendelian2 ~{intersample_vcf_gz} -P ~{ped_csv} > out.txt
+        if ~{defined(include)}
+        then
+            INCLUDE_FLAG="--include ~{include}"
+        else
+            INCLUDE_FLAG=" "
+        fi
+        ${TIME_COMMAND} bcftools +mendelian2 ~{intersample_vcf_gz} -P ~{ped_csv} ${INCLUDE_FLAG} > out.txt
     >>>
 
     output {
