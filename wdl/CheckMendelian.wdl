@@ -26,17 +26,17 @@ workflow CheckMendelian {
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb
     }
-    call SelectTRs {
+    call SelectTRs as not_trs {
         input:
             vcf_gz = intersample_vcf_gz,
             vcf_tbi = intersample_tbi,
             tandem_track_bed = tandem_track_bed,
             mode = 0
     }
-    call CheckMendelianImpl as not_trs {
+    call CheckMendelianImpl as check_not_trs {
         input:
-            intersample_vcf_gz = SelectTRs.out_vcf_gz,
-            intersample_tbi = SelectTRs.out_tbi,
+            intersample_vcf_gz = not_trs.out_vcf_gz,
+            intersample_tbi = not_trs.out_tbi,
             ped_tsv = ped_tsv,
             only_50bp = only_50bp,
             n_cpu = n_cpu,
@@ -45,7 +45,7 @@ workflow CheckMendelian {
     
     output {
         File all_txt = all.out_txt
-        File not_trs_txt = not_trs.out_txt
+        File not_trs_txt = check_not_trs.out_txt
     }
 }
 
