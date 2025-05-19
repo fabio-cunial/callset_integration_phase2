@@ -67,13 +67,10 @@ task SelectTRs {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -93,8 +90,8 @@ task SelectTRs {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/out.vcf.gz"
-        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
 
     runtime {
@@ -126,13 +123,10 @@ task CheckMendelianImpl {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 2*ceil(size(intersample_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -148,7 +142,7 @@ task CheckMendelianImpl {
     >>>
 
     output {
-        File out_txt = work_dir + "/out.txt"
+        File out_txt = "out.txt"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
