@@ -7,6 +7,7 @@ workflow CheckMendelian {
         File intersample_vcf_gz
         File intersample_tbi
         File ped_tsv
+        File tandem_track_bed
         Int only_50bp = 0
         
         Int n_cpu = 2
@@ -16,7 +17,7 @@ workflow CheckMendelian {
         ped_tsv: "In the format used by `bcftools +mendelian2`: `<ignored>,proband,father,mother,sex(1:male,2:female)`."
     }
     
-    call CheckMendelianImpl {
+    call CheckMendelianImpl as all {
         input:
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi,
@@ -25,9 +26,83 @@ workflow CheckMendelian {
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb
     }
+    call SelectTRs {
+        input:
+            vcf_gz = intersample_vcf_gz,
+            vcf_tbi = intersample_tbi,
+            tandem_track_bed = tandem_track_bed,
+            mode = 0
+    }
+    call CheckMendelianImpl as not_trs {
+        input:
+            intersample_vcf_gz = SelectTRs.out_vcf_gz,
+            intersample_tbi = SelectTRs.out_tbi,
+            ped_tsv = ped_tsv,
+            only_50bp = only_50bp,
+            n_cpu = n_cpu,
+            ram_size_gb = ram_size_gb
+    }
     
     output {
-        File out_txt = CheckMendelianImpl.out_txt
+        File all_txt = all.out_txt
+        File not_trs_txt = not_trs.out_txt
+    }
+}
+
+
+# Any overlap with the track is considered, even by a single bp.
+#
+task SelectTRs {
+    input {
+        File vcf_gz
+        File vcf_tbi
+        File tandem_track_bed
+        Int mode
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+        mode: "Keep only calls that: 0=do not overlap with the track; 1=overlap with the track."
+    }
+    
+    String docker_dir = "/callset_integration"
+    String work_dir = "/cromwell_root/callset_integration"
+    Int disk_size_gb = 10*ceil(size(vcf_gz,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        bcftools view --header-only ~{vcf_gz} > out.vcf
+        if [ ~{mode} -eq 1 ]; then
+            INTERSECTION_MODE="-u"
+        elif [ ~{mode} -eq 0 ]; then
+            INTERSECTION_MODE="-v"
+        fi
+        ${TIME_COMMAND} bedtools intersect -a ~{vcf_gz} -b ~{tandem_track_bed} ${INTERSECTION_MODE} >> out.vcf
+        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 2 out.vcf
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = work_dir + "/out.vcf.gz"
+        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
     }
 }
 
