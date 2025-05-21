@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l InterCenterMerge.wdl
 java -jar ${WOMTOOL_PATH} validate -l CheckMendelian.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHwe.wdl
 java -jar ${WOMTOOL_PATH} validate -l QcPlots.wdl
@@ -20,7 +21,6 @@ java -jar ${WOMTOOL_PATH} validate -l Workpackage3.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage2.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage1.wdl
 java -jar ${WOMTOOL_PATH} validate -l InterCenterBench.wdl
-java -jar ${WOMTOOL_PATH} validate -l InterCenterMerge.wdl
 java -jar ${WOMTOOL_PATH} validate -l PasteGTs.wdl
 java -jar ${WOMTOOL_PATH} validate -l KanpigMerged.wdl
 java -jar ${WOMTOOL_PATH} validate -l RemoveSamples.wdl

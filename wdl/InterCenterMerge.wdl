@@ -1,6 +1,12 @@
 version 1.0
 
 
+# Estimates the number of distinct calls in a set of cohort-level VCFs by
+# performing a truvari collapse over them.
+#
+# Remark: since we only care about computing distinct calls, each cohort VCF is
+# transformed into a single-sample VCF with all GTs equal to 0/1 before the
+# inter-cohort merge.
 #
 workflow InterCenterMerge {
     input {
@@ -47,6 +53,7 @@ task Merge {
     }
     
     String work_dir = "/cromwell_root/callset_integration"
+    Int disk_size_gb = 10*ceil(size(center_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -109,7 +116,7 @@ task Merge {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk 256 HDD"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
 }
