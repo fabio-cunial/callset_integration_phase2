@@ -48,12 +48,12 @@ task Merge {
         
         Int n_cpu = 8
         Int ram_size_gb = 16
+        Int disk_size_gb = 1000
     }
     parameter_meta {
     }
     
     String work_dir = "/cromwell_root/callset_integration"
-    Int disk_size_gb = 10*ceil(size(center_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -130,13 +130,13 @@ task ConcatenateChromosomes {
         
         Int n_cpu = 4
         Int ram_size_gb = 8
+        Int disk_size_gb = 1000
     }
     parameter_meta {
     }
     
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
-    Int disk_size_gb = 256  # Arbitrary
 
     command <<<
         set -euxo pipefail
