@@ -85,7 +85,7 @@ task SubsetToSamples {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
@@ -101,8 +101,8 @@ task BenchSample {
         File dipcall_vcf_gz
         Int min_sv_length
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 4
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -146,7 +146,7 @@ task BenchSample {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
