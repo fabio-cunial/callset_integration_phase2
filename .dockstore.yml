@@ -170,3 +170,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/CheckMendelian.wdl
   testParameterFiles:
+- name: BenchCohortSamples
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortSamples.wdl
+  testParameterFiles:
