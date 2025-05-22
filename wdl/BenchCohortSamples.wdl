@@ -10,7 +10,6 @@ workflow BenchCohortSamples {
         File cohort_vcf_gz
         File cohort_tbi
         Array[File] dipcall_vcf_gz
-        Array[File] dipcall_tbi
         Int min_sv_length
     }
     parameter_meta {
@@ -31,7 +30,6 @@ workflow BenchCohortSamples {
                 samples_vcf_gz = SubsetToSamples.out_vcf_gz,
                 samples_tbi = SubsetToSamples.out_tbi,
                 dipcall_vcf_gz = dipcall_vcf_gz[i],
-                dipcall_tbi = dipcall_tbi[i],
                 min_sv_length = min_sv_length
         }
     }
@@ -101,7 +99,6 @@ task BenchSample {
         File samples_vcf_gz
         File samples_tbi
         File dipcall_vcf_gz
-        File dipcall_tbi
         Int min_sv_length
         
         Int n_cpu = 8
@@ -132,6 +129,7 @@ task BenchSample {
         rm -f tmp1.vcf.gz
         
         # Truvari
+        ${TIME_COMMAND} tabix -f ~{dipcall_vcf_gz}
         if [ ~{min_sv_length} -ne 0 ]; then
             FILTER_STRING="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length}"
         else
