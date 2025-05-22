@@ -128,14 +128,18 @@ task BenchSample {
         ${TIME_COMMAND} tabix -f sample.vcf.gz
         rm -f tmp1.vcf.gz
         
+        # Norming the dipcall file
+        ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{dipcall_vcf_gz} > truth.vcf.gz
+        ${TIME_COMMAND} tabix -f truth.vcf.gz
+        rm -f ~{dipcall_vcf_gz}
+        
         # Truvari
-        ${TIME_COMMAND} tabix -f ~{dipcall_vcf_gz}
         if [ ~{min_sv_length} -ne 0 ]; then
             FILTER_STRING="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length}"
         else
             FILTER_STRING="--sizemin 0 --sizefilt 0"
         fi
-        ${TIME_COMMAND} truvari bench -b ~{dipcall_vcf_gz} -c sample.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./truvari/
+        ${TIME_COMMAND} truvari bench -b truth.vcf.gz -c sample.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./truvari/
         mv ./truvari/summary.json ./~{sample_id}_summary.json
     >>>
     
