@@ -175,3 +175,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortSamples.wdl
   testParameterFiles:
+- name: GetPresentCalls
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetPresentCalls.wdl
+  testParameterFiles:
