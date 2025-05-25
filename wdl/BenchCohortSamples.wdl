@@ -42,8 +42,8 @@ workflow BenchCohortSamples {
                 samples_tbi = SubsetToSamples.out_tbi,
                 dipcall_vcf_gz = dipcall_vcf_gz[i],
                 dipcall_bed = dipcall_bed[i],
-                tandem_bed = tandem_bed,
-                not_tandem_bed = ComplementBed.out_bed,
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
                 min_sv_length = min_sv_length
         }
     }
@@ -133,11 +133,13 @@ task ComplementBed {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
 
         
-        ${TIME_COMMAND} bedtools complement -i ~{tandem_bed} -L -g ~{reference_fai} > out.bed
+        ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
+        ${TIME_COMMAND} bedtools complement -i sorted.bed -L -g ~{reference_fai} > complement.bed
     >>>
     
     output {
-        File out_bed = work_dir + "/out.bed"
+        File sorted_bed = work_dir + "/sorted.bed"
+        File complement_bed = work_dir + "/complement.bed"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
