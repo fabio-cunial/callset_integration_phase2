@@ -8,6 +8,7 @@ workflow GetPresentCalls {
     input {
         File cohort_vcf_gz
         File cohort_tbi
+        Int min_sv_length = 0
     }
     parameter_meta {
     }
@@ -30,6 +31,7 @@ task GetPresentCallsImpl {
     input {
         File cohort_vcf_gz
         File cohort_tbi
+        Int min_sv_length
         
         Int n_cpu = 16
         Int ram_size_gb = 32
@@ -50,8 +52,11 @@ task GetPresentCallsImpl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
 
-        
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="0/1" || GT="0|1" || GT="1/0" || GT="1|0" || GT="1/1" || GT="1|1")>0' --output-type z ~{cohort_vcf_gz} > out.vcf.gz
+        FILTER_STRING="COUNT(GT=\"0/1\" || GT=\"0|1\" || GT=\"1/0\" || GT=\"1|0\" || GT=\"1/1\" || GT=\"1|1\")>0"
+        if [ ~{min_sv_length} -ne 0 ]; then
+            FILTER_STRING="${FILTER_STRING} && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})"
+        fi
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "${FILTER_STRING}" --output-type z ~{cohort_vcf_gz} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
     
