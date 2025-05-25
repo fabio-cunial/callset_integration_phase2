@@ -180,3 +180,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetPresentCalls.wdl
   testParameterFiles:
+- name: BenchHprcSamples
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchHprcSamples.wdl
+  testParameterFiles:
