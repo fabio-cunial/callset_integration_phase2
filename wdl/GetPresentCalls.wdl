@@ -16,7 +16,8 @@ workflow GetPresentCalls {
     call GetPresentCallsImpl {
         input:
             cohort_vcf_gz = cohort_vcf_gz,
-            cohort_tbi = cohort_tbi
+            cohort_tbi = cohort_tbi,
+            min_sv_length = min_sv_length
     }
     
     output {
