@@ -53,7 +53,7 @@ task GetPresentCallsImpl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
 
-        FILTER_STRING="COUNT(GT=\"0/1\" || GT=\"0|1\" || GT=\"1/0\" || GT=\"1|0\" || GT=\"1/1\" || GT=\"1|1\")>0"
+        FILTER_STRING="COUNT(GT=\"alt\")>0"
         if [ ~{min_sv_length} -ne 0 ]; then
             FILTER_STRING="${FILTER_STRING} && (SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length})"
         fi
