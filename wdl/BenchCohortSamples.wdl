@@ -89,7 +89,7 @@ task SubsetToSamples {
         echo ${INPUT_FILES} | tr ',' '\n' > list.txt
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file list.txt --output-type z ~{cohort_vcf_gz} > tmp1.vcf.gz
         ${TIME_COMMAND} tabix -f tmp1.vcf.gz
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="0/1" || GT="0|1" || GT="1/0" || GT="1|0" || GT="1/1" || GT="1|1")>0' --output-type z tmp1.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1.vcf.gz > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
     
@@ -201,7 +201,7 @@ task BenchSample {
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{samples_vcf_gz} > tmp1.vcf.gz
         ${TIME_COMMAND} tabix -f tmp1.vcf.gz
         rm -f ~{samples_vcf_gz}
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="0/1" || GT="0|1" || GT="1/0" || GT="1|0" || GT="1/1" || GT="1|1")>0' --output-type z tmp1.vcf.gz > sample.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1.vcf.gz > sample.vcf.gz
         ${TIME_COMMAND} tabix -f sample.vcf.gz
         rm -f tmp1.vcf.gz
         
