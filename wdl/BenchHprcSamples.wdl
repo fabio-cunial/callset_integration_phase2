@@ -36,18 +36,18 @@ workflow BenchHprcSamples {
             reference_fai = reference_fai
     }
     scatter (i in range(length(sample_ids))) {
-        call BenchSample as bench_truvari {
-            input:
-                sample_id = sample_ids[i],
-                sample_vcf_gz = truvari_vcf_gz[i],
-                sample_tbi = truvari_tbi[i],
-                dipcall_vcf_gz = dipcall_vcf_gz[i],
-                dipcall_bed = dipcall_bed[i],
-                tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed,
-                min_sv_length = min_sv_length,
-                only_present = 0
-        }
+        #call BenchSample as bench_truvari {
+        #    input:
+        #        sample_id = sample_ids[i],
+        #        sample_vcf_gz = truvari_vcf_gz[i],
+        #        sample_tbi = truvari_tbi[i],
+        #        dipcall_vcf_gz = dipcall_vcf_gz[i],
+        #        dipcall_bed = dipcall_bed[i],
+        #        tandem_bed = ComplementBed.sorted_bed,
+        #        not_tandem_bed = ComplementBed.complement_bed,
+        #        min_sv_length = min_sv_length,
+        #        only_present = 0
+        #}
         call BenchSample as bench_kanpig {
             input:
                 sample_id = sample_ids[i],
@@ -160,7 +160,7 @@ task BenchSample {
         
         # Keeping only calls that occur in the given sample
         if [ ~{only_present} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="0/1" || GT="0|1" || GT="1/0" || GT="1|0" || GT="1/1" || GT="1|1")>0' --output-type z ~{sample_vcf_gz} > sample.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{sample_vcf_gz} > sample.vcf.gz
             ${TIME_COMMAND} tabix -f sample.vcf.gz
             rm -f ~{sample_vcf_gz}*
         else
