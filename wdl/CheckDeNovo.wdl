@@ -169,6 +169,8 @@ task GetMatrix {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
+        
+        echo ~{samples} | tr ',' '\n' > samples.txt
         if [ ~{region_mode} -eq 0 ]; then
             REGION_STRING=" "
         elif [ ~{region_mode} -eq 1 ]; then
@@ -177,9 +179,9 @@ task GetMatrix {
             REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
         fi
         if [ ~{only_50} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
+            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} --samples-file samples.txt -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
         else
-            ${TIME_COMMAND} bcftools query ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
+            ${TIME_COMMAND} bcftools query ${REGION_STRING} --samples-file samples.txt -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
         fi
         
     >>>
