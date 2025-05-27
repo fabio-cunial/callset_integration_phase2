@@ -177,11 +177,11 @@ task GetMatrix {
             REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
         fi
         if [ ~{only_50} -eq 1 ]; then
-            LENGTH_STRING="--include 'SVLEN>=50 || SVLEN<=-50'"
+            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
         else
-            LENGTH_STRING=" "
+            ${TIME_COMMAND} bcftools query ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
         fi
-        ${TIME_COMMAND} bcftools query ${LENGTH_STRING} ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
+        
     >>>
 
     output {
