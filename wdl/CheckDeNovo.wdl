@@ -234,9 +234,9 @@ task GetMatrix {
         echo ~{samples} | tr ',' '\n' | sort | uniq > samples.txt
         while read SAMPLE; do
             if [ ~{only_50} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} -f '[%GT]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
             else
-                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${REGION_STRING} -f '[%GT]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
             fi
         done < samples.txt
         wait
