@@ -131,12 +131,8 @@ task ComplementBed {
 }
 
 
-# To circumvent the following bug of `bcftools query --samples` or
-# `--samples-file`, which occurs both with v1.21 and v1.18 in the cloud but
-# that cannot be reproduced with v1.18 on an interactive VM or locally:
-#
-# free(): invalid next size (fast)
-# Command terminated by signal 6
+# Limits the cohort VCF to just the distinct samples needed, to speed up the
+# following steps.
 #
 task GetSamples {
     input {
@@ -163,7 +159,7 @@ task GetSamples {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        echo ~{samples} | tr ',' '\n' > samples.txt
+        echo ~{samples} | tr ',' '\n' | sort | uniq | > samples.txt
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file samples.txt --output-type z ~{intersample_vcf_gz} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
@@ -192,14 +188,16 @@ task GetMatrix {
         File intersample_vcf_gz
         File intersample_tbi
         
+        String samples
+        
         File tandem_track_bed
         File tandem_track_complement_bed
         
         Int region_mode
         Int only_50
         
-        Int n_cpu = 4
-        Int ram_size_gb = 32
+        Int n_cpu = 64
+        Int ram_size_gb = 64
     }
     parameter_meta {
         region_mode: "0: all; 1=TR; 2=not TR."
@@ -225,15 +223,29 @@ task GetMatrix {
             REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
         fi
         if [ ~{only_50} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
+            LENGTH_STRING="--include \'SVLEN>=50 || SVLEN<=-50\'"
         else
-            ${TIME_COMMAND} bcftools query ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
+            LENGTH_STRING=" "
         fi
         
+        # Computing the GT vector of every distinct sample
+        echo ~{samples} | tr ',' '\n' | sort | uniq | > samples.txt
+        while read SAMPLE; do
+            ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${LENGTH_STRING} ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+        done < samples.txt
+        wait
+        
+        # Pasting the vectors, allowing duplicates.
+        echo ~{samples} | tr ',' '\n' > samples.txt
+        SAMPLES_STRING=" "
+        while read SAMPLE; do
+            SAMPLES_STRING="${SAMPLES_STRING} sample_${SAMPLE}.txt"
+        done < samples.txt
+        ${TIME_COMMAND} paste ${SAMPLES_STRING} > matrix.txt
     >>>
 
     output {
-        File matrix_all = "matrix.txt"
+        File matrix = "matrix.txt"
     }
     runtime {
         docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo"
