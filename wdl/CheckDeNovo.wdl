@@ -169,8 +169,20 @@ task GetMatrix {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        
         echo ~{samples} | tr ',' '\n' > samples.txt
+        
+        
+        
+        # Debugging
+        bcftools --version && echo 0
+        while read SAMPLE; do
+            ${TIME_COMMAND} bcftools query --samples ${SAMPLE} -f '[%GT,]\n' ~{intersample_vcf_gz} > tmp.txt
+            head tmp.txt
+            rm -f tmp.txt
+        done < samples.txt
+        
+        
+        
         if [ ~{region_mode} -eq 0 ]; then
             REGION_STRING=" "
         elif [ ~{region_mode} -eq 1 ]; then
