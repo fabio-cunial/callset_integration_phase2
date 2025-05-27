@@ -113,12 +113,12 @@ task GetMatrix {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        ${TIME_COMMAND} bcftools query --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_all.txt &
-        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_tr.txt &
-        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_not_tr.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_all_50.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_tr_50.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT ]\n' ~{intersample_vcf_gz} > matrix_not_tr_50.txt &
+        ${TIME_COMMAND} bcftools query --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_all.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_tr.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_not_tr.txt &
+        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_all_50.txt &
+        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_tr_50.txt &
+        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_not_tr_50.txt &
         wait
     >>>
 
