@@ -122,7 +122,7 @@ task ComplementBed {
         File complement_bed = work_dir + "/complement.bed"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_denovo"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -170,13 +170,13 @@ task GetMatrix {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         if [ ~{region_mode} -eq 0 ]; then
-            REGION_STRING="--regions-file ~{tandem_track_bed} --regions-overlap pos"
-        elif [ ~{region_mode} -eq 1 ]; then
-            REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
-        else
             REGION_STRING=" "
+        elif [ ~{region_mode} -eq 1 ]; then
+            REGION_STRING="--regions-file ~{tandem_track_bed} --regions-overlap pos"
+        else
+            REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
         fi
-        if [ ~{only_50} -eq 0 ]; then
+        if [ ~{only_50} -eq 1 ]; then
             LENGTH_STRING="--include 'SVLEN>=50 || SVLEN<=-50'"
         else
             LENGTH_STRING=" "
@@ -188,7 +188,7 @@ task GetMatrix {
         File matrix_all = "matrix.txt"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "fcunial/callset_integration_phase2_denovo"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
