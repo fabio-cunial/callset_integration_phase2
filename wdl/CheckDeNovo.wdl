@@ -229,16 +229,15 @@ task GetMatrix {
         else
             REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
         fi
-        if [ ~{only_50} -eq 1 ]; then
-            LENGTH_STRING="--include \'SVLEN>=50 || SVLEN<=-50\'"
-        else
-            LENGTH_STRING=" "
-        fi
         
         # Computing the GT vector of every distinct sample
         echo ~{samples} | tr ',' '\n' | sort | uniq > samples.txt
         while read SAMPLE; do
-            ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${LENGTH_STRING} ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+            if [ ~{only_50} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} --include 'SVLEN>=50 || SVLEN<=-50' ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+            else
+                ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
+            fi
         done < samples.txt
         wait
         
