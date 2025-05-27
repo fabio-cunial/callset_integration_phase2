@@ -190,3 +190,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/CheckDeNovo.wdl
   testParameterFiles:
+- name: GetLongCalls
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetLongCalls.wdl
+  testParameterFiles:
