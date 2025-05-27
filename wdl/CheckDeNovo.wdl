@@ -31,6 +31,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 0,
@@ -40,6 +41,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 0,
@@ -49,6 +51,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 1,
@@ -58,6 +61,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 1,
@@ -67,6 +71,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 2,
@@ -76,6 +81,7 @@ workflow CheckDeNovo {
         input:
             intersample_vcf_gz = GetSamples.out_vcf_gz,
             intersample_tbi = GetSamples.out_tbi,
+            samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
             tandem_track_complement_bed = ComplementBed.complement_bed,
             region_mode = 2,
@@ -131,6 +137,7 @@ task ComplementBed {
 }
 
 
+
 # Limits the cohort VCF to just the distinct samples needed, to speed up the
 # following steps.
 #
@@ -141,7 +148,7 @@ task GetSamples {
         
         String samples
         
-        Int n_cpu = 4
+        Int n_cpu = 16
         Int ram_size_gb = 32
     }
     parameter_meta {
