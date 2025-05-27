@@ -166,7 +166,7 @@ task GetSamples {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        echo ~{samples} | tr ',' '\n' | sort | uniq | > samples.txt
+        echo ~{samples} | tr ',' '\n' | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file samples.txt --output-type z ~{intersample_vcf_gz} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
@@ -236,7 +236,7 @@ task GetMatrix {
         fi
         
         # Computing the GT vector of every distinct sample
-        echo ~{samples} | tr ',' '\n' | sort | uniq | > samples.txt
+        echo ~{samples} | tr ',' '\n' | sort | uniq > samples.txt
         while read SAMPLE; do
             ${TIME_COMMAND} bcftools query --samples ${SAMPLE} ${LENGTH_STRING} ${REGION_STRING} -f '[%GT,]\n' ~{intersample_vcf_gz} > sample_${SAMPLE}.txt &
         done < samples.txt
