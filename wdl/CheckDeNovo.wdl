@@ -21,13 +21,65 @@ workflow CheckDeNovo {
             tandem_bed = tandem_track_bed,
             reference_fai = reference_fai
     }
-    call GetMatrix {
+    call GetMatrix as all {
         input:
             intersample_vcf_gz = intersample_vcf_gz,
             intersample_tbi = intersample_tbi,
             samples = samples,
             tandem_track_bed = ComplementBed.sorted_bed,
-            tandem_track_complement_bed = ComplementBed.complement_bed
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 0,
+            only_50 = 0
+    }
+    call GetMatrix as all_50 {
+        input:
+            intersample_vcf_gz = intersample_vcf_gz,
+            intersample_tbi = intersample_tbi,
+            samples = samples,
+            tandem_track_bed = ComplementBed.sorted_bed,
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 0,
+            only_50 = 1
+    }
+    call GetMatrix as tr {
+        input:
+            intersample_vcf_gz = intersample_vcf_gz,
+            intersample_tbi = intersample_tbi,
+            samples = samples,
+            tandem_track_bed = ComplementBed.sorted_bed,
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 1,
+            only_50 = 0
+    }
+    call GetMatrix as tr_50 {
+        input:
+            intersample_vcf_gz = intersample_vcf_gz,
+            intersample_tbi = intersample_tbi,
+            samples = samples,
+            tandem_track_bed = ComplementBed.sorted_bed,
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 1,
+            only_50 = 1
+    }
+    call GetMatrix as not_tr {
+        input:
+            intersample_vcf_gz = intersample_vcf_gz,
+            intersample_tbi = intersample_tbi,
+            samples = samples,
+            tandem_track_bed = ComplementBed.sorted_bed,
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 2,
+            only_50 = 0
+    }
+    call GetMatrix as not_tr_50 {
+        input:
+            intersample_vcf_gz = intersample_vcf_gz,
+            intersample_tbi = intersample_tbi,
+            samples = samples,
+            tandem_track_bed = ComplementBed.sorted_bed,
+            tandem_track_complement_bed = ComplementBed.complement_bed,
+            region_mode = 2,
+            only_50 = 1
     }
     
     output {
@@ -94,11 +146,16 @@ task GetMatrix {
         File tandem_track_bed
         File tandem_track_complement_bed
         
-        Int n_cpu = 8
-        Int ram_size_gb = 64
+        Int region_mode
+        Int only_50
+        
+        Int n_cpu = 4
+        Int ram_size_gb = 32
     }
     parameter_meta {
         samples: "Comma-separated: child1,parent1_1,parent1_2,child2,parent2_1,parent2_2,..."
+        region_mode: "0: all; 1=TR; 2=not TR."
+        only_50: "1=use only calls >=50bp."
     }
     
     String docker_dir = "/callset_integration"
@@ -112,23 +169,23 @@ task GetMatrix {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        
-        ${TIME_COMMAND} bcftools query --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_all.txt &
-        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_tr.txt &
-        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_not_tr.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_all_50.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_tr_50.txt &
-        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_track_complement_bed} --regions-overlap pos --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix_not_tr_50.txt &
-        wait
+        if [ ~{region_mode} -eq 0 ]; then
+            REGION_STRING="--regions-file ~{tandem_track_bed} --regions-overlap pos"
+        elif [ ~{region_mode} -eq 1 ]; then
+            REGION_STRING="--regions-file ~{tandem_track_complement_bed} --regions-overlap pos"
+        else
+            REGION_STRING=" "
+        fi
+        if [ ~{only_50} -eq 0 ]; then
+            LENGTH_STRING="--include 'SVLEN>=50 || SVLEN<=-50'"
+        else
+            LENGTH_STRING=" "
+        fi
+        ${TIME_COMMAND} bcftools query ${LENGTH_STRING} ${REGION_STRING} --samples ~{samples} -f '[%GT,]\n' ~{intersample_vcf_gz} > matrix.txt
     >>>
 
     output {
-        File matrix_all = "matrix_all.txt"
-        File matrix_tr = "matrix_tr.txt"
-        File matrix_not_tr = "matrix_not_tr.txt"
-        File matrix_all_50 = "matrix_all_50.txt"
-        File matrix_tr_50 = "matrix_tr_50.txt"
-        File matrix_not_tr_50 = "matrix_not_tr_50.txt"
+        File matrix_all = "matrix.txt"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
