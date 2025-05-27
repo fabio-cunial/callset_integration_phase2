@@ -185,3 +185,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchHprcSamples.wdl
   testParameterFiles:
+- name: CheckDeNovo
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/CheckDeNovo.wdl
+  testParameterFiles:
