@@ -9,6 +9,6 @@ fi
 
 TAG="$1"
 
-docker build --progress=plain -t fcunial/callset_integration_phase2_denovo .
-docker tag fcunial/callset_integration_phase2_resolve fcunial/callset_integration_phase2_denovo:${TAG}
-docker push fcunial/callset_integration_phase2_resolve:${TAG}
+docker build --progress=plain -t us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo .
+docker tag us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo:${TAG}
+docker push us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo:${TAG}

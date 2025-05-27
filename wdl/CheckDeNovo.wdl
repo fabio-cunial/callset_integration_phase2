@@ -122,7 +122,7 @@ task ComplementBed {
         File complement_bed = work_dir + "/complement.bed"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_denovo"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -188,7 +188,7 @@ task GetMatrix {
         File matrix_all = "matrix.txt"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_denovo"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_denovo"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
