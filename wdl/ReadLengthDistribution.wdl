@@ -70,7 +70,7 @@ task DistributionImpl {
             local FASTQ_FILE=$1
             
             ${TIME_COMMAND} samtools fqidx --fai-idx ${FASTQ_FILE}.fai ${FASTQ_FILE}
-            cut -f 2 ${FASTQ_FILE}.fai | sort --numeric-sort > ${FASTQ_FILE}.lengths
+            cut -f 2 ${FASTQ_FILE}.fai | sort --parallel 1 --mmap --numeric-sort > ${FASTQ_FILE}.lengths
             rm -f ${FASTQ_FILE}.fai
         }
         
@@ -113,7 +113,7 @@ task DistributionImpl {
         done
         wait
         date
-        cat *.lengths | sort --parallel ${N_THREADS} --numeric-sort > lengths.txt
+        sort --merge --parallel ${N_THREADS} --mmap --numeric-sort --batch-size=$(( ${N_THREADS} + 1 )) *.lengths > lengths.txt
         date
     >>>
     
