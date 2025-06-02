@@ -77,16 +77,16 @@ task DistributionImpl {
         
         # Downloading and converting to FASTQ
         SUCCESS="0"
-        if [[ ${ADDRESS} == gs://* ]]; then
-            SUCCESS=$(gsutil -u ~{billing_project} -m cp ${ADDRESS} . && echo 1 || echo 0)
+        if [[ ~{bam_address} == gs://* ]]; then
+            SUCCESS=$(gsutil -u ~{billing_project} -m cp ~{bam_address} . && echo 1 || echo 0)
         else
-            SUCCESS=$(wget ${ADDRESS} && echo 1 || echo 0)
+            SUCCESS=$(wget ~{bam_address} && echo 1 || echo 0)
         fi
         if [[ ${SUCCESS} -eq 0 ]]; then
             echo "Error downloading file"
             return
         fi
-        FILE_NAME=$(basename ${ADDRESS})
+        FILE_NAME=$(basename ~{bam_address})
         if [[ ${FILE_NAME} == *.bam ]]; then
             ${TIME_COMMAND} samtools fastq -@ ${N_THREADS} -n ${FILE_NAME} > reads.fastq 
         elif [[ ${FILE_NAME} == *.fastq.gz ]]; then
