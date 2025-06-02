@@ -10,16 +10,16 @@ version 1.0
 # samtools fastq        15 m             33 %         16 MB
 # split                 30 m              3 %          2 MB
 # samtools fqidx        10 m              1 %         20 MB
-# sort                  
+# sort global                            
 #
 workflow ReadLengthDistribution {
     input {
         String bam_address
         String billing_project = "broad-firecloud-dsde-methods"
         
-        Int n_cores = 16
+        Int n_cores = 4
         Int mem_gb = 32
-        Int disk_size_gb = 500
+        Int disk_size_gb = 1000
     }
     parameter_meta {
         bam_address: "Can be .bam, .fastq, .fastq.gz"
@@ -88,6 +88,7 @@ task DistributionImpl {
             echo "Error downloading file"
             return
         fi
+        df -h
         FILE_NAME=$(basename ~{bam_address})
         if [[ ${FILE_NAME} == *.bam ]]; then
             ${TIME_COMMAND} samtools fastq -@ ${N_THREADS} -n ${FILE_NAME} > reads.fastq 
@@ -96,6 +97,7 @@ task DistributionImpl {
         elif [[ ${FILE_NAME} == *.fastq ]]; then
             mv ${FILE_NAME} reads.fastq
         fi
+        df -h
         rm -f ${FILE_NAME}
         
         # Splitting into chunks
@@ -103,6 +105,7 @@ task DistributionImpl {
         N_READS=$(( ${N_LINES} / 4 ))
         N_LINES=$(( (${N_READS} / ${N_THREADS})*4 ))
         ${TIME_COMMAND} split -l ${N_LINES} -a 2 -d reads.fastq chunk_
+        df -h
         rm -f reads.fastq
         for FILE in $(ls chunk_*); do
             mv ${FILE} ${FILE}.fastq
