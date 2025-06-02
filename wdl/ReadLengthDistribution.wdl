@@ -10,7 +10,6 @@ version 1.0
 # samtools fastq        15 m             33 %         16 MB
 # split                 30 m              3 %          2 MB
 # samtools fqidx        10 m              1 %         20 MB
-# sort global                            
 #
 workflow ReadLengthDistribution {
     input {
@@ -66,11 +65,12 @@ task DistributionImpl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        function getSortedLengths() {
+        function getLengths() {
             local FASTQ_FILE=$1
             
             ${TIME_COMMAND} samtools fqidx --fai-idx ${FASTQ_FILE}.fai ${FASTQ_FILE}
-            cut -f 2 ${FASTQ_FILE}.fai | sort --parallel 1 --mmap --numeric-sort > ${FASTQ_FILE}.lengths
+            cut -f 2 ${FASTQ_FILE}.fai > ${FASTQ_FILE}.lengths
+            # sort --parallel 1 --mmap --numeric-sort
             rm -f ${FASTQ_FILE}.fai
         }
         
@@ -109,11 +109,12 @@ task DistributionImpl {
         rm -f reads.fastq
         for FILE in $(ls chunk_*); do
             mv ${FILE} ${FILE}.fastq
-            getSortedLengths ${FILE}.fastq &
+            getLengths ${FILE}.fastq &
         done
         wait
         date
-        sort --merge --parallel ${N_THREADS} --mmap --numeric-sort --batch-size=$(( ${N_THREADS} + 1 )) *.lengths > lengths.txt
+        cat *.lengths > lengths.txt
+        # sort --merge --parallel ${N_THREADS} --mmap --numeric-sort --batch-size=$(( ${N_THREADS} + 1 )) *.lengths > lengths.txt
         date
     >>>
     
