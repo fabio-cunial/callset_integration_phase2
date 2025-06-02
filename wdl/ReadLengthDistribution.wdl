@@ -9,7 +9,7 @@ version 1.0
 # STEP                  TIME            CPU            RAM
 # samtools fastq        15 m             33 %         16 MB
 # split                 30 m              3 %          2 MB
-# samtools fqidx         1 m             80 %         20 MB
+# samtools fqidx        10 m              1 %         20 MB
 # sort                  
 #
 workflow ReadLengthDistribution {
@@ -109,7 +109,9 @@ task DistributionImpl {
             getSortedLengths ${FILE}.fastq &
         done
         wait
+        date
         cat *.lengths | sort --parallel ${N_THREADS} --numeric-sort > lengths.txt
+        date
     >>>
     
     output {
