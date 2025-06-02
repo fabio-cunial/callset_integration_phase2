@@ -7,8 +7,10 @@ version 1.0
 # Total cost: ????
 #
 # STEP                  TIME            CPU            RAM
-# samtools fastq         1 m            250 %         16 MB
-# samtools fqidx         ? m            ??? %         ?? MB
+# samtools fastq        15 m             33 %         16 MB
+# split                 30 m              3 %          2 MB
+# samtools fqidx         1 m             80 %         20 MB
+# sort                  
 #
 workflow ReadLengthDistribution {
     input {
@@ -111,7 +113,7 @@ task DistributionImpl {
     >>>
     
     output {
-        File out_lengths = work_dir + "lengths.txt"
+        File out_lengths = work_dir + "/lengths.txt"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
