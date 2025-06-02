@@ -195,3 +195,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetLongCalls.wdl
   testParameterFiles:
+- name: ReadLengthDistribution
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/ReadLengthDistribution.wdl
+  testParameterFiles:

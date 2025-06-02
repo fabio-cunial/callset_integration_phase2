@@ -203,7 +203,7 @@ task GetMatrix {
         Int region_mode
         Int only_50
         
-        Int n_cpu = 64
+        Int n_cpu = 256
         Int ram_size_gb = 64
     }
     parameter_meta {

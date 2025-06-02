@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l ReadLengthDistribution.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetLongCalls.wdl
 java -jar ${WOMTOOL_PATH} validate -l CheckDeNovo.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchHprcSamples.wdl
