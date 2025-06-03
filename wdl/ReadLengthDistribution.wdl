@@ -81,7 +81,7 @@ task DistributionImpl {
         SUCCESS="0"
         if [[ ~{bam_address} == gs://* ]]; then
             SUCCESS=$(gsutil -u ~{billing_project} -m cp ~{bam_address} . && echo 1 || echo 0)
-        else if [[ ~{bam_address} == s3://* ]]; then
+        elif [[ ~{bam_address} == s3://* ]]; then
             SUCCESS=$(aws s3 --no-sign-request cp ~{bam_address} . && echo 1 || echo 0)
         else
             SUCCESS=$(wget ~{bam_address} && echo 1 || echo 0)
