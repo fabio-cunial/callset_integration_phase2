@@ -200,3 +200,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/ReadLengthDistribution.wdl
   testParameterFiles:
+- name: SubsampleSimple
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SubsampleSimple.wdl
+  testParameterFiles:
