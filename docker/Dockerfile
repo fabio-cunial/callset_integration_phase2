@@ -63,6 +63,12 @@ RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud
     && yes | ./google-cloud-sdk/install.sh
 ENV PATH=${work_dir}/google-cloud-sdk/bin:${PATH}
 
+# AWS
+RUN wget https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip \
+    && unzip awscli-exe-linux-x86_64.zip \
+    && ./aws/install \
+    && aws --version
+
 # HTSLIB
 ARG htslib_version=1.21
 RUN wget https://github.com/samtools/htslib/releases/download/${htslib_version}/htslib-${htslib_version}.tar.bz2 \

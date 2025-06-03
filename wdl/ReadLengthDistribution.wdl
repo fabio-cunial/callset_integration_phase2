@@ -78,17 +78,12 @@ task DistributionImpl {
         # Main program
         
         # Downloading and converting to FASTQ
-        SUCCESS="0"
         if [[ ~{bam_address} == gs://* ]]; then
-            SUCCESS=$(gsutil -u ~{billing_project} -m cp ~{bam_address} . && echo 1 || echo 0)
+            gsutil -u ~{billing_project} -m cp ~{bam_address} .
         elif [[ ~{bam_address} == s3://* ]]; then
-            SUCCESS=$(aws s3 --no-sign-request cp --quiet ~{bam_address} . && echo 1 || echo 0)
+            aws s3 --no-sign-request cp ~{bam_address} .
         else
-            SUCCESS=$(wget ~{bam_address} && echo 1 || echo 0)
-        fi
-        if [[ ${SUCCESS} -eq 0 ]]; then
-            echo "Error downloading file"
-            return
+            wget ~{bam_address}
         fi
         df -h
         FILE_NAME=$(basename ~{bam_address})
