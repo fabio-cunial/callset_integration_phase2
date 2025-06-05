@@ -60,16 +60,16 @@ task DownloadImpl {
         if [[ ~{hap1_address} == gs://* ]]; then
             gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap1_address} ~{remote_output_dir}/ &
         elif [[ ~{hap1_address} == s3://* ]]; then
-            aws s3 --no-sign-request cp ~{hap1_address} - | gsutil ${GSUTIL_UPLOAD_THRESHOLD} -m cp - ~{remote_output_dir}/ &
+            aws s3 --no-sign-request cp ~{hap1_address} - | gsutil cp - ~{remote_output_dir}/ &
         else
-            curl ~{hap1_address} | gsutil ${GSUTIL_UPLOAD_THRESHOLD} -m cp - ~{remote_output_dir}/ &
+            curl ~{hap1_address} | gsutil cp - ~{remote_output_dir}/ &
         fi
         if [[ ~{hap2_address} == gs://* ]]; then
             gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap2_address} ~{remote_output_dir}/ &
         elif [[ ~{hap2_address} == s3://* ]]; then
-            aws s3 --no-sign-request cp ~{hap2_address} - | gsutil ${GSUTIL_UPLOAD_THRESHOLD} -m cp - ~{remote_output_dir}/ &
+            aws s3 --no-sign-request cp ~{hap2_address} - | gsutil cp - ~{remote_output_dir}/ &
         else
-            curl ~{hap2_address} | gsutil ${GSUTIL_UPLOAD_THRESHOLD} -m cp - ~{remote_output_dir}/ &
+            curl ~{hap2_address} | gsutil cp - ~{remote_output_dir}/ &
         fi
         wait
         echo "~{remote_output_dir}/$(basename ~{hap1_address})" > hap1.txt
