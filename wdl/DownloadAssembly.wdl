@@ -56,24 +56,27 @@ task DownloadImpl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        
+        FILE_NAME=$(basename ~{hap1_address})
+        echo "~{remote_output_dir}/${FILE_NAME}" > hap1.txt
         if [[ ~{hap1_address} == gs://* ]]; then
-            gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap1_address} ~{remote_output_dir}/ &
+            gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap1_address} ~{remote_output_dir}/${FILE_NAME} &
         elif [[ ~{hap1_address} == s3://* ]]; then
-            aws s3 --no-sign-request cp ~{hap1_address} - | gsutil cp - ~{remote_output_dir}/ &
+            aws s3 --no-sign-request cp ~{hap1_address} - | gsutil cp - ~{remote_output_dir}/${FILE_NAME} &
         else
-            curl ~{hap1_address} | gsutil cp - ~{remote_output_dir}/ &
+            curl ~{hap1_address} | gsutil cp - ~{remote_output_dir}/${FILE_NAME} &
         fi
+        
+        FILE_NAME=$(basename ~{hap2_address})
+        echo "~{remote_output_dir}/${FILE_NAME}" > hap2.txt
         if [[ ~{hap2_address} == gs://* ]]; then
-            gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap2_address} ~{remote_output_dir}/ &
+            gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap2_address} ~{remote_output_dir}/${FILE_NAME} &
         elif [[ ~{hap2_address} == s3://* ]]; then
-            aws s3 --no-sign-request cp ~{hap2_address} - | gsutil cp - ~{remote_output_dir}/ &
+            aws s3 --no-sign-request cp ~{hap2_address} - | gsutil cp - ~{remote_output_dir}/${FILE_NAME} &
         else
-            curl ~{hap2_address} | gsutil cp - ~{remote_output_dir}/ &
+            curl ~{hap2_address} | gsutil cp - ~{remote_output_dir}/${FILE_NAME} &
         fi
+        
         wait
-        echo "~{remote_output_dir}/$(basename ~{hap1_address})" > hap1.txt
-        echo "~{remote_output_dir}/$(basename ~{hap2_address})" > hap2.txt
     >>>
     
     output {
