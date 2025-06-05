@@ -85,8 +85,6 @@ task DownloadImpl {
     >>>
     
     output {
-        String hap1_downloaded_address = read_string(work_dir+"/hap1.txt")
-        String hap2_downloaded_address = read_string(work_dir+"/hap2.txt")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
