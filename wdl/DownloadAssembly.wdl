@@ -23,8 +23,6 @@ workflow DownloadAssembly {
     }
     
     output {
-        String hap1_downloaded_address = DownloadImpl.hap1_downloaded_address
-        String hap2_downloaded_address = DownloadImpl.hap2_downloaded_address
     }
 }
 
