@@ -4,6 +4,7 @@ version 1.0
 #
 workflow DownloadAssembly {
     input {
+        String sample_id
         String hap1_address
         String hap2_address
         String billing_project
@@ -14,6 +15,7 @@ workflow DownloadAssembly {
     
     call DownloadImpl {
         input:
+            sample_id = sample_id,
             hap1_address = hap1_address,
             hap2_address = hap2_address,
             billing_project = billing_project,
@@ -29,6 +31,7 @@ workflow DownloadAssembly {
 
 task DownloadImpl {
     input {
+        String sample_id
         String hap1_address
         String hap2_address
         String remote_output_dir
@@ -57,6 +60,7 @@ task DownloadImpl {
         N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         FILE_NAME=$(basename ~{hap1_address})
+        FILE_NAME="~{sample_id}_hap1_${FILE_NAME}"
         echo "~{remote_output_dir}/${FILE_NAME}" > hap1.txt
         if [[ ~{hap1_address} == gs://* ]]; then
             gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap1_address} ~{remote_output_dir}/${FILE_NAME} &
@@ -67,6 +71,7 @@ task DownloadImpl {
         fi
         
         FILE_NAME=$(basename ~{hap2_address})
+        FILE_NAME="~{sample_id}_hap2_${FILE_NAME}"
         echo "~{remote_output_dir}/${FILE_NAME}" > hap2.txt
         if [[ ~{hap2_address} == gs://* ]]; then
             gsutil ${GSUTIL_UPLOAD_THRESHOLD} -u ~{billing_project} -m cp ~{hap2_address} ~{remote_output_dir}/${FILE_NAME} &
