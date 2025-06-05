@@ -7,7 +7,7 @@ workflow DownloadAssembly {
         String sample_id
         String hap1_address
         String hap2_address
-        String billing_project
+        String billing_project = "broad-dsp-lrma"
         String remote_output_dir
     }
     parameter_meta {
