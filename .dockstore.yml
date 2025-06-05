@@ -205,3 +205,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SubsampleSimple.wdl
   testParameterFiles:
+- name: DownloadAssembly
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/DownloadAssembly.wdl
+  testParameterFiles:
