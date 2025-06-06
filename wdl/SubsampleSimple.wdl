@@ -143,7 +143,7 @@ task SubsampleImpl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/hapestry_experiments"
         cpu: n_cores
         memory: mem_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"

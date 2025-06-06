@@ -137,6 +137,17 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_versio
     && mv bedtools /usr/local/bin \
     && bedtools --help
 
+# PIGZ
+RUN apt-get install -y --no-install-recommends pigz
+
+# SEQKIT
+ARG seqkit_version=2.8.2
+RUN wget https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_amd64.tar.gz \
+    && tar -xzvf seqkit_linux_amd64.tar.gz \
+    && rm -f seqkit_linux_amd64.tar.gz \
+    && chmod +x seqkit \
+    && ./seqkit --help
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
