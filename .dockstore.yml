@@ -210,3 +210,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/DownloadAssembly.wdl
   testParameterFiles:
+- name: MapR10Phase2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/MapR10Phase2.wdl
+  testParameterFiles:
