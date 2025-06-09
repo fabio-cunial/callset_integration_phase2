@@ -218,5 +218,5 @@ workflows:
 - name: MapCCSPhase2Prime
   subclass: wdl
   publish: True
-  primaryDescriptorPath: /wdl/MapR10Phase2.wdl
+  primaryDescriptorPath: /wdl/MapCCSPhase2Prime.wdl
   testParameterFiles:

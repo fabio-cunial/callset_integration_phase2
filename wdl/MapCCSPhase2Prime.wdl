@@ -1,7 +1,7 @@
 version 1.0
 
 
-# Like `MapCCSPhase2.wdl`, but uses directly minimap2 to avoid a pbmm2 crash
+# Like `MapCCSPhase2.wdl`, but uses minimap2 directly to avoid a pbmm2 crash
 # with some FASTQs.
 #
 workflow MapCCSPhase2Prime {
