@@ -147,6 +147,15 @@ RUN wget https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_li
     && rm -f seqkit_linux_amd64.tar.gz \
     && chmod +x seqkit \
     && ./seqkit --help
+    
+# MINIMAP2. We need v2.15 because it is the one wrapped by pbmm2 v1.10.0 that 
+# is used in AoU Phase 2 production.
+ARG minimap2_version=2.15
+RUN wget https://github.com/lh3/minimap2/releases/download/v${minimap2_version}/minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && tar xjf minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && rm -f minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && mv ./minimap2-${minimap2_version}_x64-linux/ ./minimap2/ \
+    && ./minimap2/minimap2 -h && echo 0 || echo 1
 
 # AD HOC SCRIPTS
 COPY *.java .
