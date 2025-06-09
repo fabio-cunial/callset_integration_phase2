@@ -73,7 +73,7 @@ task RemoveDuplicatedReads {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        ${TIME_COMMAND} seqkit rmdup --by-seq -o out.fastq.gz
+        ${TIME_COMMAND} ~{docker_dir}/seqkit rmdup --by-seq -o out.fastq.gz ~{reads_fastq_gz}
     >>>
     
     output {
