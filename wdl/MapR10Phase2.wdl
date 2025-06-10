@@ -22,23 +22,29 @@ workflow MapR10Phase2 {
     parameter_meta {
     }
     
-    
     call RemoveDuplicatedReads {
         input:
             sample_id = sample_id,
             reads_fastq_gz = reads_fastq_gz
     }
-    call MapR10Impl {
+    call Minimap2 {
         input:
             sample_id = sample_id,
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             reads_fastq_gz = RemoveDuplicatedReads.out_fastq_gz
     }
+    call Sam2Bam {
+        input:
+            sample_id = sample_id,
+            input_sam = Minimap2.output_sam,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai
+    }
     
     output {
-        File output_bam = MapR10Impl.output_bam
-        File output_bai = MapR10Impl.output_bai
+        File output_bam = Sam2Bam.output_bam
+        File output_bai = Sam2Bam.output_bai
     }
 }
 
@@ -89,22 +95,22 @@ task RemoveDuplicatedReads {
 }
 
 
+
 # Performance with 32 cores and 64 GB of RAM.
 #
 # TASK              % CPU       RAM     TIME
 # minimap2          ???         51G     6.3h
-# samtools sort     
 #
-task MapR10Impl {
+task Minimap2 {
     input {
         String sample_id
         File reference_fa
         File reference_fai
         File reads_fastq_gz
         
-        Int n_cpus = 32
-        Int ram_size_gb = 64
-        Int disk_gb = 200
+        Int n_cpus = 64
+        Int ram_size_gb = 128
+        Int disk_gb = 1000
         
         String docker = "us.gcr.io/broad-dsp-lrma/lr-minimap2:2.26-gcloud"
     }
@@ -123,14 +129,72 @@ task MapR10Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS_MINIMAP=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         N_THREADS_SAMTOOLS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} / 2 ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 4 ))
         
+        ls -laht
+        df -h
         minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} > out.sam
+        ls -laht
+        df -h
+    >>>
+    
+    output {
+        File output_sam = work_dir + "/out.sam"
+    }
+    runtime {
+        docker: docker
+        cpu: n_cpus
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: 0
+    }
+}
+
+
+
+#
+task Sam2Bam {
+    input {
+        String sample_id
+        File input_sam
+        File reference_fa
+        File reference_fai
+        
+        Int n_cpus = 32
+        Int ram_size_gb = 64
+        Int disk_gb = 1000
+        
+        String docker = "us.gcr.io/broad-dsp-lrma/lr-minimap2:2.26-gcloud"
+    }
+    parameter_meta {
+    }
+    
+    Int disk_size_gb = ceil(size(input_sam, "GB")) + disk_gb
+    String work_dir = "/cromwell_root/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
+        
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS_MINIMAP=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS_SAMTOOLS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} / 2 ))
+        
+        ls -laht
+        df -h
         mkdir ./tmp/
-        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam out.sam
-        rm -f out.sam
+        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam ~{input_sam}
+        ls -laht
+        df -h
+        rm -f ~{input_sam}
+        df -h
         samtools calmd -@ ${N_THREADS_SAMTOOLS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
+        ls -laht
+        df -h
         samtools index -@ ${N_THREADS_SAMTOOLS} ~{sample_id}.bam
+        ls -laht
+        df -h
     >>>
     
     output {
