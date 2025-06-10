@@ -89,6 +89,11 @@ task RemoveDuplicatedReads {
 }
 
 
+# Performance with 32 cores and 64 GB of RAM.
+#
+# TASK              % CPU       RAM     TIME
+# minimap2          ???         51G     6.3h
+# samtools sort     
 #
 task MapR10Impl {
     input {
@@ -116,13 +121,16 @@ task MapR10Impl {
         
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS_MINIMAP=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS_SAMTOOLS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} / 2 ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 4 ))
         
-        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS} -K4G ~{reference_fa} ~{reads_fastq_gz} > out.sam
-        samtools sort -@4 -m4G --no-PG -o out.bam out.sam
+        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} > out.sam
+        mkdir ./tmp/
+        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam out.sam
         rm -f out.sam
-        samtools calmd -@ ${N_THREADS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
-        samtools index -@ ${N_THREADS} ~{sample_id}.bam
+        samtools calmd -@ ${N_THREADS_SAMTOOLS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
+        samtools index -@ ${N_THREADS_SAMTOOLS} ~{sample_id}.bam
     >>>
     
     output {

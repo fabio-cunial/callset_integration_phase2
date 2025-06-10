@@ -10,9 +10,9 @@ workflow MapCCSPhase2Prime {
         File reference_fa
         File reference_fai
         File reads_fastq_gz
-        Int n_cpus
-        Int ram_size_gb
-        Int disk_gb
+        Int n_cpus = 64
+        Int ram_size_gb = 64
+        Int disk_gb = 1000
     }
     parameter_meta {
     }
@@ -35,6 +35,13 @@ workflow MapCCSPhase2Prime {
 }
 
 
+# Performance with 64 cores and 128 GB of RAM.
+#
+# TASK              % CPU       RAM     TIME
+# minimap2          2500%       40G     15m
+# samtools sort     350%        17G     5m
+# samtools calmd    850%        500M    2h
+# samtools index    1770%       30M     10s       
 #
 task MapCCSImpl {
     input {
