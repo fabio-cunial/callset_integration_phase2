@@ -66,7 +66,7 @@ task MapCCSImpl {
         # From `https://github.com/PacificBiosciences/pbmm2#
         # what-are-parameter-sets-and-how-can-i-override-them`
         PBMM2_CCS_PARAMS="-k 19 -w 19 -O 6,26 -E 2,1 -A 1 -B 4 -z 400,50 -r 2000 -g 5000"
-        ${TIME_COMMAND} ~{docker_dir}/minimap2/minimap2 ${PBMM2_CCS_PARAMS} -ayYL --MD --eqx --cs -t ${N_THREADS} -K4G ~{reference_fa} ~{reads_fastq_gz} > out.sam
+        ${TIME_COMMAND} ~{docker_dir}/minimap2/minimap2 ${PBMM2_CCS_PARAMS} -ayYL --MD --eqx --cs -t ${N_THREADS} ~{reference_fa} ~{reads_fastq_gz} > out.sam
         ${TIME_COMMAND} samtools sort -@4 -m4G --no-PG -o out.bam out.sam
         rm -f out.sam
         ${TIME_COMMAND} samtools calmd -@ ${N_THREADS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
