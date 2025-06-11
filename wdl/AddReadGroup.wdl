@@ -9,8 +9,8 @@ workflow AddReadGroup {
         File input_bam
         File input_bai
 
-        Int n_cpus = 64
-        Int ram_size_gb = 64
+        Int n_cpus = 8
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -34,7 +34,7 @@ workflow AddReadGroup {
 # Performance with 64 cores and 64 GB of RAM.
 #
 # TASK                      % CPU       RAM     TIME
-# samtools addreplacerg     
+# samtools addreplacerg     500%        50M     3m
 #
 task AddReadGroupImpl {
     input {
@@ -60,7 +60,7 @@ task AddReadGroupImpl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         FAKE_RG="@RG\tID:default\tPL:PACBIO\tDS:READTYPE=UNKNOWN\tPU:default\tSM:~{sample_id}\tPM:SEQUEL"
         
         ${TIME_COMMAND} samtools addreplacerg -@ ${N_THREADS} -r ${FAKE_RG} -m overwrite_all --no-PG -o ~{sample_id}_rg.bam ~{input_bam}
