@@ -129,10 +129,11 @@ task Minimap2 {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS_MINIMAP=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         N_THREADS_SAMTOOLS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} / 2 ))
+        FAKE_RG="@RG\tID:default\tPL:ONT\tDS:READTYPE=UNKNOWN\tPU:default\tSM:${SAMPLE_ID}\tPM:ONT"
         
         ls -laht
         df -h
-        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} | samtools view -b > out.bam
+        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} -R ${FAKE_RG} ~{reads_fastq_gz} | samtools view -b > out.bam
         ls -laht
         df -h
     >>>
