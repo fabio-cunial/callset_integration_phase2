@@ -37,7 +37,7 @@ workflow MapR10Phase2 {
     call Sam2Bam {
         input:
             sample_id = sample_id,
-            input_sam = Minimap2.output_sam,
+            input_bam = Minimap2.output_bam,
             reference_fa = reference_fa,
             reference_fai = reference_fai
     }
@@ -132,13 +132,13 @@ task Minimap2 {
         
         ls -laht
         df -h
-        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} > out.sam
+        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} | samtools view -b out.sam > out.bam
         ls -laht
         df -h
     >>>
     
     output {
-        File output_sam = work_dir + "/out.sam"
+        File output_bam = work_dir + "/out.bam"
     }
     runtime {
         docker: docker
@@ -155,7 +155,7 @@ task Minimap2 {
 task Sam2Bam {
     input {
         String sample_id
-        File input_sam
+        File input_bam
         File reference_fa
         File reference_fai
         
@@ -168,7 +168,7 @@ task Sam2Bam {
     parameter_meta {
     }
     
-    Int disk_size_gb = ceil(size(input_sam, "GB")) + disk_gb
+    Int disk_size_gb = ceil(size(input_bam, "GB")) + disk_gb
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
@@ -184,10 +184,10 @@ task Sam2Bam {
         ls -laht
         df -h
         mkdir ./tmp/
-        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam ~{input_sam}
+        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam ~{input_bam}
         ls -laht
         df -h
-        rm -f ~{input_sam}
+        rm -f ~{input_bam}
         df -h
         samtools calmd -@ ${N_THREADS_SAMTOOLS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
         ls -laht
