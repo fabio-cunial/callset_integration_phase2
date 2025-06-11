@@ -185,7 +185,7 @@ task Sam2Bam {
         ls -laht
         df -h
         mkdir ./tmp/
-        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -o out.bam ~{input_bam}
+        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -O BAM ~{input_bam} > out.bam
         ls -laht
         df -h
         rm -f ~{input_bam}
