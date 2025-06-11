@@ -132,7 +132,7 @@ task Minimap2 {
         
         ls -laht
         df -h
-        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} | samtools view -b out.sam > out.bam
+        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS_MINIMAP} -K4G ~{reference_fa} ~{reads_fastq_gz} | samtools view -b > out.bam
         ls -laht
         df -h
     >>>
