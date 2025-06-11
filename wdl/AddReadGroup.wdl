@@ -63,7 +63,7 @@ task AddReadGroupImpl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         FAKE_RG="@RG\tID:default\tPL:PACBIO\tDS:READTYPE=UNKNOWN\tPU:default\tSM:~{sample_id}\tPM:SEQUEL"
         
-        ${TIME_COMMAND} samtools addreplacerg -@ ${N_THREADS} -r ${FAKE_RG} -m overwrite_all --no-PG -o ~{sample_id}_rg.bam ~{input_bam}
+        ${TIME_COMMAND} samtools addreplacerg -@ ${N_THREADS} -r ${FAKE_RG} -m overwrite_all -w --no-PG -o ~{sample_id}_rg.bam ~{input_bam}
         ${TIME_COMMAND} samtools index -@ ${N_THREADS} ~{sample_id}_rg.bam
     >>>
     
