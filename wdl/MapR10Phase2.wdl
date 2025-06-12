@@ -98,8 +98,10 @@ task RemoveDuplicatedReads {
 
 # Performance with 32 cores and 64 GB of RAM.
 #
-# TASK              % CPU       RAM     TIME
-# minimap2          ???         51G     6.3h
+# TASK                      % CPU       RAM     TIME
+# minimap2                  ???         51G     6.3h
+# samtools view             
+# minimap2 | samtools view  ???         73G     15h
 #
 task Minimap2 {
     input {
@@ -127,12 +129,14 @@ task Minimap2 {
         
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         FAKE_RG="@RG\tID:default\tPL:ONT\tDS:READTYPE=UNKNOWN\tPU:default\tSM:~{sample_id}\tPM:ONT"
         
         ls -laht
         df -h
-        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS} -K4G ~{reference_fa} -R ${FAKE_RG} ~{reads_fastq_gz} | samtools view -b > out.bam
+        minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS} ~{reference_fa} -R ${FAKE_RG} ~{reads_fastq_gz} > out.sam
+        # -K4G 
+        samtools view -@ ${N_THREADS} -b out.sam > out.bam
         ls -laht
         df -h
     >>>
@@ -159,11 +163,9 @@ task Sam2Bam {
         File reference_fa
         File reference_fai
         
-        Int n_cpus = 32
-        Int ram_size_gb = 64
+        Int n_cpus = 64
+        Int ram_size_gb = 128
         Int disk_gb = 1000
-        
-        String docker = "us.gcr.io/broad-dsp-lrma/lr-minimap2:2.26-gcloud"
     }
     parameter_meta {
     }
@@ -176,23 +178,23 @@ task Sam2Bam {
         mkdir -p ~{work_dir}
         cd ~{work_dir}
         
+        TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS_MINIMAP=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        N_THREADS_SAMTOOLS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} / 2 ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         ls -laht
         df -h
         mkdir ./tmp/
-        samtools sort -@ ${N_THREADS_SAMTOOLS} -T ./tmp/prefix --no-PG -O BAM ~{input_bam} > out.bam
+        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -T ./tmp/prefix --no-PG -O BAM ~{input_bam} > out.bam
         ls -laht
         df -h
         rm -f ~{input_bam}
         df -h
-        samtools calmd -@ ${N_THREADS_SAMTOOLS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
+        ${TIME_COMMAND} samtools calmd -@ ${N_THREADS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
         ls -laht
         df -h
-        samtools index -@ ${N_THREADS_SAMTOOLS} ~{sample_id}.bam
+        ${TIME_COMMAND} samtools index -@ ${N_THREADS} ~{sample_id}.bam
         ls -laht
         df -h
     >>>
@@ -202,7 +204,7 @@ task Sam2Bam {
         File output_bai = work_dir + "/" + sample_id + ".bam.bai"
     }
     runtime {
-        docker: docker
+        docker: "fcunial/callset_integration_phase2"
         cpu: n_cpus
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
