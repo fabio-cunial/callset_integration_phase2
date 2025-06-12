@@ -54,6 +54,11 @@ workflow MapR10Phase2 {
 #
 # Remark: this step does not reproduce the AoU pipeline exactly, since we work
 # with FASTQs whereas the pipeline worked with BAMs.
+#
+# Performance with 4 cores and 128GB of RAM.
+#
+# TASK                      % CPU       RAM     TIME
+# seqkit rmdup              350%        1.1G    30m
 # 
 task RemoveDuplicatedReads {
     input {
@@ -61,7 +66,7 @@ task RemoveDuplicatedReads {
         File reads_fastq_gz
         
         Int n_cpus = 4
-        Int ram_size_gb = 128
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
