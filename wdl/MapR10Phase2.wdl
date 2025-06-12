@@ -96,7 +96,7 @@ task RemoveDuplicatedReads {
         cpu: n_cpus
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 2
     }
 }
 
@@ -159,7 +159,7 @@ task Minimap2 {
         cpu: n_cpus
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 2
     }
 }
 
@@ -219,6 +219,6 @@ task Sam2Bam {
         cpu: n_cpus
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 2
     }
 }
