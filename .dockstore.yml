@@ -225,3 +225,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/AddReadGroup.wdl
   testParameterFiles:
+- name: MapR10Phase2Scattered
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/MapR10Phase2Scattered.wdl
+  testParameterFiles:
