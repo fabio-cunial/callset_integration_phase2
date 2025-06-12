@@ -38,6 +38,7 @@ workflow MapR10Phase2 {
         input:
             sample_id = sample_id,
             input_bam = Minimap2.output_bam,
+            input_bai = Minimap2.output_bai,
             reference_fa = reference_fa,
             reference_fai = reference_fai
     }
@@ -136,13 +137,17 @@ task Minimap2 {
         df -h
         minimap2 -ayYL --MD --eqx --cs -x map-ont -t ${N_THREADS} ~{reference_fa} -R ${FAKE_RG} ~{reads_fastq_gz} > out.sam
         # -K4G 
+        ls -laht
+        df -h
         samtools view -@ ${N_THREADS} -b out.sam > out.bam
+        samtools index -@ ${N_THREADS} out.bam
         ls -laht
         df -h
     >>>
     
     output {
         File output_bam = work_dir + "/out.bam"
+        File output_bai = work_dir + "/out.bam.bai"
     }
     runtime {
         docker: docker
@@ -160,6 +165,7 @@ task Sam2Bam {
     input {
         String sample_id
         File input_bam
+        File input_bai
         File reference_fa
         File reference_fai
         
