@@ -62,7 +62,7 @@ workflow MapR10Phase2Scattered {
 # Remark: this step does not reproduce the AoU pipeline exactly, since we work
 # with FASTQs whereas the pipeline worked with BAMs.
 #
-# Performance with 4 cores and 128GB of RAM.
+# Performance with 4 cores and 128GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # seqkit rmdup              350%        1.1G    1h
@@ -72,13 +72,13 @@ task RemoveDuplicatedReads {
     input {
         File reads_fastq_gz
         
-        Int n_cpus = 4
-        Int ram_size_gb = 4
+        Int n_cpus = 8
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*ceil(size(reads_fastq_gz, "GB"))
+    Int disk_size_gb = 5*ceil(size(reads_fastq_gz, "GB"))
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
@@ -93,6 +93,7 @@ task RemoveDuplicatedReads {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         ${TIME_COMMAND} ~{docker_dir}/seqkit rmdup --by-seq -o out.fastq.gz ~{reads_fastq_gz}
+        rm -f ~{reads_fastq_gz}
         ${TIME_COMMAND} ~{docker_dir}/seqkit split2 --by-part 4 --by-part-prefix chunk --extension .gz --out-dir . out.fastq.gz
     >>>
     
@@ -110,7 +111,7 @@ task RemoveDuplicatedReads {
 
 
 
-# Performance on one chunk with 64 cores and 128 GB of RAM.
+# Performance on one chunk with 64 cores and 128 GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # minimap2                  ???         51G     1h
@@ -168,7 +169,7 @@ task Minimap2 {
 }
 
 
-# Performance on 30x R10 with 32 cores and 64 GB of RAM.
+# Performance on one chunk with 64 cores and 128 GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # samtools sort
@@ -233,7 +234,7 @@ task Sam2Bam {
 }
 
 
-# Performance on 30x R10 with 64 cores and 128 GB of RAM.
+# Performance on 30x with 64 cores and 128 GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # samtools merge           
