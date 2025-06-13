@@ -38,7 +38,6 @@ workflow MapR10Phase2Scattered {
             input:
                 sample_id = sample_id,
                 input_bam = Minimap2.output_bam,
-                input_bai = Minimap2.output_bai,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai
         }
@@ -66,14 +65,15 @@ workflow MapR10Phase2Scattered {
 # Performance with 4 cores and 128GB of RAM.
 #
 # TASK                      % CPU       RAM     TIME
-# seqkit rmdup              350%        1.1G    30m
+# seqkit rmdup              350%        1.1G    1h
+# seqkit split              260%        100M    1h
 # 
 task RemoveDuplicatedReads {
     input {
         File reads_fastq_gz
         
         Int n_cpus = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -110,12 +110,11 @@ task RemoveDuplicatedReads {
 
 
 
-# Performance on 30x R10 with 32 cores and 64 GB of RAM.
+# Performance on one chunk with 64 cores and 128 GB of RAM.
 #
 # TASK                      % CPU       RAM     TIME
-# minimap2                  ???         51G     6.3h
+# minimap2                  ???         51G     1h
 # samtools view             
-# minimap2 | samtools view  ???         73G     15h
 #
 task Minimap2 {
     input {
@@ -125,8 +124,8 @@ task Minimap2 {
         File reads_fastq_gz
         
         Int n_cpus = 64
-        Int ram_size_gb = 128
-        Int disk_gb = 1000
+        Int ram_size_gb = 64
+        Int disk_gb = 500
         
         String docker = "us.gcr.io/broad-dsp-lrma/lr-minimap2:2.26-gcloud"
     }
@@ -152,14 +151,12 @@ task Minimap2 {
         ls -laht
         df -h
         samtools view -@ ${N_THREADS} -b out.sam > out.bam
-        samtools index -@ ${N_THREADS} out.bam
         ls -laht
         df -h
     >>>
     
     output {
         File output_bam = work_dir + "/out.bam"
-        File output_bai = work_dir + "/out.bam.bai"
     }
     runtime {
         docker: docker
@@ -182,7 +179,6 @@ task Sam2Bam {
     input {
         String sample_id
         File input_bam
-        File input_bai
         File reference_fa
         File reference_fai
         
@@ -213,6 +209,7 @@ task Sam2Bam {
         ls -laht
         df -h
         rm -f ~{input_bam}
+        ls -laht
         df -h
         ${TIME_COMMAND} samtools calmd -@ ${N_THREADS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
         ls -laht
