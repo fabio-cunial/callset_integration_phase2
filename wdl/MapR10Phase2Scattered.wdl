@@ -62,18 +62,19 @@ workflow MapR10Phase2Scattered {
 # Remark: this step does not reproduce the AoU pipeline exactly, since we work
 # with FASTQs whereas the pipeline worked with BAMs.
 #
-# Performance with 4 cores and 128GB of RAM:
+# Performance with 8 cores and 8GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
-# seqkit rmdup              350%        1.1G    1h
-# seqkit split              260%        100M    1h
+# seqkit rmdup              200%        1.1G    1h
+# seqkit split              190%        100M    1h
 # 
 task RemoveDuplicatedReads {
     input {
         File reads_fastq_gz
+        Int n_chunks = 8
         
-        Int n_cpus = 8
-        Int ram_size_gb = 8
+        Int n_cpus = 4
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -94,7 +95,7 @@ task RemoveDuplicatedReads {
         
         ${TIME_COMMAND} ~{docker_dir}/seqkit rmdup --by-seq -o out.fastq.gz ~{reads_fastq_gz}
         rm -f ~{reads_fastq_gz}
-        ${TIME_COMMAND} ~{docker_dir}/seqkit split2 --by-part 4 --by-part-prefix chunk --extension .gz --out-dir . out.fastq.gz
+        ${TIME_COMMAND} ~{docker_dir}/seqkit split2 --by-part ~{n_chunks} --by-part-prefix chunk --extension .gz --out-dir . out.fastq.gz
     >>>
     
     output {
@@ -105,17 +106,17 @@ task RemoveDuplicatedReads {
         cpu: n_cpus
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 2
     }
 }
 
 
 
-# Performance on one chunk with 64 cores and 128 GB of RAM:
+# Performance on one 7.5x chunk with 64 cores and 128 GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
-# minimap2                  ???         51G     1h
-# samtools view             
+# minimap2                  ???         70G     1h
+# samtools view             ???         ???     ~1h?
 #
 task Minimap2 {
     input {
@@ -125,7 +126,7 @@ task Minimap2 {
         File reads_fastq_gz
         
         Int n_cpus = 64
-        Int ram_size_gb = 64
+        Int ram_size_gb = 128
         Int disk_gb = 500
         
         String docker = "us.gcr.io/broad-dsp-lrma/lr-minimap2:2.26-gcloud"
@@ -169,12 +170,12 @@ task Minimap2 {
 }
 
 
-# Performance on one chunk with 64 cores and 128 GB of RAM:
+# Performance on one 7.5x chunk with 64 cores and 128 GB of RAM:
 #
-# TASK                      % CPU       RAM     TIME
-# samtools sort
-# samtools calmd 
-# samtools index
+# TASK                      CPU%        RAM     TIME
+# samtools sort             500%        51G     30m
+# samtools calmd            600%        500M    15m
+# samtools index            1900%       70M     1m
 #
 task Sam2Bam {
     input {
@@ -183,14 +184,13 @@ task Sam2Bam {
         File reference_fa
         File reference_fai
         
-        Int n_cpus = 64
-        Int ram_size_gb = 128
-        Int disk_gb = 1000
+        Int n_cpus = 8
+        Int ram_size_gb = 64
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = ceil(size(input_bam, "GB")) + disk_gb
+    Int disk_size_gb = 5*ceil(size(input_bam, "GB"))
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
@@ -236,9 +236,9 @@ task Sam2Bam {
 
 # Performance on 30x with 64 cores and 128 GB of RAM:
 #
-# TASK                      % CPU       RAM     TIME
-# samtools merge           
-# samtools index             
+# TASK                      CPU %       RAM     TIME
+# samtools merge            500%        60M     1h
+# samtools index            100%        150M    1h
 #
 task MergeChunks {
     input {
@@ -246,14 +246,13 @@ task MergeChunks {
         Array[File] input_bam
         Array[File] input_bai
         
-        Int n_cpus = 64
-        Int ram_size_gb = 128
-        Int disk_gb = 1000
+        Int n_cpus = 8
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = ceil(size(input_bam, "GB")) + disk_gb
+    Int disk_size_gb = 5*ceil(size(input_bam, "GB"))
     String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
