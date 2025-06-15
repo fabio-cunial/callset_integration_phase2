@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l MapR10Phase2ScatteredLrhq.wdl
 java -jar ${WOMTOOL_PATH} validate -l MapR10Phase2Scattered.wdl
 java -jar ${WOMTOOL_PATH} validate -l AddReadGroup.wdl
 java -jar ${WOMTOOL_PATH} validate -l MapCCSPhase2Prime.wdl
