@@ -40,7 +40,7 @@ task ResolveImpl {
     
     Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB")) ) + ceil(size(reference_fa,"GB")) + 50
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail

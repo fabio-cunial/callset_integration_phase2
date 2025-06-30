@@ -32,7 +32,7 @@ task BuildTrainingResourceIntersampleImpl {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail

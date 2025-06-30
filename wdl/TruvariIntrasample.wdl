@@ -60,7 +60,7 @@ task TruvariIntrasampleImpl {
     
     Int disk_size_gb = 10*( ceil(size(pbsv_vcf_gz,"GB")) + ceil(size(sniffles_vcf_gz,"GB")) + ceil(size(pav_vcf_gz,"GB")) ) + 50
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail

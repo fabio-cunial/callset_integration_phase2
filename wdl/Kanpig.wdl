@@ -76,7 +76,7 @@ task KanpigImpl {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     String output_prefix = sample_id + ".kanpig"
     Int disk_size_gb = 200 + ceil(size(reference_fa,"GB")) + 100*ceil(size(vcf_gz,"GB")) + 2*ceil(size(alignments_bam,"GB"))
     

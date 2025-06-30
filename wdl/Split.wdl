@@ -42,7 +42,7 @@ task SplitImpl {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     Int disk_size_gb = 10*(ceil(size(sample_vcf_gz,"GB")))  # Arbitrary
 
     command <<<
