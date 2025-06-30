@@ -37,7 +37,7 @@ task PAV2SVsImpl {
     Int disk_size_gb = 10*ceil(size(input_vcf_gz,"GB"))
     Int ram_size_gb = 4
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
+    String work_dir = "/mnt/disks/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
