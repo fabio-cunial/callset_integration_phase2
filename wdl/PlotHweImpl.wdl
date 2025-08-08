@@ -198,7 +198,7 @@ task SelectBiallelic {
         Int max_distance_bp = 10
         
         Int n_cpu = 2
-        Int ram_size_gb = 64
+        Int ram_size_gb = 128
     }
     
     String docker_dir = "/callset_integration"
@@ -429,3 +429,56 @@ task Counts2Plot {
         disks: "local-disk " + disk_size_gb + " HDD"
     }
 }
+
+
+#
+task FilterBySamples {
+    input {
+        File vcf_gz
+        File vcf_tbi
+        File sample_ids
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+        sample_ids: "One sample per line. Not necessarily sorted."
+    }
+    
+    String docker_dir = "/callset_integration"
+    String work_dir = "/cromwell_root/callset_integration"
+    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        mkdir -p ~{work_dir}
+        cd ~{work_dir}
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        
+        cut -f 1 ~{sample_ids} | sort > desired_samples.txt
+        bcftools view --header-only ~{vcf_gz} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
+        comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt --output-type z ~{vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = work_dir + "/out.vcf.gz"
+        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+

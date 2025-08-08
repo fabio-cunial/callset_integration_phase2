@@ -235,3 +235,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/MapR10Phase2ScatteredLrhq.wdl
   testParameterFiles:
+- name: PlotHweFocused
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PlotHweFocused.wdl
+  testParameterFiles:
