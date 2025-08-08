@@ -147,13 +147,10 @@ task FilterByLengthAndType {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -174,8 +171,8 @@ task FilterByLengthAndType {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/filtered.vcf.gz"
-        File out_tbi = work_dir + "/filtered.vcf.gz.tbi"
+        File out_vcf_gz = "filtered.vcf.gz"
+        File out_tbi = "filtered.vcf.gz.tbi"
     }
 
     runtime {
@@ -202,13 +199,10 @@ task SelectBiallelic {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 5*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -225,8 +219,8 @@ task SelectBiallelic {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/biallelic.vcf.gz"
-        File out_tbi = work_dir + "/biallelic.vcf.gz.tbi"
+        File out_vcf_gz = "biallelic.vcf.gz"
+        File out_tbi = "biallelic.vcf.gz.tbi"
     }
 
     runtime {
@@ -254,13 +248,10 @@ task FilterByAc {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -275,8 +266,8 @@ task FilterByAc {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/out.vcf.gz"
-        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
 
     runtime {
@@ -306,13 +297,10 @@ task SelectTRs {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -332,8 +320,8 @@ task SelectTRs {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/out.vcf.gz"
-        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
 
     runtime {
@@ -357,13 +345,10 @@ task Vcf2Counts {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 2*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -378,7 +363,7 @@ task Vcf2Counts {
     >>>
 
     output {
-        File gt_counts = work_dir + "/gt_counts.csv"
+        File gt_counts = "gt_counts.csv"
     }
 
     runtime {
@@ -402,13 +387,10 @@ task Counts2Plot {
         plothw_r: "Custom R script to use for plotting."
     }
     
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*ceil(size(gt_counts,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
 
         if ~{defined(plothw_r)}
         then
@@ -419,7 +401,7 @@ task Counts2Plot {
     >>>
 
     output {
-        File out_image = work_dir + "/" + out_file_name
+        File out_image = out_file_name
     }
 
     runtime {
@@ -446,13 +428,10 @@ task FilterBySamples {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -469,8 +448,8 @@ task FilterBySamples {
     >>>
 
     output {
-        File out_vcf_gz = work_dir + "/out.vcf.gz"
-        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
 
     runtime {
