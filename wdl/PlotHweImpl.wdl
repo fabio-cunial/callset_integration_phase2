@@ -403,14 +403,14 @@ task Counts2Plot {
 
         if ~{defined(plothw_r)}
         then
-            Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}
+            Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}.png
         else
-            Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}
+            Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}.png
         fi
     >>>
 
     output {
-        File out_image = out_file_name
+        File out_image = out_file_name + ".png"
     }
 
     runtime {
@@ -459,6 +459,7 @@ task FilterBySamples {
     output {
         File out_vcf_gz = "out.vcf.gz"
         File out_tbi = "out.vcf.gz.tbi"
+        File selected_samples = "selected_samples.txt"
     }
 
     runtime {
@@ -469,4 +470,3 @@ task FilterBySamples {
         preemptible: 0
     }
 }
-
