@@ -339,9 +339,13 @@ task Vcf2Counts {
     input {
         File vcf_gz
         File vcf_tbi
+        File? PlotHw_java
         
         Int n_cpu = 1
         Int ram_size_gb = 8
+    }
+    parameter_meta {
+        PlotHw_java: "Custom Java program to use."
     }
     
     String docker_dir = "/callset_integration"
@@ -359,7 +363,15 @@ task Vcf2Counts {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
 
         
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
+        if ~{defined(PlotHw_java)}
+        then
+            javac ~{PlotHw_java}
+            JAVA_COMMAND="~{PlotHw_java}"
+            JAVA_COMMAND=${JAVA_COMMAND%.java}
+        else
+            JAVA_COMMAND="PlotHwFast"
+        fi
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G ${JAVA_COMMAND} ~{vcf_gz} gt_counts.csv
     >>>
 
     output {

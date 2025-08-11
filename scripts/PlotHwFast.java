@@ -3,7 +3,7 @@ import java.util.zip.*;
 
 
 /**
- * 
+ * Remark: the program prints only records that occur in some sample.
  */
 public class PlotHwFast {
     
@@ -52,7 +52,7 @@ public class PlotHwFast {
                 }
                 start=end+1;
             } while (start<length);
-            if (gt00+gt01+gt11>0) bwHwe.write(gt00+","+gt01+","+gt11+"\n");
+            if (gt01+gt11>0) bwHwe.write(gt00+","+gt01+","+gt11+"\n");
             nLines++;
             if (nLines%QUANTUM==0) System.err.println("Processed "+nLines+" lines in "+((double)(System.currentTimeMillis()-ms)/1000)+"s");
             str=br.readLine();

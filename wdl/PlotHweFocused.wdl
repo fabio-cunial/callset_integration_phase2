@@ -39,7 +39,7 @@ workflow PlotHweFocused {
         call impl.Counts2Plot as plot {
             input:
                 gt_counts = counts.gt_counts,
-                out_file_name = "ancestry.png",
+                out_file_name = "ancestry.pdf",
                 plothw_r = plothw_r
         }
     }
@@ -59,7 +59,7 @@ workflow PlotHweFocused {
     call impl.Counts2Plot as plot_biallelic {
         input:
             gt_counts = counts_biallelic.gt_counts,
-            out_file_name = "ancestry.png",
+            out_file_name = "biallelic.pdf",
             plothw_r = plothw_r
     }
     
