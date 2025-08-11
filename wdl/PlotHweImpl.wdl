@@ -365,13 +365,10 @@ task Vcf2Counts {
         
         if ~{defined(PlotHw_java)}
         then
-            javac ~{PlotHw_java}
-            JAVA_COMMAND="~{PlotHw_java}"
-            JAVA_COMMAND=${JAVA_COMMAND%.java}
-        else
-            JAVA_COMMAND="PlotHwFast"
+            mv ~{PlotHw_java} ./PlotHwFast.java
+            javac PlotHwFast.java
         fi
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G ${JAVA_COMMAND} ~{vcf_gz} gt_counts.csv
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
     >>>
 
     output {
