@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamples.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHweFocused.wdl
 java -jar ${WOMTOOL_PATH} validate -l MapR10Phase2ScatteredLrhq.wdl
 java -jar ${WOMTOOL_PATH} validate -l MapR10Phase2Scattered.wdl
@@ -16,7 +17,6 @@ java -jar ${WOMTOOL_PATH} validate -l GetLongCalls.wdl
 java -jar ${WOMTOOL_PATH} validate -l CheckDeNovo.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchHprcSamples.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetPresentCalls.wdl
-java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamples.wdl
 java -jar ${WOMTOOL_PATH} validate -l InterCenterMerge.wdl
 java -jar ${WOMTOOL_PATH} validate -l CheckMendelian.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHwe.wdl

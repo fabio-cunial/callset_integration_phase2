@@ -10,8 +10,10 @@ workflow BenchCohortSamples {
         File cohort_vcf_gz
         File cohort_tbi
         
-        Array[File] dipcall_vcf_gz
-        Array[File] dipcall_bed
+        Array[File] single_sample_dipcall_vcf_gz
+        Array[File] single_sample_dipcall_bed
+        Array[File] single_sample_kanpig_vcf_gz
+        Array[File] single_sample_kanpig_annotated_vcf_gz
         
         File tandem_bed
         File reference_fai
@@ -19,8 +21,10 @@ workflow BenchCohortSamples {
         Int min_sv_length
     }
     parameter_meta {
-        dipcall_vcf_gz: "In the same order as `sample_ids`."
-        dipcall_bed: "In the same order as `sample_ids`."
+        single_sample_dipcall_vcf_gz: "In the same order as `sample_ids`."
+        single_sample_dipcall_bed: "In the same order as `sample_ids`."
+        single_sample_kanpig_vcf_gz: "The output of kanpig without any further processing."
+        single_sample_kanpig_annotated_vcf_gz: "The output of kanpig, annotated with `FORMAT/CALIBRATION_SENSITIVITY`."
     }
     
     call ComplementBed {
@@ -38,10 +42,12 @@ workflow BenchCohortSamples {
         call BenchSample {
             input:
                 sample_id = sample_ids[i],
-                samples_vcf_gz = SubsetToSamples.out_vcf_gz,
-                samples_tbi = SubsetToSamples.out_tbi,
-                dipcall_vcf_gz = dipcall_vcf_gz[i],
-                dipcall_bed = dipcall_bed[i],
+                cohort_vcf_gz = SubsetToSamples.out_vcf_gz,
+                cohort_tbi = SubsetToSamples.out_tbi,
+                single_sample_dipcall_vcf_gz = single_sample_dipcall_vcf_gz[i],
+                single_sample_dipcall_bed = single_sample_dipcall_bed[i],
+                single_sample_kanpig_vcf_gz = single_sample_kanpig_vcf_gz[i],
+                single_sample_kanpig_annotated_vcf_gz = single_sample_kanpig_annotated_vcf_gz[i],
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 min_sv_length = min_sv_length
@@ -49,9 +55,7 @@ workflow BenchCohortSamples {
     }
     
     output {
-        Array[File] jsons_all = BenchSample.all_json
-        Array[File] jsons_tr = BenchSample.tr_json
-        Array[File] jsons_not_tr = BenchSample.not_tr_json
+        Array[Array[File]] out_jsons = BenchSample.out_jsons
     }
 }
 
@@ -151,17 +155,19 @@ task ComplementBed {
 }
 
 
-# Truvari bench with default parameters
+# Remark: this uses `truvari bench` with default parameters.
 #
 task BenchSample {
     input {
         String sample_id
         
-        File samples_vcf_gz
-        File samples_tbi
+        File cohort_vcf_gz
+        File cohort_tbi
         
-        File dipcall_vcf_gz
-        File dipcall_bed
+        File single_sample_dipcall_vcf_gz
+        File single_sample_dipcall_bed
+        File single_sample_kanpig_vcf_gz
+        File single_sample_kanpig_annotated_vcf_gz
         
         File tandem_bed
         File not_tandem_bed
@@ -175,7 +181,7 @@ task BenchSample {
     }
     
     String work_dir = "/cromwell_root/callset_integration"
-    Int disk_size_gb = 10*( ceil(size(samples_vcf_gz,"GB")) + ceil(size(dipcall_vcf_gz,"GB")) )
+    Int disk_size_gb = 10*( ceil(size(cohort_vcf_gz,"GB")) + ceil(size(single_sample_dipcall_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_vcf_gz,"GB")) )
     
     command <<<
         set -euxo pipefail
@@ -192,45 +198,72 @@ task BenchSample {
             FILTER_STRING="--sizemin 0 --sizefilt 0"
         fi
         
-        # Making sure the dipcall file is normed
-        ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{dipcall_vcf_gz} > truth.vcf.gz
+        
+        function bench_thread() {
+            local INPUT_VCF_GZ=$1
+            local OUTPUT_PREFIX=$2
+            
+            # Extracting calls with POS inside and outside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_not_tr.vcf.gz
+        
+            # Benchmarking
+            rm -rf ./${OUTPUT_PREFIX}_truvari_*
+            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth.vcf.gz -c ${INPUT_VCF_GZ} ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_all/
+            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_tr.vcf.gz -c ${OUTPUT_PREFIX}_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_tr/
+            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_not_tr/
+            
+            mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_all.json
+            mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.json
+            mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.json
+        }
+
+
+        # Main program
+        
+        # Preprocessing the dipcall file
+        ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{single_sample_dipcall_vcf_gz} > truth.vcf.gz
         ${TIME_COMMAND} tabix -f truth.vcf.gz
-        rm -f ~{dipcall_vcf_gz}
-        
-        # Keeping only calls that occur in the given sample
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{samples_vcf_gz} > tmp1.vcf.gz
-        ${TIME_COMMAND} tabix -f tmp1.vcf.gz
-        rm -f ~{samples_vcf_gz}
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1.vcf.gz > sample.vcf.gz
-        ${TIME_COMMAND} tabix -f sample.vcf.gz
-        rm -f tmp1.vcf.gz
-        
-        # Extracting calls with POS inside and outside TRs
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z sample.vcf.gz > sample_tr.vcf.gz &
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z sample.vcf.gz > sample_not_tr.vcf.gz &
+        rm -f ~{single_sample_dipcall_vcf_gz}
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z truth.vcf.gz > truth_tr.vcf.gz &
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z truth.vcf.gz > truth_not_tr.vcf.gz &
         wait
-        ${TIME_COMMAND} tabix -f sample_tr.vcf.gz &
-        ${TIME_COMMAND} tabix -f sample_not_tr.vcf.gz &
         ${TIME_COMMAND} tabix -f truth_tr.vcf.gz &
         ${TIME_COMMAND} tabix -f truth_not_tr.vcf.gz &
         wait
         
-        # Benchmarking
-        ${TIME_COMMAND} truvari bench --includebed ~{dipcall_bed} -b truth.vcf.gz -c sample.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./truvari_all/ &
-        ${TIME_COMMAND} truvari bench --includebed ~{dipcall_bed} -b truth_tr.vcf.gz -c sample_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./truvari_tr/ &
-        ${TIME_COMMAND} truvari bench --includebed ~{dipcall_bed} -b truth_not_tr.vcf.gz -c sample_not_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./truvari_not_tr/ &
+        # Preprocessing the cohort VCF
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_vcf_gz} > tmp1.vcf.gz
+        ${TIME_COMMAND} tabix -f tmp1.vcf.gz
+        rm -f ~{cohort_vcf_gz}
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1.vcf.gz > sample_cohort.vcf.gz
+        ${TIME_COMMAND} tabix -f sample_cohort.vcf.gz
+        rm -f tmp1.vcf.gz
+        
+        # Preprocessing the single-sample kanpig file
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{single_sample_kanpig_vcf_gz} > sample_kanpig.vcf.gz
+        ${TIME_COMMAND} tabix -f sample_kanpig.vcf.gz
+        
+        # Filtering the single-sample annotated file
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "FORMAT/CALIBRATION_SENSITIVITY<=0.7" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_07.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "FORMAT/CALIBRATION_SENSITIVITY<=0.9" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_09.vcf.gz &
         wait
-        mv ./truvari_all/summary.json ./~{sample_id}_summary_all.json
-        mv ./truvari_tr/summary.json ./~{sample_id}_summary_tr.json
-        mv ./truvari_not_tr/summary.json ./~{sample_id}_summary_not_tr.json
+        ${TIME_COMMAND} tabix -f sample_07.vcf.gz &
+        ${TIME_COMMAND} tabix -f sample_09.vcf.gz &
+        wait
+        
+        # Benchmarking
+        bench_thread sample_cohort.vcf.gz cohort &
+        bench_thread sample_kanpig.vcf.gz kanpig &
+        bench_thread sample_07.vcf.gz 07 &
+        bench_thread sample_09.vcf.gz 09 &
+        wait
     >>>
     
     output {
-        File all_json = work_dir + "/" + sample_id + "_summary_all.json"
-        File tr_json = work_dir + "/" + sample_id + "_summary_tr.json"
-        File not_tr_json = work_dir + "/" + sample_id + "_summary_not_tr.json"
+        Array[File] out_jsons = glob("*.json")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
