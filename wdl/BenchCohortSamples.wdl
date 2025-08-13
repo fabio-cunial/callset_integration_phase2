@@ -7,18 +7,25 @@ version 1.0
 workflow BenchCohortSamples {
     input {
         Array[String] sample_ids = ["HG002", "HG00438", "HG005", "HG00621", "HG00673", "HG00733", "HG00735", "HG00741", "HG01071", "HG01106", "HG01109", "HG01123", "HG01175", "HG01243", "HG01258", "HG01358", "HG01361", "HG01891", "HG01928", "HG01952", "HG01978", "HG02055", "HG02080", "HG02109", "HG02145", "HG02148", "HG02257", "HG02486", "HG02559", "HG02572", "HG02622", "HG02630", "HG02717", "HG02723", "HG02818", "HG02886", "HG03098", "HG03453", "HG03486", "HG03492", "HG03516", "HG03540", "HG03579", "NA18906", "NA19240", "NA20129", "NA21309"]
-        File cohort_vcf_gz
-        File cohort_tbi
+        Int min_sv_length
         
-        Array[File] single_sample_dipcall_vcf_gz
-        Array[File] single_sample_dipcall_bed
         Array[File] single_sample_kanpig_vcf_gz
         Array[File] single_sample_kanpig_annotated_vcf_gz
         
+        File cohort_merged_07_vcf_gz
+        File cohort_merged_07_tbi
+        File cohort_merged_09_vcf_gz
+        File cohort_merged_09_tbi
+        
+        File cohort_regenotyped_07_vcf_gz
+        File cohort_regenotyped_07_tbi
+        File cohort_regenotyped_09_vcf_gz
+        File cohort_regenotyped_09_tbi
+        
+        Array[File] single_sample_dipcall_vcf_gz
+        Array[File] single_sample_dipcall_bed
         File tandem_bed
         File reference_fai
-        
-        Int min_sv_length
     }
     parameter_meta {
         single_sample_dipcall_vcf_gz: "In the same order as `sample_ids`."
@@ -32,25 +39,49 @@ workflow BenchCohortSamples {
             tandem_bed = tandem_bed,
             reference_fai = reference_fai
     }
-    call SubsetToSamples {
+    call SubsetToSamples as cohort_merged_07 {
         input:
-            cohort_vcf_gz = cohort_vcf_gz,
-            cohort_tbi = cohort_tbi,
+            cohort_vcf_gz = cohort_merged_07_vcf_gz,
+            cohort_tbi = cohort_merged_07_tbi,
+            sample_ids = sample_ids
+    }
+    call SubsetToSamples as cohort_merged_09 {
+        input:
+            cohort_vcf_gz = cohort_merged_09_vcf_gz,
+            cohort_tbi = cohort_merged_09_tbi,
+            sample_ids = sample_ids
+    }
+    call SubsetToSamples as cohort_regenotyped_07 {
+        input:
+            cohort_vcf_gz = cohort_regenotyped_07_vcf_gz,
+            cohort_tbi = cohort_regenotyped_07_tbi,
+            sample_ids = sample_ids
+    }
+    call SubsetToSamples as cohort_regenotyped_09 {
+        input:
+            cohort_vcf_gz = cohort_regenotyped_09_vcf_gz,
+            cohort_tbi = cohort_regenotyped_09_tbi,
             sample_ids = sample_ids
     }
     scatter (i in range(length(sample_ids))) {
         call BenchSample {
             input:
                 sample_id = sample_ids[i],
-                cohort_vcf_gz = SubsetToSamples.out_vcf_gz,
-                cohort_tbi = SubsetToSamples.out_tbi,
-                single_sample_dipcall_vcf_gz = single_sample_dipcall_vcf_gz[i],
-                single_sample_dipcall_bed = single_sample_dipcall_bed[i],
+                min_sv_length = min_sv_length,
                 single_sample_kanpig_vcf_gz = single_sample_kanpig_vcf_gz[i],
                 single_sample_kanpig_annotated_vcf_gz = single_sample_kanpig_annotated_vcf_gz[i],
+                cohort_merged_07_vcf_gz = cohort_merged_07.out_vcf_gz,
+                cohort_merged_07_tbi = cohort_merged_07.out_tbi,
+                cohort_merged_09_vcf_gz = cohort_merged_09.out_vcf_gz,
+                cohort_merged_09_tbi = cohort_merged_09.out_tbi,
+                cohort_regenotyped_07_vcf_gz = cohort_regenotyped_07.out_vcf_gz,
+                cohort_regenotyped_07_tbi = cohort_regenotyped_07.out_tbi,
+                cohort_regenotyped_09_vcf_gz = cohort_regenotyped_09.out_vcf_gz,
+                cohort_regenotyped_09_tbi = cohort_regenotyped_09.out_tbi,
+                single_sample_dipcall_vcf_gz = single_sample_dipcall_vcf_gz[i],
+                single_sample_dipcall_bed = single_sample_dipcall_bed[i],
                 tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed,
-                min_sv_length = min_sv_length
+                not_tandem_bed = ComplementBed.complement_bed
         }
     }
     
@@ -154,19 +185,25 @@ task ComplementBed {
 task BenchSample {
     input {
         String sample_id
+        Int min_sv_length
         
-        File cohort_vcf_gz
-        File cohort_tbi
-        
-        File single_sample_dipcall_vcf_gz
-        File single_sample_dipcall_bed
         File single_sample_kanpig_vcf_gz
         File single_sample_kanpig_annotated_vcf_gz
         
+        File cohort_merged_07_vcf_gz
+        File cohort_merged_07_tbi
+        File cohort_merged_09_vcf_gz
+        File cohort_merged_09_tbi
+        
+        File cohort_regenotyped_07_vcf_gz
+        File cohort_regenotyped_07_tbi
+        File cohort_regenotyped_09_vcf_gz
+        File cohort_regenotyped_09_tbi
+        
+        File single_sample_dipcall_vcf_gz
+        File single_sample_dipcall_bed
         File tandem_bed
         File not_tandem_bed
-        
-        Int min_sv_length
         
         Int n_cpu = 8
         Int ram_size_gb = 16
@@ -174,7 +211,7 @@ task BenchSample {
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*( ceil(size(cohort_vcf_gz,"GB")) + ceil(size(single_sample_dipcall_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_vcf_gz,"GB")) )
+    Int disk_size_gb = 10*( ceil(size(single_sample_kanpig_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_vcf_gz,"GB")) + ceil(size(cohort_merged_07_vcf_gz,"GB")) + ceil(size(cohort_merged_09_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_07_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_09_vcf_gz,"GB")) + ceil(size(single_sample_dipcall_vcf_gz,"GB")) )
     
     command <<<
         set -euxo pipefail
@@ -214,7 +251,7 @@ task BenchSample {
 
         # Main program
         
-        # Preprocessing the dipcall file
+        # Preprocessing: dipcall VCF.
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{single_sample_dipcall_vcf_gz} > truth.vcf.gz
         ${TIME_COMMAND} tabix -f truth.vcf.gz
         rm -f ~{single_sample_dipcall_vcf_gz}
@@ -225,19 +262,14 @@ task BenchSample {
         ${TIME_COMMAND} tabix -f truth_not_tr.vcf.gz &
         wait
         
-        # Preprocessing the cohort VCF
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_vcf_gz} > tmp1.vcf.gz
-        ${TIME_COMMAND} tabix -f tmp1.vcf.gz
-        rm -f ~{cohort_vcf_gz}
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1.vcf.gz > sample_cohort.vcf.gz
-        ${TIME_COMMAND} tabix -f sample_cohort.vcf.gz
-        rm -f tmp1.vcf.gz
-        
-        # Preprocessing the single-sample kanpig file
+        # Preprocessing the VCF after:
+        # 1. intra-sample truvari -> kanpig
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{single_sample_kanpig_vcf_gz} > sample_kanpig.vcf.gz
         ${TIME_COMMAND} tabix -f sample_kanpig.vcf.gz
         
-        # Filtering the single-sample annotated file
+        # Preprocessing the VCF after:
+        # 1. intra-sample truvari -> kanpig
+        # 2. scoring -> filtering 0.7 and 0.9
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "INFO/CALIBRATION_SENSITIVITY<=0.7" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_07.vcf.gz &
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "INFO/CALIBRATION_SENSITIVITY<=0.9" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_09.vcf.gz &
         wait
@@ -245,11 +277,52 @@ task BenchSample {
         ${TIME_COMMAND} tabix -f sample_09.vcf.gz &
         wait
         
+        # Preprocessing the VCF after:
+        # 1. intra-sample truvari -> kanpig
+        # 2. scoring -> filtering 0.7 and 0.9
+        # 3. inter-sample truvari
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_merged_07_vcf_gz} > tmp1_07.vcf.gz &
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_merged_09_vcf_gz} > tmp1_09.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix -f tmp1_07.vcf.gz &
+        ${TIME_COMMAND} tabix -f tmp1_09.vcf.gz &
+        rm -f ~{cohort_merged_07_vcf_gz} ~{cohort_merged_09_vcf_gz}
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_07.vcf.gz > sample_cohort_merged_07.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_09.vcf.gz > sample_cohort_merged_09.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix -f sample_cohort_merged_07.vcf.gz &
+        ${TIME_COMMAND} tabix -f sample_cohort_merged_09.vcf.gz &
+        wait
+        rm -f tmp1_*.vcf.gz
+        
+        # Preprocessing the VCF after:
+        # 1. intra-sample truvari -> kanpig
+        # 2. scoring -> filtering 0.7 and 0.9
+        # 3. inter-sample truvari
+        # 4. re-genotyping
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_regenotyped_07_vcf_gz} > tmp1_07.vcf.gz &
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{cohort_regenotyped_09_vcf_gz} > tmp1_09.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix -f tmp1_07.vcf.gz &
+        ${TIME_COMMAND} tabix -f tmp1_09.vcf.gz &
+        wait
+        rm -f ~{cohort_regenotyped_07_vcf_gz} ~{cohort_regenotyped_09_vcf_gz}
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_07.vcf.gz > sample_cohort_regenotyped_07.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_09.vcf.gz > sample_cohort_regenotyped_09.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix -f sample_cohort_regenotyped_07.vcf.gz &
+        ${TIME_COMMAND} tabix -f sample_cohort_regenotyped_09.vcf.gz &
+        wait
+        rm -f tmp1_*.vcf.gz
+        
         # Benchmarking
-        bench_thread sample_cohort.vcf.gz cohort &
         bench_thread sample_kanpig.vcf.gz kanpig &
         bench_thread sample_07.vcf.gz 07 &
         bench_thread sample_09.vcf.gz 09 &
+        bench_thread sample_cohort_merged_07.vcf.gz cohort_merged_07 &
+        bench_thread sample_cohort_merged_09.vcf.gz cohort_merged_09 &
+        bench_thread sample_cohort_regenotyped_07.vcf.gz cohort_regenotyped_07 &
+        bench_thread sample_cohort_regenotyped_09.vcf.gz cohort_regenotyped_09 &
         wait
     >>>
     
