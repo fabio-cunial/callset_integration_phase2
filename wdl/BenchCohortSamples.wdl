@@ -75,13 +75,10 @@ task SubsetToSamples {
     parameter_meta {
     }
     
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 5*ceil(size(cohort_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -98,8 +95,8 @@ task SubsetToSamples {
     >>>
     
     output {
-        File out_vcf_gz = work_dir + "/out.vcf.gz"
-        File out_tbi = work_dir + "/out.vcf.gz.tbi"
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
@@ -123,13 +120,10 @@ task ComplementBed {
     parameter_meta {
     }
     
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*ceil(size(tandem_bed,"GB"))
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -142,8 +136,8 @@ task ComplementBed {
     >>>
     
     output {
-        File sorted_bed = work_dir + "/sorted.bed"
-        File complement_bed = work_dir + "/complement.bed"
+        File sorted_bed = "sorted.bed"
+        File complement_bed = "complement.bed"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
