@@ -24,7 +24,7 @@ workflow BenchCohortSamples {
         single_sample_dipcall_vcf_gz: "In the same order as `sample_ids`."
         single_sample_dipcall_bed: "In the same order as `sample_ids`."
         single_sample_kanpig_vcf_gz: "The output of kanpig without any further processing."
-        single_sample_kanpig_annotated_vcf_gz: "The output of kanpig, annotated with `FORMAT/CALIBRATION_SENSITIVITY`."
+        single_sample_kanpig_annotated_vcf_gz: "The output of kanpig, annotated with `INFO/CALIBRATION_SENSITIVITY`."
     }
     
     call ComplementBed {
@@ -238,8 +238,8 @@ task BenchSample {
         ${TIME_COMMAND} tabix -f sample_kanpig.vcf.gz
         
         # Filtering the single-sample annotated file
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "FORMAT/CALIBRATION_SENSITIVITY<=0.7" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_07.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "FORMAT/CALIBRATION_SENSITIVITY<=0.9" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_09.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "INFO/CALIBRATION_SENSITIVITY<=0.7" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_07.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "INFO/CALIBRATION_SENSITIVITY<=0.9" --output-type z ~{single_sample_kanpig_annotated_vcf_gz} > sample_09.vcf.gz &
         wait
         ${TIME_COMMAND} tabix -f sample_07.vcf.gz &
         ${TIME_COMMAND} tabix -f sample_09.vcf.gz &
