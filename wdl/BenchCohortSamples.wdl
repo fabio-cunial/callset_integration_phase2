@@ -180,13 +180,10 @@ task BenchSample {
     parameter_meta {
     }
     
-    String work_dir = "/cromwell_root/callset_integration"
     Int disk_size_gb = 10*( ceil(size(cohort_vcf_gz,"GB")) + ceil(size(single_sample_dipcall_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_vcf_gz,"GB")) )
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
