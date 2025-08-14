@@ -240,3 +240,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PlotHweFocused.wdl
   testParameterFiles:
+- name: PlotHweFocusedAc
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PlotHweFocusedAc.wdl
+  testParameterFiles:
