@@ -367,8 +367,11 @@ task Vcf2Counts {
         then
             mv ~{PlotHw_java} ./PlotHwFast.java
             javac PlotHwFast.java
+            CP_STRING=" "
+        else
+            CP_STRING="-cp ~{docker_dir}"
         fi
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
+        ${TIME_COMMAND} java ${CP_STRING} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
     >>>
 
     output {
@@ -422,6 +425,8 @@ task Counts2Plot {
 }
 
 
+# Remark: this keeps the set of records unaltered, i.e. it does not remove
+# records that do not occur in the selected samples.
 #
 task FilterBySamples {
     input {
