@@ -33,12 +33,12 @@ workflow PlotHweFocusedAc {
                 sample_ids = sample_ids[i]
         }
         # Ancestry, AC.
-        scatter (i in range(10)) {
+        scatter (j in range(10)) {
             call impl.FilterByAc as ac {
                 input:
                     vcf_gz = ancestry.out_vcf_gz,
                     vcf_tbi = ancestry.out_tbi,
-                    min_count = i
+                    min_count = j
             }
             call impl.Vcf2Counts as counts_ac {
                 input:
@@ -49,7 +49,7 @@ workflow PlotHweFocusedAc {
             call impl.Counts2Plot as plot_ac {
                 input:
                     gt_counts = counts_ac.gt_counts,
-                    out_file_name = ancestry_ids[i] + "_" + i,
+                    out_file_name = ancestry_ids[i] + "_ac" + j,
                     plothw_r = plothw_r
             }
         }
