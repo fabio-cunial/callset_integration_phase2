@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l BenchCohortTrios.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHweFocusedAc.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamples.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHweFocused.wdl

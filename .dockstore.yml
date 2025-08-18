@@ -245,3 +245,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PlotHweFocusedAc.wdl
   testParameterFiles:
+- name: BenchCohortTrios
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTrios.wdl
+  testParameterFiles:
