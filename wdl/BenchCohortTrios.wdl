@@ -6,7 +6,6 @@ version 1.0
 workflow BenchCohortTrios {
     input {
         File ped_tsv
-        File trios_sample_ids
         Int min_sv_length
         
         Array[File] single_sample_kanpig_proband_vcf_gz
