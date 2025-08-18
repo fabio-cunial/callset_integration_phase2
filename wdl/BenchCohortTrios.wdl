@@ -76,14 +76,14 @@ workflow BenchCohortTrios {
                 single_sample_kanpig_annotated_proband_vcf_gz = single_sample_kanpig_annotated_proband_vcf_gz[i],
                 single_sample_kanpig_annotated_father_vcf_gz = single_sample_kanpig_annotated_father_vcf_gz[i],
                 single_sample_kanpig_annotated_mother_vcf_gz = single_sample_kanpig_annotated_mother_vcf_gz[i],
-                cohort_merged_07_vcf_gz = cohort_merged_07_vcf_gz,
-                cohort_merged_07_tbi = cohort_merged_07_tbi,
-                cohort_merged_09_vcf_gz = cohort_merged_09_vcf_gz,
-                cohort_merged_09_tbi = cohort_merged_09_tbi,
-                cohort_regenotyped_07_vcf_gz = cohort_regenotyped_07_vcf_gz,
-                cohort_regenotyped_07_tbi = cohort_regenotyped_07_tbi,
-                cohort_regenotyped_09_vcf_gz = cohort_regenotyped_09_vcf_gz,
-                cohort_regenotyped_09_tbi = cohort_regenotyped_09_tbi,
+                cohort_merged_07_vcf_gz = cohort_merged_07.out_vcf_gz,
+                cohort_merged_07_tbi = cohort_merged_07.out_tbi,
+                cohort_merged_09_vcf_gz = cohort_merged_09.out_vcf_gz,
+                cohort_merged_09_tbi = cohort_merged_09.out_tbi,
+                cohort_regenotyped_07_vcf_gz = cohort_regenotyped_07.out_vcf_gz,
+                cohort_regenotyped_07_tbi = cohort_regenotyped_07.out_tbi,
+                cohort_regenotyped_09_vcf_gz = cohort_regenotyped_09.out_vcf_gz,
+                cohort_regenotyped_09_tbi = cohort_regenotyped_09.out_tbi,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed
         }
@@ -245,6 +245,11 @@ task BenchTrio {
             ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
             ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
             ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            
+            
+            
+            
+            
         }
         
 
