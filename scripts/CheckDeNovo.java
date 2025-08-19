@@ -12,7 +12,7 @@ public class CheckDeNovo {
      * 
      */
     public static void main(String[] args) throws IOException {
-        final String TRIO_MATRIX_TSV = args[0];
+        final String TRIO_MATRIX_CSV = args[0];
         
         final int QUANTUM = 10000;  // Arbitrary
         
@@ -26,9 +26,9 @@ public class CheckDeNovo {
         
         
         // Computing the number of trios
-        br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
+        br = new BufferedReader(new FileReader(TRIO_MATRIX_CSV));
         str=br.readLine();
-        tokens=str.split("\t");
+        tokens=str.split(",");
         br.close();
         nTrios=tokens.length/3;
         System.err.println(nTrios+" trios");
@@ -38,13 +38,13 @@ public class CheckDeNovo {
         Arrays.fill(numerator,0);
         denominator = new int[nTrios];
         Arrays.fill(denominator,0);
-        br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
+        br = new BufferedReader(new FileReader(TRIO_MATRIX_CSV));
         nRecords=0;
         str=br.readLine();
         while (str!=null) { 
             nRecords++;
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records...");
-            tokens=str.split("\t");
+            tokens=str.split(",");
             for (i=0; i<nTrios; i++) {
                 if (tokens[3*i].indexOf("1")<0) {
                     // Not ALT in the child
