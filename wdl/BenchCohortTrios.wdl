@@ -216,7 +216,7 @@ task BenchTrio {
         File not_tandem_bed
         
         Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int ram_size_gb = 64
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
@@ -239,12 +239,28 @@ task BenchTrio {
             
             if [ ~{only_50_bp} -ne 0 ]; then
                 ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+                # Inside TRs
+                ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+                tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+                rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
+                # Outside TRs
+                ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+                tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+                rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             else
                 ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+                # Inside TRs
+                ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+                tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+                rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
+                # Outside TRs
+                ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+                tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+                rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             fi
             # -------> Add de novo........
         }
