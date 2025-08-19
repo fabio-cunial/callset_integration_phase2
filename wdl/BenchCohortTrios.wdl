@@ -6,7 +6,7 @@ version 1.0
 workflow BenchCohortTrios {
     input {
         File ped_tsv
-        Int min_sv_length
+        Int only_50_bp
         
         Array[File] single_sample_kanpig_proband_vcf_gz
         Array[File] single_sample_kanpig_father_vcf_gz
@@ -69,7 +69,7 @@ workflow BenchCohortTrios {
             input:
                 ped_tsv = ped_tsv,
                 ped_tsv_row = i+1,
-                min_sv_length = min_sv_length,
+                only_50_bp = only_50_bp,
                 single_sample_kanpig_proband_vcf_gz = single_sample_kanpig_proband_vcf_gz[i],
                 single_sample_kanpig_father_vcf_gz = single_sample_kanpig_father_vcf_gz[i],
                 single_sample_kanpig_mother_vcf_gz = single_sample_kanpig_mother_vcf_gz[i],
@@ -192,7 +192,7 @@ task BenchTrio {
     input {
         File ped_tsv
         Int ped_tsv_row
-        Int min_sv_length
+        Int only_50_bp
         
         File single_sample_kanpig_proband_vcf_gz
         File single_sample_kanpig_father_vcf_gz
@@ -231,20 +231,21 @@ task BenchTrio {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        if [ ~{min_sv_length} -ne 0 ]; then
-            INCLUDE_STRING="--include 'SVLEN>=~{min_sv_length} || SVLEN<=-~{min_sv_length}'"
-        else
-            INCLUDE_STRING=" "
-        fi
         
         
         function bench_thread() {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            if [ ~{only_50_bp} -ne 0 ]; then
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            else
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            fi
             # -------> Add de novo........
         }
         
