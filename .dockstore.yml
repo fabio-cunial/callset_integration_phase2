@@ -250,3 +250,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortTrios.wdl
   testParameterFiles:
+- name: PlotHweFocusedTruvariCollapse
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PlotHweFocusedTruvariCollapse.wdl
+  testParameterFiles:
