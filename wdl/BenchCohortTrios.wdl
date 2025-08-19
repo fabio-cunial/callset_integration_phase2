@@ -242,14 +242,10 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ~{ped_tsv} ${INCLUDE_STRING} --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-            
-            
-            
-            
-            
+            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} --regions-file ~{tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv ${INCLUDE_STRING} --regions-file ~{not_tandem_bed} --regions-overlap pos > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            # -------> Add de novo........
         }
         
 
