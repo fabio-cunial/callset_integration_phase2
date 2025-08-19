@@ -2,9 +2,14 @@ SOURCE_DIR='.';
 FONT_SIZE=18;
 DELTA=0.4;
 
+figure(1);
 
 
 
+
+A=load('trios_all.csv');
+[nrows,ncolumns]=size(A);
+% Columns of A:
 % ${KANPIG_N_GOOD_ALT},${KANPIG_N_MERR},
 % ${F07_N_GOOD_ALT},${F07_N_MERR},
 % ${F09_N_GOOD_ALT},${F09_N_MERR},
@@ -12,13 +17,6 @@ DELTA=0.4;
 % ${COHORT_MERGED_09_N_GOOD_ALT},${COHORT_MERGED_09_N_MERR},
 % ${COHORT_REGENOTYPED_07_N_GOOD_ALT},${COHORT_REGENOTYPED_07_N_MERR},
 % ${COHORT_REGENOTYPED_09_N_GOOD_ALT},${COHORT_REGENOTYPED_09_N_MERR}
-
-
-
-figure(1);
-
-A=load('trios_all.csv');
-[nrows,ncolumns]=size(A);
 
 # All, 07.
 subplot(3,2,1); hold on;
