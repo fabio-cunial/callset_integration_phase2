@@ -186,6 +186,7 @@ task BenchSample {
     input {
         String sample_id
         Int min_sv_length
+        Int bench_method
         
         File single_sample_kanpig_vcf_gz
         File single_sample_kanpig_annotated_vcf_gz
@@ -209,6 +210,7 @@ task BenchSample {
         Int ram_size_gb = 16
     }
     parameter_meta {
+        bench_method: "0=truvari bench, 1=vcfdist."
     }
     
     Int disk_size_gb = 10*( ceil(size(single_sample_kanpig_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_vcf_gz,"GB")) + ceil(size(cohort_merged_07_vcf_gz,"GB")) + ceil(size(cohort_merged_09_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_07_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_09_vcf_gz,"GB")) + ceil(size(single_sample_dipcall_vcf_gz,"GB")) )
@@ -221,10 +223,14 @@ task BenchSample {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         if [ ~{min_sv_length} -ne 0 ]; then
-            FILTER_STRING="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length}"
+            FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax 1000000"
+            FILTER_STRING_VCFDIST="--sv-threshold ~{min_sv_length} --largest-variant 1000000"
         else
-            FILTER_STRING="--sizemin 0 --sizefilt 0"
+            FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax 1000000"
+            FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant 1000000"
         fi
+        SV_STRING_VCFDIST="--cluster size 100 --max-supercluster-size 10000"
+        # From https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
         
         
         function bench_thread() {
@@ -238,14 +244,22 @@ task BenchSample {
             ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_not_tr.vcf.gz
         
             # Benchmarking
-            rm -rf ./${OUTPUT_PREFIX}_truvari_*
-            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth.vcf.gz -c ${INPUT_VCF_GZ} ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_all/
-            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_tr.vcf.gz -c ${OUTPUT_PREFIX}_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_tr/
-            ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${FILTER_STRING} --sizemax 1000000 -o ./${OUTPUT_PREFIX}_truvari_not_tr/
-            
-            mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_all.json
-            mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.json
-            mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.json
+            if [ ~{bench_method} -eq 0 ]; then
+                rm -rf ./${OUTPUT_PREFIX}_truvari_*
+                ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth.vcf.gz -c ${INPUT_VCF_GZ} ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_all/
+                ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_tr.vcf.gz -c ${OUTPUT_PREFIX}_tr.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_tr/
+                ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_not_tr/
+                mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
+                mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
+                mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
+            else
+                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
+                mv ./${OUTPUT_PREFIX}_vcfdist_all/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
+                mv ./${OUTPUT_PREFIX}_vcfdist_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
+                mv ./${OUTPUT_PREFIX}_vcfdist_not_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
+            fi
         }
 
 
@@ -327,7 +341,7 @@ task BenchSample {
     >>>
     
     output {
-        Array[File] out_jsons = glob("*.json")
+        Array[File] out_jsons = glob("*.txt")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
