@@ -72,6 +72,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 # All, 09.
+figure(1);
 subplot(3,2,2); hold on;
 X=ones(nrows,1).*1 -DELTA/2 + rand(nrows,1).*DELTA;
 Y=A(:,2)./(A(:,2)+A(:,1));
@@ -122,6 +123,7 @@ A=load('trios_tr.csv');
 [nrows,ncolumns]=size(A);
 
 # Inside TRs, 07.
+figure(1);
 subplot(3,2,3); hold on;
 X=ones(nrows,1).*1 -DELTA/2 + rand(nrows,1).*DELTA;
 Y=A(:,2)./(A(:,2)+A(:,1));
@@ -169,6 +171,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 # Inside TRs, 09.
+figure(1);
 subplot(3,2,4); hold on;
 X=ones(nrows,1).*1 -DELTA/2 + rand(nrows,1).*DELTA;
 Y=A(:,2)./(A(:,2)+A(:,1));
@@ -219,6 +222,7 @@ A=load('trios_not_tr.csv');
 [nrows,ncolumns]=size(A);
 
 # Outside TRs, 07.
+figure(1);
 subplot(3,2,5); hold on;
 X=ones(nrows,1).*1 -DELTA/2 + rand(nrows,1).*DELTA;
 Y=A(:,2)./(A(:,2)+A(:,1));
@@ -267,6 +271,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 # Outside TRs, 09.
+figure(1);
 subplot(3,2,6); hold on;
 X=ones(nrows,1).*1 -DELTA/2 + rand(nrows,1).*DELTA;
 Y=A(:,2)./(A(:,2)+A(:,1));

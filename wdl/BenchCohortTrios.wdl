@@ -28,11 +28,14 @@ workflow BenchCohortTrios {
         
         File tandem_bed
         File reference_fai
+        
+        Int truvari_collapse = 0
     }
     parameter_meta {
         ped_tsv: "In the format used by `bcftools +mendelian2`: `<ignored>,proband,father,mother,sex(1:male,2:female)`."
         single_sample_kanpig_proband_vcf_gz: "The output of kanpig without any further processing."
         single_sample_kanpig_annotated_proband_vcf_gz: "The output of kanpig, annotated with `INFO/CALIBRATION_SENSITIVITY`."
+        truvari_collapse: "Run `truvari collapse` after `bcftools merge` when working with 3 sample VCFs."
     }
     
     call ComplementBed {
@@ -85,7 +88,8 @@ workflow BenchCohortTrios {
                 cohort_regenotyped_09_vcf_gz = cohort_regenotyped_09.out_vcf_gz,
                 cohort_regenotyped_09_tbi = cohort_regenotyped_09.out_tbi,
                 tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed
+                not_tandem_bed = ComplementBed.complement_bed,
+                truvari_collapse = truvari_collapse
         }
     }
     
@@ -212,6 +216,8 @@ task BenchTrio {
         File cohort_regenotyped_09_vcf_gz
         File cohort_regenotyped_09_tbi
         
+        Int truvari_collapse
+        
         File tandem_bed
         File not_tandem_bed
         
@@ -272,6 +278,18 @@ task BenchTrio {
             fi
         }
         
+        # Remark: this function overwrites the input file with its collapse.
+        #
+        function truvari_collapse() {
+            local INPUT_VCF_GZ=$1
+            local ID=$2
+            
+            truvari collapse --input ${INPUT_VCF_GZ} --sizemin 0 --sizemax 1000000 --keep common --gt all | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > collapse_${ID}.vcf.gz
+            tabix -f collapse_${ID}.vcf.gz
+            mv collapse_${ID}.vcf.gz ${INPUT_VCF_GZ}
+            mv collapse_${ID}.vcf.gz.tbi ${INPUT_VCF_GZ}.tbi
+        }
+        
 
         # Main program
         head -n ~{ped_tsv_row} ~{ped_tsv} | tail -n 1 > ped.tsv
@@ -292,6 +310,9 @@ task BenchTrio {
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --output-type z proband_kanpig.vcf.gz father_kanpig.vcf.gz mother_kanpig.vcf.gz > trio_kanpig.vcf.gz
         ${TIME_COMMAND} tabix -f trio_kanpig.vcf.gz
         rm -f proband_kanpig.vcf.gz* father_kanpig.vcf.gz* mother_kanpig.vcf.gz*
+        if [ ~{truvari_collapse} -ne 0 ]; then
+            truvari_collapse trio_kanpig.vcf.gz trio_kanpig
+        fi
         
         # Evaluating the VCF after:
         # 1. intra-sample truvari -> kanpig
@@ -317,6 +338,11 @@ task BenchTrio {
         ${TIME_COMMAND} tabix -f trio_09.vcf.gz &
         wait
         rm -f proband_07.vcf.gz* father_07.vcf.gz* mother_07.vcf.gz* proband_09.vcf.gz* father_09.vcf.gz* mother_09.vcf.gz*
+        if [ ~{truvari_collapse} -ne 0 ]; then
+            truvari_collapse trio_07.vcf.gz trio_07 &
+            truvari_collapse trio_09.vcf.gz trio_09 &
+            wait
+        fi
         
         # Preprocessing the VCF after:
         # 1. intra-sample truvari -> kanpig
