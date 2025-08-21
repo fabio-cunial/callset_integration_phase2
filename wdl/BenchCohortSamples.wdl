@@ -237,7 +237,7 @@ task BenchSample {
             FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax 1000000"
             FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant 10000"
         fi
-        SV_STRING_VCFDIST="--cluster size 100 --max-supercluster-size 10002"
+        SV_STRING_VCFDIST="--cluster size 100 --max-supercluster-size 10002 --realign-query --realign-truth"
         # From https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
         # Remark: --max-supercluster-size has to be >= --largest-variant + 2
         
@@ -262,9 +262,9 @@ task BenchSample {
                 mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
             else
-                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
-                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
-                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
+                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
                 mv ./${OUTPUT_PREFIX}_vcfdist_all/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_not_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
