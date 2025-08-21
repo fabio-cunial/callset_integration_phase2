@@ -1,4 +1,4 @@
-SOURCE_DIR='.';
+SOURCE_DIR='/Users/fcunial/Downloads/BenchCohortTrios_collapse_prime';
 FONT_SIZE=18;
 DELTA=0.4;
 
@@ -21,7 +21,7 @@ DELTA=0.4;
 
 
 
-A=load('trios_all.csv');
+A=load(sprintf('%s/trios_all.csv',SOURCE_DIR));
 [nrows,ncolumns]=size(A);
 
 # All, 07.
@@ -119,7 +119,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 
-A=load('trios_tr.csv');
+A=load(sprintf('%s/trios_tr.csv',SOURCE_DIR));
 [nrows,ncolumns]=size(A);
 
 # Inside TRs, 07.
@@ -218,7 +218,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 
-A=load('trios_not_tr.csv');
+A=load(sprintf('%s/trios_not_tr.csv',SOURCE_DIR));
 [nrows,ncolumns]=size(A);
 
 # Outside TRs, 07.

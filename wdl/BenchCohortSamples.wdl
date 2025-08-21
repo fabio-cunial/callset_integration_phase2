@@ -8,6 +8,7 @@ workflow BenchCohortSamples {
     input {
         Array[String] sample_ids = ["HG002", "HG00438", "HG005", "HG00621", "HG00673", "HG00733", "HG00735", "HG00741", "HG01071", "HG01106", "HG01109", "HG01123", "HG01175", "HG01243", "HG01258", "HG01358", "HG01361", "HG01891", "HG01928", "HG01952", "HG01978", "HG02055", "HG02080", "HG02109", "HG02145", "HG02148", "HG02257", "HG02486", "HG02559", "HG02572", "HG02622", "HG02630", "HG02717", "HG02723", "HG02818", "HG02886", "HG03098", "HG03453", "HG03486", "HG03492", "HG03516", "HG03540", "HG03579", "NA18906", "NA19240", "NA20129", "NA21309"]
         Int min_sv_length
+        Int bench_method
         
         Array[File] single_sample_kanpig_vcf_gz
         Array[File] single_sample_kanpig_annotated_vcf_gz
@@ -25,9 +26,11 @@ workflow BenchCohortSamples {
         Array[File] single_sample_dipcall_vcf_gz
         Array[File] single_sample_dipcall_bed
         File tandem_bed
+        File reference_fa
         File reference_fai
     }
     parameter_meta {
+        bench_method: "0=truvari bench, 1=vcfdist."
         single_sample_dipcall_vcf_gz: "In the same order as `sample_ids`."
         single_sample_dipcall_bed: "In the same order as `sample_ids`."
         single_sample_kanpig_vcf_gz: "The output of kanpig without any further processing."
@@ -68,6 +71,7 @@ workflow BenchCohortSamples {
             input:
                 sample_id = sample_ids[i],
                 min_sv_length = min_sv_length,
+                bench_method = bench_method,
                 single_sample_kanpig_vcf_gz = single_sample_kanpig_vcf_gz[i],
                 single_sample_kanpig_annotated_vcf_gz = single_sample_kanpig_annotated_vcf_gz[i],
                 cohort_merged_07_vcf_gz = cohort_merged_07.out_vcf_gz,
@@ -81,7 +85,9 @@ workflow BenchCohortSamples {
                 single_sample_dipcall_vcf_gz = single_sample_dipcall_vcf_gz[i],
                 single_sample_dipcall_bed = single_sample_dipcall_bed[i],
                 tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed
+                not_tandem_bed = ComplementBed.complement_bed,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai
         }
     }
     
@@ -205,6 +211,8 @@ task BenchSample {
         File single_sample_dipcall_bed
         File tandem_bed
         File not_tandem_bed
+        File reference_fa
+        File reference_fai
         
         Int n_cpu = 8
         Int ram_size_gb = 16
@@ -253,9 +261,9 @@ task BenchSample {
                 mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
             else
-                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
-                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
-                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
+                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} / ${N_THREADS} ))GB --realign-query --realign-truth ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
                 mv ./${OUTPUT_PREFIX}_vcfdist_all/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_not_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
