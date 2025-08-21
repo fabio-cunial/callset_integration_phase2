@@ -7,7 +7,8 @@ version 1.0
 workflow BenchCohortSamples {
     input {
         Array[String] sample_ids = ["HG002", "HG00438", "HG005", "HG00621", "HG00673", "HG00733", "HG00735", "HG00741", "HG01071", "HG01106", "HG01109", "HG01123", "HG01175", "HG01243", "HG01258", "HG01358", "HG01361", "HG01891", "HG01928", "HG01952", "HG01978", "HG02055", "HG02080", "HG02109", "HG02145", "HG02148", "HG02257", "HG02486", "HG02559", "HG02572", "HG02622", "HG02630", "HG02717", "HG02723", "HG02818", "HG02886", "HG03098", "HG03453", "HG03486", "HG03492", "HG03516", "HG03540", "HG03579", "NA18906", "NA19240", "NA20129", "NA21309"]
-        Int min_sv_length
+        Int min_sv_length = 50
+        Int max_sv_length = 10000
         Int bench_method
         
         Array[File] single_sample_kanpig_vcf_gz
@@ -71,6 +72,7 @@ workflow BenchCohortSamples {
             input:
                 sample_id = sample_ids[i],
                 min_sv_length = min_sv_length,
+                max_sv_length = max_sv_length,
                 bench_method = bench_method,
                 single_sample_kanpig_vcf_gz = single_sample_kanpig_vcf_gz[i],
                 single_sample_kanpig_annotated_vcf_gz = single_sample_kanpig_annotated_vcf_gz[i],
@@ -198,6 +200,7 @@ task BenchSample {
     input {
         String sample_id
         Int min_sv_length
+        Int max_sv_length
         Int bench_method
         
         File single_sample_kanpig_vcf_gz
@@ -237,11 +240,11 @@ task BenchSample {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         if [ ~{min_sv_length} -ne 0 ]; then
-            FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax 1000000"
-            FILTER_STRING_VCFDIST="--sv-threshold ~{min_sv_length} --largest-variant 10000"
+            FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length}"
+            FILTER_STRING_VCFDIST="--sv-threshold ~{min_sv_length} --largest-variant ~{max_sv_length}"
         else
-            FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax 1000000"
-            FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant 10000"
+            FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax ~{max_sv_length}"
+            FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant ~{max_sv_length}"
         fi
         # See https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
         # Remark: `--max-supercluster-size` has to be >= `--largest-variant + 2`
@@ -249,36 +252,48 @@ task BenchSample {
         # Remark: we choose `--cluster gap` since it is faster. We choose 500
         #         to mimic kanpig inter-sample's `--neighdist` (the intra-
         #         sample value would be 1000, which might be too big).
-        SV_STRING_VCFDIST="--cluster gap 500 --max-supercluster-size 10002 --realign-query --realign-truth"
+        SV_STRING_VCFDIST="--cluster gap 500 --max-supercluster-size $((~{max_sv_length}+2)) --realign-query --realign-truth"
         
         
         function bench_thread() {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
+            # Fltering by length, if needed.
+            if [ ~{min_sv_length} -ne 0 ]; then
+                ${TIME_COMMAND} bcftools view --include "(SVLEN>=~{min_sv_length} && SVLEN<=~{max_sv_length}) || (SVLEN<=-~{min_sv_length} && SVLEN>=-~{max_sv_length})" --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_PREFIX}_input.vcf.gz
+                tabix -f ${OUTPUT_PREFIX}_input.vcf.gz
+            else
+                cp ${INPUT_VCF_GZ} ${OUTPUT_PREFIX}_input.vcf.gz
+                cp ${INPUT_VCF_GZ}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
+            fi
+            
             # Extracting calls with POS inside and outside TRs
-            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_PREFIX}_tr.vcf.gz
-            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_not_tr.vcf.gz
             ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_tr.vcf.gz
             ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_not_tr.vcf.gz
         
             # Benchmarking
             if [ ~{bench_method} -eq 0 ]; then
                 rm -rf ./${OUTPUT_PREFIX}_truvari_*
-                ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth.vcf.gz -c ${INPUT_VCF_GZ} ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_all/
+                ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth.vcf.gz -c ${OUTPUT_PREFIX}_input.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_all/
                 ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_tr.vcf.gz -c ${OUTPUT_PREFIX}_tr.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_tr/
                 ${TIME_COMMAND} truvari bench --includebed ~{single_sample_dipcall_bed} -b truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari_not_tr/
                 mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
                 mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
             else
-                ${TIME_COMMAND} vcfdist ${INPUT_VCF_GZ} truth.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
+                ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_input.vcf.gz truth.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
                 ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz truth_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
                 ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz truth_not_tr.vcf.gz ~{reference_fa} --max-threads 1 --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ~{single_sample_dipcall_bed} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
                 mv ./${OUTPUT_PREFIX}_vcfdist_all/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_all.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_tr.txt
                 mv ./${OUTPUT_PREFIX}_vcfdist_not_tr/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_not_tr.txt
             fi
+            
+            # Removing temporary files
+            rm -f ${OUTPUT_PREFIX}_input.vcf.gz*
         }
 
 
