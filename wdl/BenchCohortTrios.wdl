@@ -191,6 +191,13 @@ task ComplementBed {
 }
 
 
+# Performance with 8 cores and 16GB of RAM:
+#
+# TASK                      % CPU       RAM     TIME
+# bcftools filter           100%        2G      1m
+# bcftools merge            200%        50M     1m
+# truvari collapse          
+# bcftools +mendelian2      100%        50M     1m
 #
 task BenchTrio {
     input {
@@ -222,7 +229,7 @@ task BenchTrio {
         File not_tandem_bed
         
         Int n_cpu = 8
-        Int ram_size_gb = 64
+        Int ram_size_gb = 16
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."

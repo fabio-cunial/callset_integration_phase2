@@ -188,6 +188,12 @@ task ComplementBed {
 
 # Remark: this uses `truvari bench` with default parameters.
 #
+# Performance with 8 cores and 16GB of RAM:
+#
+# TASK                      % CPU       RAM     TIME
+# truvari bench             
+# vcfdist
+#
 task BenchSample {
     input {
         String sample_id
@@ -237,9 +243,13 @@ task BenchSample {
             FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax 1000000"
             FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant 10000"
         fi
-        SV_STRING_VCFDIST="--cluster size 100 --max-supercluster-size 10002 --realign-query --realign-truth"
-        # From https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
-        # Remark: --max-supercluster-size has to be >= --largest-variant + 2
+        # See https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
+        # Remark: `--max-supercluster-size` has to be >= `--largest-variant + 2`
+        #         and we set it to 10002 to mimic kanpig's `--sizemax`.
+        # Remark: we choose `--cluster gap` since it is faster. We choose 500
+        #         to mimic kanpig inter-sample's `--neighdist` (the intra-
+        #         sample value would be 1000, which might be too big).
+        SV_STRING_VCFDIST="--cluster gap 500 --max-supercluster-size 10002 --realign-query --realign-truth"
         
         
         function bench_thread() {
