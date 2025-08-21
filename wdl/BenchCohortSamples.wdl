@@ -349,14 +349,26 @@ task BenchSample {
         rm -f tmp1_*.vcf.gz
         
         # Benchmarking
-        bench_thread sample_kanpig.vcf.gz kanpig &
-        bench_thread sample_07.vcf.gz 07 &
-        bench_thread sample_09.vcf.gz 09 &
-        bench_thread sample_cohort_merged_07.vcf.gz cohort_merged_07 &
-        bench_thread sample_cohort_merged_09.vcf.gz cohort_merged_09 &
-        bench_thread sample_cohort_regenotyped_07.vcf.gz cohort_regenotyped_07 &
-        bench_thread sample_cohort_regenotyped_09.vcf.gz cohort_regenotyped_09 &
-        wait
+        if [ ~{bench_method} -eq 0 ]; then
+            bench_thread sample_kanpig.vcf.gz kanpig &
+            bench_thread sample_07.vcf.gz 07 &
+            bench_thread sample_09.vcf.gz 09 &
+            bench_thread sample_cohort_merged_07.vcf.gz cohort_merged_07 &
+            bench_thread sample_cohort_merged_09.vcf.gz cohort_merged_09 &
+            bench_thread sample_cohort_regenotyped_07.vcf.gz cohort_regenotyped_07 &
+            bench_thread sample_cohort_regenotyped_09.vcf.gz cohort_regenotyped_09 &
+            wait
+        else
+            # Sequential for vcfdist, since it takes too much RAM.
+            bench_thread sample_kanpig.vcf.gz kanpig
+            bench_thread sample_07.vcf.gz 07
+            bench_thread sample_09.vcf.gz 09
+            bench_thread sample_cohort_merged_07.vcf.gz cohort_merged_07
+            bench_thread sample_cohort_merged_09.vcf.gz cohort_merged_09
+            bench_thread sample_cohort_regenotyped_07.vcf.gz cohort_regenotyped_07
+            bench_thread sample_cohort_regenotyped_09.vcf.gz cohort_regenotyped_09
+        fi
+        
     >>>
     
     output {
