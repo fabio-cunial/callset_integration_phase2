@@ -58,12 +58,9 @@ task MapCCSImpl {
     
     Int disk_size_gb = ceil(size(reads_fastq_gz, "GB")) + ceil(size(reference_fa, "GB")) + disk_gb
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -82,8 +79,8 @@ task MapCCSImpl {
     >>>
     
     output {
-        File output_bam = work_dir + "/" + sample_id + ".bam"
-        File output_bai = work_dir + "/" + sample_id + ".bam.bai"
+        File output_bam = sample_id + ".bam"
+        File output_bai = sample_id + ".bam.bai"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
