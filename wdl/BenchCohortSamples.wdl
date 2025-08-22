@@ -190,11 +190,11 @@ task ComplementBed {
 
 # Remark: this uses `truvari bench` with default parameters.
 #
-# Performance with 8 cores and 16GB of RAM:
+# Performance with 16 cores and 32GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # truvari bench             
-# vcfdist
+# vcfdist                   400%        24G     1h30m
 #
 task BenchSample {
     input {
@@ -223,8 +223,8 @@ task BenchSample {
         File reference_fa
         File reference_fai
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 4
+        Int ram_size_gb = 32
     }
     parameter_meta {
         bench_method: "0=truvari bench, 1=vcfdist."

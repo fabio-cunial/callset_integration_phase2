@@ -255,3 +255,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PlotHweFocusedTruvariCollapse.wdl
   testParameterFiles:
+- name: Workpackage9Squish
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Workpackage9Squish.wdl
+  testParameterFiles:
