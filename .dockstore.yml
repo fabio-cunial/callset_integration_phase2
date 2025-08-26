@@ -265,3 +265,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TestKanpigIntersample.wdl
   testParameterFiles:
+- name: BenchCohortTriosSquish
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTriosSquish.wdl
+  testParameterFiles:
