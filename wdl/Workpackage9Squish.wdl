@@ -17,7 +17,7 @@ workflow Workpackage9Squish {
         Int n_cpu = 6
         Int ram_size_gb = 20
         Int disk_size_gb = 100
-        String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97 --squish"
+        String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."

@@ -194,7 +194,7 @@ task ComplementBed {
 #
 # TASK                      % CPU       RAM     TIME
 # truvari bench             
-# vcfdist                   400%        24G     1h30m
+# vcfdist                   400%        25G     1h30m
 #
 task BenchSample {
     input {
@@ -224,7 +224,7 @@ task BenchSample {
         File reference_fai
         
         Int n_cpu = 4
-        Int ram_size_gb = 32
+        Int ram_size_gb = 30
     }
     parameter_meta {
         bench_method: "0=truvari bench, 1=vcfdist."

@@ -260,3 +260,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Workpackage9Squish.wdl
   testParameterFiles:
+- name: TestKanpigIntersample
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/TestKanpigIntersample.wdl
+  testParameterFiles:
