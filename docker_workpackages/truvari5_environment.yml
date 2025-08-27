@@ -1,0 +1,6 @@
+name: truvari5
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - truvari==5.2.0
