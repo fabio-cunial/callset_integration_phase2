@@ -50,7 +50,7 @@ public class CheckDeNovo {
                     // Not ALT in the child
                     continue;
                 }
-                /*isMissing=false;
+                isMissing=false;
                 for (j=3*i; j<3*i+3; j++) {
                     try { 
                         if (tokens[j].indexOf(".")>=0) { isMissing=true; break; }
@@ -59,7 +59,7 @@ public class CheckDeNovo {
                 if (isMissing) {
                     // At least one GT in the triplet is missing
                     continue;
-                }*/
+                }
                 denominator[i]++;
                 if (tokens[3*i+1].indexOf("1")<0 && tokens[3*i+2].indexOf("1")<0) numerator[i]++;
             }

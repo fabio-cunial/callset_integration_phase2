@@ -270,3 +270,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortTriosSquish.wdl
   testParameterFiles:
+- name: BenchCohortTriosSquish2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTriosSquish2.wdl
+  testParameterFiles:
