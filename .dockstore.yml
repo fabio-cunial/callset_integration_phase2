@@ -275,3 +275,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortTriosSquish2.wdl
   testParameterFiles:
+- name: GetMapqDistribution
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetMapqDistribution.wdl
+  testParameterFiles:
