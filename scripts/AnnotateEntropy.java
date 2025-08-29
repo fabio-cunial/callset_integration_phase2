@@ -6,7 +6,9 @@ import java.io.*;
 
 
 /**
- * 
+ * Adds to the INFO field of a VCF the k-th order empirical entropy of REF or 
+ * ALT, depending on the variant. See e.g. page 4 in 
+ * https://arxiv.org/abs/0708.2084
  */
 public class AnnotateEntropy {
     
