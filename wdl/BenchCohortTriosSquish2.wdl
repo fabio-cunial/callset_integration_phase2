@@ -139,7 +139,7 @@ task BenchTrio {
             tabix -f tmp_${ID}.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp_${ID}.vcf.gz > ${ID}.vcf.gz
             tabix -f ${ID}.vcf.gz
-            rm -f ${INPUT_VCF_GZ}* tmp_${ID}.vcf.gz*
+            rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi tmp_${ID}.vcf.gz tmp_${ID}.vcf.gz.tbi
         }
         
         
@@ -181,8 +181,8 @@ task BenchTrio {
                 rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             fi
         }
-
         
+
 
 
         # Main program
@@ -192,19 +192,20 @@ task BenchTrio {
         MOTHER_ID=$(cut -f 4 ped.tsv)
         echo ~{sep="," squish_vcf_gz} | tr ',' '\n' > files.txt
         echo ~{squish_ids} | tr ',' '\n' > ids.txt
-        paste files.txt ids.txt > list.txt
+        paste -d , files.txt ids.txt > list.txt
+        cat list.txt
         
         # Preprocessing the VCFs
         while read ROW; do
-            VCF_FILE=$(echo ${ROW} | cut -f 1)
-            ID=$(echo ${ROW} | cut -f 2)
+            VCF_FILE=$(echo ${ROW} | cut -d , -f 1)
+            ID=$(echo ${ROW} | cut -d , -f 2)
             preprocess_thread ${VCF_FILE} ${ID} &
         done < list.txt
         wait
         
         # Benchmarking
         while read ROW; do
-            ID=$(echo ${ROW} | cut -f 2)
+            ID=$(echo ${ROW} | cut -d , -f 2)
             bench_thread ${ID}.vcf.gz ${ID} &
         done < list.txt
         wait
