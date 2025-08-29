@@ -180,9 +180,9 @@ task BenchTrio {
         
         # Preprocessing the VCFs
         while read ROW; do
-            PATH=$(echo ${ROW} | cut -f 1)
+            VCF_FILE=$(echo ${ROW} | cut -f 1)
             ID=$(echo ${ROW} | cut -f 2)
-            (${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} ${PATH} | bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z > ${ID}.vcf.gz; tabix -f ${ID}.vcf.gz; rm -f ${PATH}*) &
+            (${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} ${VCF_FILE} | bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z > ${ID}.vcf.gz; tabix -f ${ID}.vcf.gz; rm -f ${VCF_FILE}*) &
         done < list.txt
         wait
         
