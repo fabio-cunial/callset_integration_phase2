@@ -131,12 +131,7 @@ public class AnnotateEntropy {
             return out/n;
         }
     }
-    
-    
-    
-    // -----------> Implement also a faster order-1 and order-2
-    
-    
+
     
     /**
      * Naive, slow implementation.
