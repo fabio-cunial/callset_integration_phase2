@@ -110,7 +110,7 @@ task BenchTrio {
         File not_tandem_bed
         
         Int n_cpu = 22
-        Int ram_size_gb = 64
+        Int ram_size_gb = 128
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
@@ -127,6 +127,20 @@ task BenchTrio {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        # Prepares an input VCF for benchmarking
+        #
+        function preprocess_thread() {
+            local INPUT_VCF_GZ=$1
+            local ID=$2
+            
+            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ${INPUT_VCF_GZ} > tmp_${ID}.vcf.gz
+            tabix -f tmp_${ID}.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp_${ID}.vcf.gz > ${ID}.vcf.gz
+            tabix -f ${ID}.vcf.gz
+            rm -f ${INPUT_VCF_GZ}* tmp_${ID}.vcf.gz*
+        }
         
         
         # Evaluates an input VCF that contains only 3 samples (child, parents).
@@ -167,7 +181,9 @@ task BenchTrio {
                 rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             fi
         }
+
         
+
 
         # Main program
         head -n ~{ped_tsv_row} ~{ped_tsv} | tail -n 1 > ped.tsv
@@ -182,7 +198,7 @@ task BenchTrio {
         while read ROW; do
             VCF_FILE=$(echo ${ROW} | cut -f 1)
             ID=$(echo ${ROW} | cut -f 2)
-            (${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} ${VCF_FILE} | bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z > ${ID}.vcf.gz; tabix -f ${ID}.vcf.gz; rm -f ${VCF_FILE}*) &
+            preprocess_thread ${VCF_FILE} ${ID} &
         done < list.txt
         wait
         
