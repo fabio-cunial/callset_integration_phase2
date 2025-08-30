@@ -20,35 +20,46 @@ public class AnnotateEntropy {
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String ORDERS = args[1];
+        final String AUTOCORRELATIONS = args[2];
         
         final int sigma = 4;
         
         int i;
         int refLength, altLength;
-        double entropy;
+        double entropy, corr;
         String str;
         StringBuilder sequence;
         BufferedReader br;
-        int[] orders;
-        double[] tmpCounts;
+        int[] orders, autocorrelations;
+        double[] tmpCounts, runsValues;
         StringBuilder[] tmpSbs;
         String[] tokens;
         HashMap<String,StringBuilder> tmpMap;
         
+        // Initializing data structures
         tokens=ORDERS.split(",");
         orders = new int[tokens.length];
         for (i=0; i<tokens.length; i++) orders[i]=Integer.parseInt(tokens[i]);
+        tokens=AUTOCORRELATIONS.split(",");
+        autocorrelations = new int[tokens.length];
+        for (i=0; i<tokens.length; i++) autocorrelations[i]=Integer.parseInt(tokens[i]);
         sequence = new StringBuilder();
         tmpMap = new HashMap();
         tmpCounts = new double[sigma];
         tmpSbs = new StringBuilder[sigma];
         for (i=0; i<sigma; i++) tmpSbs[i] = new StringBuilder();
+        runsValues = new double[2];
+        
+        // Annotating the VCF
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine();
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 if (str.substring(0,6).equalsIgnoreCase("#CHROM")) {
                     for (i=0; i<orders.length; i++) System.out.println("##INFO=<ID=H"+orders[i]+",Number=1,Type=Float,Description=\""+orders[i]+"-order empirical entropy\">");
+                    System.out.println("##INFO=<ID=RN,Number=1,Type=Float,Description=\"Number of runs divided by sequence length\">");
+                    System.out.println("##INFO=<ID=RL,Number=1,Type=Float,Description=\"Length of a longest run divided by sequence length\">");
+                    for (i=0; i<autocorrelations.length; i++) System.out.println("##INFO=<ID=C"+autocorrelations[i]+",Number=1,Type=Float,Description=\"Autocorrelation with offset "+autocorrelations[i]+"\">");
                 }
                 System.out.println(str);
                 str=br.readLine();
@@ -63,10 +74,19 @@ public class AnnotateEntropy {
                 // Arbitrary decision
                 sequence.append(tokens[4]);
             }
+            // Computing measures
+            lowercase(sequence);
             for (i=0; i<orders.length; i++) {
                 entropy=entropy(orders[i],sequence,tmpMap,tmpCounts,tmpSbs);
                 tokens[7]=tokens[7]+";H"+orders[i]+"="+entropy;
             }
+            runLength(sequence,runsValues);
+            for (i=0; i<autocorrelations.length; i++) {
+                corr=autocorrelation(autocorrelations[i],sequence);
+                tokens[7]=tokens[7]+";C"+autocorrelations[i]+"="+corr;
+            }
+            tokens[7]=tokens[7]+";RN="+runsValues[0]+";RL="+runsValues[1];
+            // Outputting
             System.out.print(tokens[0]);
             for (i=1; i<tokens.length; i++) System.out.print("\t"+tokens[i]);
             System.out.println();
@@ -76,9 +96,23 @@ public class AnnotateEntropy {
     }
     
     
+    private static final void lowercase(StringBuilder sequence) {
+        final int n = sequence.length();
+        
+        char c;
+        int i;
+        
+        for (i=0; i<n; i++) {
+            c=sequence.charAt(i);
+            sequence.setCharAt(i,Character.toLowerCase(c));
+        }
+    }
+    
+    
     /**
      * Naive, slow implementation.
      *
+     * @param sequence assumed to be all lowercase;
      * @return -1 if `sequence` is empty or has length `k` or less.
      */
     private static final double entropy(int k, StringBuilder sequence, HashMap<String,StringBuilder> tmpMap, double[] tmpCounts, StringBuilder[] tmpSbs) {
@@ -99,10 +133,10 @@ public class AnnotateEntropy {
             for (i=0; i<n-1; i++) {
                 b=sequence.charAt(i);
                 c=sequence.charAt(i+1);
-                if (b=='a' || b=='A') tmpSbs[0].append(c);
-                else if (b=='c' || b=='C') tmpSbs[1].append(c);
-                else if (b=='g' || b=='G') tmpSbs[2].append(c);
-                else if (b=='t' || b=='T') tmpSbs[3].append(c);
+                if (b=='a') tmpSbs[0].append(c);
+                else if (b=='c') tmpSbs[1].append(c);
+                else if (b=='g') tmpSbs[2].append(c);
+                else if (b=='t') tmpSbs[3].append(c);
             }
             out=0;
             for (i=0; i<sigma; i++) {
@@ -135,6 +169,8 @@ public class AnnotateEntropy {
     
     /**
      * Naive, slow implementation.
+     *
+     * @param sequence assumed to be all lowercase.
      */
     private static final double entropy0(StringBuilder sequence, double[] tmp) {
         final int sigma = 4;
@@ -147,16 +183,62 @@ public class AnnotateEntropy {
         for (i=0; i<sigma; i++) tmp[i]=0;
         for (i=0; i<n; i++) {
             c=sequence.charAt(i);
-            if (c=='a' || c=='A') tmp[0]++;
-            else if (c=='c' || c=='C') tmp[1]++;
-            else if (c=='g' || c=='G') tmp[2]++;
-            else if (c=='t' || c=='T') tmp[3]++;
+            if (c=='a') tmp[0]++;
+            else if (c=='c') tmp[1]++;
+            else if (c=='g') tmp[2]++;
+            else if (c=='t') tmp[3]++;
         }
         out=0;
         for (i=0; i<sigma; i++) {
             if (tmp[i]!=0) out+=tmp[i]*Math.log(n/tmp[i]);
         }
         return out/n;
+    }
+    
+    
+    /**
+     * @param sequence assumed to be all lowercase;
+     * @param out output values: 0=nRuns/length, 1=longestRun/length.
+     */
+    private static final void runLength(StringBuilder sequence, double[] out) {
+        final int n = sequence.length();
+        
+        char c, d;
+        int i;
+        int nRuns, longestRun, length;
+        
+        nRuns=0; longestRun=0;
+        c=sequence.charAt(0); length=1;
+        for (i=1; i<n; i++) {
+            d=sequence.charAt(i);
+            if (d==c) length++;
+            else {
+                nRuns++;
+                if (length>longestRun) longestRun=length;
+                c=d; length=1;
+            }
+        }
+        nRuns++;
+        if (length>longestRun) longestRun=length;
+        out[0]=((double)nRuns)/n;
+        out[1]=((double)longestRun)/n;
+    } 
+    
+    
+    /**
+     * @param sequence assumed to be all lowercase.
+     */
+    private static final double autocorrelation(int k, StringBuilder sequence) {
+        final int n = sequence.length();
+        
+        int i;
+        int nMatches;
+        
+        nMatches=0;
+        for (i=0; i<n-k; i++) {
+            if (sequence.charAt(i)==sequence.charAt(i+k)) nMatches++;
+        }
+        return ((double)nMatches)/n;
     }
     
 }
