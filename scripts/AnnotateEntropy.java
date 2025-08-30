@@ -15,7 +15,9 @@ public class AnnotateEntropy {
     /**
      * Remark: the output VCF is printed to STDOUT.
      *
-     * @param args 1: comma-separated list of entropy orders, e.g. "0,1,2,3".
+     * @param args 
+     * 1: comma-separated list of entropy orders, e.g. "0,1,2,3";
+     * 2: comma-separated list of autocorrelation offsets, e.g. "1,2,3,4".
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
