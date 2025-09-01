@@ -280,3 +280,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetMapqDistribution.wdl
   testParameterFiles:
+- name: Workpackage9Subsets
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Workpackage9Subsets.wdl
+  testParameterFiles:
