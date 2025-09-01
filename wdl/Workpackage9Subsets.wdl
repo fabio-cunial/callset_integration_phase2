@@ -88,7 +88,7 @@ task Subset {
         
         Int n_cpu = 8
         Int ram_size_gb = 16
-        Int disk_size_gb = 1000
+        Int disk_size_gb = 500
     }
     parameter_meta {
     }
@@ -104,13 +104,13 @@ task Subset {
         # Filtering
         if [ ~{only_50bp} -eq 1 ]; then
             if [ ~{only_present} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools filter --include '(SVLEN>=50 || SVLEN<=-50) && AC>0' --output-type z > tmp.vcf.gz
+                ${TIME_COMMAND} bcftools filter --include '(SVLEN>=50 || SVLEN<=-50) && AC>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             else
-                ${TIME_COMMAND} bcftools filter --include 'SVLEN>=50 || SVLEN<=-50' --output-type z > tmp.vcf.gz
+                ${TIME_COMMAND} bcftools filter --include 'SVLEN>=50 || SVLEN<=-50' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             fi
         else
             if [ ~{only_present} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools filter --include 'AC>0' --output-type z > tmp.vcf.gz
+                ${TIME_COMMAND} bcftools filter --include 'AC>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             fi
         fi
         ${TIME_COMMAND} tabix -f tmp.vcf.gz
