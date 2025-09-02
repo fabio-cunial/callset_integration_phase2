@@ -27,7 +27,7 @@ for i=[1:nrows]
     y=min(A(i,2),MAX_AD);
     matrix(x+1,y+1)=matrix(x+1,y+1)+1;
 endfor
-imagesc(matrix); colormap('hot'); xlabel('AD REF'); ylabel('AD ALT'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
+imagesc(matrix); colormap('hot'); xlabel('AD ALT'); ylabel('AD REF'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
 
 subplot(3,4,4);
 B=A(:,1)+A(:,2);
@@ -37,7 +37,7 @@ B=A(:,1)+A(:,2);
 
 
 
-A=load(sprintf('%s/ad_present_cleaned.txt',SOURCE_DIR));
+A=load(sprintf('%s/ad_present.txt',SOURCE_DIR));
 [nrows,ncolumns]=size(A);
 
 subplot(3,4,5);
@@ -58,7 +58,7 @@ for i=[1:nrows]
     y=min(A(i,2),MAX_AD);
     matrix(x+1,y+1)=matrix(x+1,y+1)+1;
 endfor
-imagesc(matrix); colormap('hot'); xlabel('AD REF'); ylabel('AD ALT'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
+imagesc(matrix); colormap('hot'); xlabel('AD ALT'); ylabel('AD REF'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
 
 subplot(3,4,8);
 B=A(:,1)+A(:,2);
@@ -67,7 +67,7 @@ B=A(:,1)+A(:,2);
 
 
 
-A=load(sprintf('%s/ad_present_and_50_cleaned.txt',SOURCE_DIR));
+A=load(sprintf('%s/ad_present_and_50.txt',SOURCE_DIR));
 [nrows,ncolumns]=size(A);
 
 subplot(3,4,9);
@@ -88,7 +88,7 @@ for i=[1:nrows]
     y=min(A(i,2),MAX_AD);
     matrix(x+1,y+1)=matrix(x+1,y+1)+1;
 endfor
-imagesc(matrix); colormap('hot'); xlabel('AD REF'); ylabel('AD ALT'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
+imagesc(matrix); colormap('hot'); xlabel('AD ALT'); ylabel('AD REF'); title(''); axis square; set(gca,'fontsize',FONT_SIZE); 
 
 subplot(3,4,12);
 B=A(:,1)+A(:,2);
