@@ -104,13 +104,13 @@ task Subset {
         # Filtering
         if [ ~{only_50bp} -eq 1 ]; then
             if [ ~{only_present} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools filter --include '(SVLEN>=50 || SVLEN<=-50) && AC>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
+                ${TIME_COMMAND} bcftools filter --include '(SVLEN>=50 || SVLEN<=-50) && COUNT(GT="alt")>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             else
                 ${TIME_COMMAND} bcftools filter --include 'SVLEN>=50 || SVLEN<=-50' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             fi
         else
             if [ ~{only_present} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools filter --include 'AC>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
+                ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{truvari_intersample_vcf_gz} > tmp.vcf.gz
             fi
         fi
         ${TIME_COMMAND} tabix -f tmp.vcf.gz
@@ -238,7 +238,7 @@ task Workpackage9Impl {
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input ~{intersample_vcf_gz} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf
 
             # Building the GT-only output file
-            echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts.txt
+            echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts_~{intersample_type}.txt
             bcftools view --no-header ${SAMPLE_ID}_kanpig.vcf | cut -f 3,10 >> ${SAMPLE_ID}_gts_~{intersample_type}.txt
         }
         
