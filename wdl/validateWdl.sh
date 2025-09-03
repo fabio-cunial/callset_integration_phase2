@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l AnalyzeGtAdMatrix.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetGtAdMatrix.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage9Subsets.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetMapqDistribution.wdl

@@ -113,3 +113,7 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
 ARG truvari_version=5.2.0
 RUN pip3 install truvari==${truvari_version} \
     && truvari --help
+
+# AD HOC SCRIPTS
+COPY *.java .
+RUN javac *.java

@@ -290,3 +290,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetGtAdMatrix.wdl
   testParameterFiles:
+- name: AnalyzeGtAdMatrix
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/AnalyzeGtAdMatrix.wdl
+  testParameterFiles:

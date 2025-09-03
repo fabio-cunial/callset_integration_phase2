@@ -12,11 +12,11 @@ public class AnalyzeGtAdMatrix {
     public static void main(String[] args) throws IOException {
         final String INPUT_TSV = args[0];
         
-        final int AD_MAX = 50;
+        final int AD_MAX = 100;
         
         boolean isMissing;
         int i, j, p, q;
-        int nAlts, adRef, adAlt;
+        int nAlts, adRef, adAlt, nRows;
         String str;
         BufferedReader br;
         BufferedWriter bw;
@@ -24,10 +24,10 @@ public class AnalyzeGtAdMatrix {
         String[] tokens;
         
         // Collecting stats
-        histogram_ref = new int[4][AD_MAX+1];
-        histogram_alt = new int[4][AD_MAX+1];
+        histogram_ref = new long[4][AD_MAX+1];
+        histogram_alt = new long[4][AD_MAX+1];
         br = new BufferedReader(new FileReader(INPUT_TSV));
-        str=br.readLine();
+        str=br.readLine(); nRows=0;
         while (str!=null) {
             tokens=str.split("\t");
             for (i=0; i<tokens.length; i++) {
@@ -47,11 +47,13 @@ public class AnalyzeGtAdMatrix {
                 if (adRef>AD_MAX) adRef=AD_MAX;
                 adAlt=Integer.parseInt(tokens[i].substring(q+1));
                 if (adAlt>AD_MAX) adAlt=AD_MAX;
-                histogram_ref[0][adRef]++; histogram_alt[0][adAlt]++;
+                if (nAlts>0) histogram_ref[0][adRef]++; histogram_alt[0][adAlt]++;
                 if (nAlts==0) { histogram_ref[1][adRef]++; histogram_alt[1][adAlt]++; }
                 else if (nAlts==1) { histogram_ref[2][adRef]++; histogram_alt[2][adAlt]++; }
                 else if (nAlts==2) { histogram_ref[3][adRef]++; histogram_alt[3][adAlt]++; }
             }
+            nRows++;
+            if (nRows%1000==0) System.err.println("Processed "+nRows+" rows...");
             str=br.readLine();
         }
         br.close();
