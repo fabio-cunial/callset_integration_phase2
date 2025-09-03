@@ -54,11 +54,23 @@ public class AnalyzeGtAdMatrix {
             }
             nRows++;
             if (nRows%1000==0) System.err.println("Processed "+nRows+" rows...");
+            if (nRows%100000==0) {
+                System.err.println("histogram_ref:");
+                for (i=0; i<histogram_ref.length; i++) {
+                    for (j=0; j<histogram_ref[i].length; j++) System.err.print(histogram_ref[i][j]+",");
+                    System.err.println();
+                }
+                System.err.println("histogram_alt:");
+                for (i=0; i<histogram_alt.length; i++) {
+                    for (j=0; j<histogram_alt[i].length; j++) System.err.print(histogram_alt[i][j]+",");
+                    System.err.println();
+                }
+            }
             str=br.readLine();
         }
         br.close();
         
-        // Outputting
+        // Writing the full histograms to files
         bw = new BufferedWriter(new FileWriter("histogram_ref.txt"));
         for (i=0; i<histogram_ref.length; i++) {
             for (j=0; j<histogram_ref[i].length; j++) bw.write(histogram_ref[i][j]+",");

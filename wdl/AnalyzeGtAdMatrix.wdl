@@ -45,7 +45,7 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))    
         
         
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx $(( ~{ram_size_gb} - 2 ))G AnalyzeGtAdMatrix ~{matrix_tsv}
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx$(( ~{ram_size_gb} - 2 ))G AnalyzeGtAdMatrix ~{matrix_tsv}
         ls -laht
     >>>
     
