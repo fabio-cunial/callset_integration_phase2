@@ -2,9 +2,9 @@
 #
 TRIOS_TSV="/Users/fcunial/Downloads/trios_only_5.tsv"
 INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish"
-INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/new_args"
+INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/present_and_50"
 
-IDS="neighdist1 neighdist2 neighdist3 hapsim1 hapsim2 hapsim3 hapsim4 sizesim1 sizesim2 seqsim1 seqsim2 mapq1 mapq2 mapq3 mapq4"
+IDS="present present_and_50"
 
 set -euxo pipefail
 
