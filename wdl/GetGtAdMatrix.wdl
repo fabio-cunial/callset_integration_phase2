@@ -45,7 +45,7 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))    
         
         
-        ${TIME_COMMAND} bcftools query --format '[%GT,%AD\t]\n' > matrix.tsv
+        ${TIME_COMMAND} bcftools query --format '[%GT,%AD\t]\n' ~{intersample_vcf_gz} > matrix.tsv
     >>>
     
     output {
