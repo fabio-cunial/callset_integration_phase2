@@ -295,3 +295,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/AnalyzeGtAdMatrix.wdl
   testParameterFiles:
+- name: FixUnsupportedGts
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/FixUnsupportedGts.wdl
+  testParameterFiles:

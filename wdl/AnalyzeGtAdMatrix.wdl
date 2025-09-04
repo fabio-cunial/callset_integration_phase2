@@ -18,8 +18,7 @@ workflow AnalyzeGtAdMatrix {
     }
     
     output {
-        File histogram_ref = Impl.histogram_ref
-        File histogram_alt = Impl.histogram_alt
+        Array[File] histograms = Impl.histograms
     }
 }
 
@@ -60,8 +59,7 @@ task Impl {
     >>>
     
     output {
-        File histogram_ref = "histogram_ref.txt"
-        File histogram_alt = "histogram_alt.txt"
+        Array[File] histograms = glob("*.txt")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_squish"
