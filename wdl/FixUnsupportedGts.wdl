@@ -39,7 +39,6 @@ workflow FixUnsupportedGts {
 }
 
 
-
 # Restricts the cohort VCF to records that occur in a given set of samples, to
 # speed up the following steps.
 #
@@ -91,7 +90,6 @@ task SubsetToSamples {
 }
 
 
-
 #
 task Impl {
     input {
@@ -104,12 +102,12 @@ task Impl {
         
         Int n_cpu = 4
         Int ram_size_gb = 16
-        Int disk_size_gb = 500
     }
     parameter_meta {
     }
     
     String docker_dir = "/callset_integration"
+    Int disk_size_gb = 5*ceil(size(intersample_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail

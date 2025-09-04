@@ -79,7 +79,6 @@ public class AnalyzeGtAdMatrix {
         br.close();
         printHistograms(histogram_ref,histogram_alt,histogram_ref_fractional,histogram_alt_fractional);
         
-        
         // Writing the full histograms to files
         bw = new BufferedWriter(new FileWriter("histogram_ref.txt"));
         for (i=0; i<histogram_ref.length; i++) {
