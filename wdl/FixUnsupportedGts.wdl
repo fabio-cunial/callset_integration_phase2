@@ -125,7 +125,7 @@ task Impl {
             mv ~{docker_dir}/FixUnsupportedGts.java .
             javac FixUnsupportedGts.java
         fi
-        ${TIME_COMMAND} ( java -Xmx$(( ~{ram_size_gb} - 2 ))G FixUnsupportedGts ~{intersample_vcf_gz} ~{min_ad} ~{ad_index} | bcftools view --output-type z > fixed.vcf.gz )
+        java -Xmx$(( ~{ram_size_gb} - 2 ))G FixUnsupportedGts ~{intersample_vcf_gz} ~{min_ad} ~{ad_index} | bcftools view --output-type z > fixed.vcf.gz
         ${TIME_COMMAND} tabix -f fixed.vcf.gz
         ls -laht
     >>>
