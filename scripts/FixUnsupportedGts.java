@@ -11,11 +11,15 @@ public class FixUnsupportedGts {
      * Remark: the program prints to STDOUT.
      *
      * @param args 
+     * 1: min AD for keeping REF or ALT intact;
+     * 2: position of the AD field in FORMAT (zero-based);
+     * 3: 1=only set 0/1 to 0/0.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final int MIN_AD = Integer.parseInt(args[1]);
-        final int AD_INDEX = Integer.parseInt(args[2]);  // Zero-based
+        final int AD_INDEX = Integer.parseInt(args[2]);
+        final boolean ONLY_01_00 = Integer.parseInt(args[3])==1;
         
         boolean isDiploid;
         char gtPipe;
@@ -66,26 +70,36 @@ public class FixUnsupportedGts {
                     System.err.println("ERROR: unknown GT: "+tokens[i]);
                     System.exit(1);
                 }
-                if (nAlts==0) {  // 0/0
-                    if (adRef<MIN_AD) {
-                        tokens[i]=(isDiploid?"0"+gtPipe+"1":"1")+tokens[i].substring(p);
-                        n_00_01++;
+                if (ONLY_01_00) {
+                    if (nAlts==1) {  // 0/1
+                        if (adAlt<MIN_AD) {
+                            tokens[i]=(isDiploid?"0"+gtPipe+"0":"0")+tokens[i].substring(p);
+                            n_01_00++;
+                        }
                     }
                 }
-                else if (nAlts==1) {  // 0/1
-                    if (adAlt<MIN_AD) {
-                        tokens[i]=(isDiploid?"0"+gtPipe+"0":"0")+tokens[i].substring(p);
-                        n_01_00++;
+                else {
+                    if (nAlts==0) {  // 0/0
+                        if (adRef<MIN_AD) {
+                            tokens[i]=(isDiploid?"0"+gtPipe+"1":"1")+tokens[i].substring(p);
+                            n_00_01++;
+                        }
                     }
-                    else if (adRef<MIN_AD) {
-                        tokens[i]=(isDiploid?"1"+gtPipe+"1":"1")+tokens[i].substring(p);
-                        n_01_11++;
+                    else if (nAlts==1) {  // 0/1
+                        if (adAlt<MIN_AD) {
+                            tokens[i]=(isDiploid?"0"+gtPipe+"0":"0")+tokens[i].substring(p);
+                            n_01_00++;
+                        }
+                        else if (adRef<MIN_AD) {
+                            tokens[i]=(isDiploid?"1"+gtPipe+"1":"1")+tokens[i].substring(p);
+                            n_01_11++;
+                        }
                     }
-                }
-                else if (nAlts==2) {  // 1/1
-                    if (adAlt<MIN_AD) {
-                        tokens[i]=(isDiploid?"0"+gtPipe+"1":"0")+tokens[i].substring(p);
-                        n_11_01++;
+                    else if (nAlts==2) {  // 1/1
+                        if (adAlt<MIN_AD) {
+                            tokens[i]=(isDiploid?"0"+gtPipe+"1":"0")+tokens[i].substring(p);
+                            n_11_01++;
+                        }
                     }
                 }
             }
