@@ -2,7 +2,7 @@ import java.util.zip.GZIPInputStream;
 import java.io.*;
 
 
-/** 
+/**
  * 
  */
 public class FixUnsupportedGts {

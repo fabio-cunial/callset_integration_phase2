@@ -15,23 +15,22 @@ public class CheckDeNovo {
         final String TRIO_MATRIX_TSV = args[0];
         final int MAX_AD = Integer.parseInt(args[1]);
         
-        
-        boolean isMissing, isAltChild, isDeNovo;
-        int i, j;
-        int nTrios, nRecords;
-        String str;
+        boolean isMissing;
+        int i, x, y;
+        int nTrios, nRecords, nAltChild, adAltChild, adAltFather, adAltMother, adRefChild, adRefFather, adRefMother;
+        String str, gtChild, gtFather, gtMother;
         BufferedReader br;
+        BufferedWriter bw;
         String[] tokens, tokensPrime;
         int[] numerator, denominator;  // De novo rates for each trio
         // Number of de novos with a given GT, AD_ALT_CHILD=X, and
         // AD_ALT_FATHER+AD_ALT_MOTHER=Y.
         long[][] denovo_01_adAlt, denovo_11_adAlt;
-        long[][] nondenovo_01_adAlt, denovo_11_adAlt;
+        long[][] nondenovo_01_adAlt, nondenovo_11_adAlt;
         // Number of de novos with a given GT, AD_REF_CHILD=X, and
         // AD_REF_FATHER+AD_REF_MOTHER=Y.
         long[][] denovo_01_adRef, denovo_11_adRef;
-        long[][] denovo_01_adRef, denovo_11_adRef;
-        
+        long[][] nondenovo_01_adRef, nondenovo_11_adRef;
         
         // Computing the number of trios
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
@@ -41,19 +40,19 @@ public class CheckDeNovo {
         nTrios=tokens.length/3;
         System.err.println(nTrios+" trios");
         
-        // Computing rates
+        // Allocating space
         numerator = new int[nTrios];
         denominator = new int[nTrios];
         denovo_01_adAlt = new long[MAX_AD+1][MAX_AD+1];
         denovo_11_adAlt = new long[MAX_AD+1][MAX_AD+1];
         denovo_01_adRef = new long[MAX_AD+1][MAX_AD+1];
         denovo_11_adRef = new long[MAX_AD+1][MAX_AD+1];
-        
         nondenovo_01_adAlt = new long[MAX_AD+1][MAX_AD+1];
         nondenovo_11_adAlt = new long[MAX_AD+1][MAX_AD+1];
         nondenovo_01_adRef = new long[MAX_AD+1][MAX_AD+1];
         nondenovo_11_adRef = new long[MAX_AD+1][MAX_AD+1];
         
+        // Computing counts
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
         nRecords=0;
         str=br.readLine();
@@ -113,8 +112,28 @@ public class CheckDeNovo {
         br.close();
         
         // Outputting
-        --------------->
         for (i=0; i<nTrios; i++) System.out.println(((double)numerator[i])/denominator[i]);
+        printMatrix(denovo_01_adAlt,TRIO_MATRIX_TSV+"_denovo_01_adAlt.txt");
+        printMatrix(denovo_11_adAlt,TRIO_MATRIX_TSV+"_denovo_11_adAlt.txt");
+        printMatrix(denovo_01_adRef,TRIO_MATRIX_TSV+"_denovo_01_adRef.txt");
+        printMatrix(denovo_11_adRef,TRIO_MATRIX_TSV+"_denovo_11_adRef.txt");
+        printMatrix(nondenovo_01_adAlt,TRIO_MATRIX_TSV+"_nondenovo_01_adAlt.txt");
+        printMatrix(nondenovo_11_adAlt,TRIO_MATRIX_TSV+"_nondenovo_11_adAlt.txt");
+        printMatrix(nondenovo_01_adRef,TRIO_MATRIX_TSV+"_nondenovo_01_adRef.txt");
+        printMatrix(nondenovo_11_adRef,TRIO_MATRIX_TSV+"_nondenovo_11_adRef.txt");
+    }
+    
+    
+    private static final void printMatrix(long[][] matrix, String fileName) throws IOException {
+        int i, j;
+        BufferedWriter bw;
+        
+        bw = new BufferedWriter(new FileWriter(fileName));
+        for (i=0; i<matrix.length; i++) {
+            for (j=0; j<matrix[i].length; j++) bw.write(matrix[j]+",");
+            bw.newLine();
+        }
+        bw.close();
     }
     
 }
