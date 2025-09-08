@@ -76,7 +76,11 @@ task Impl {
             mv ~{docker_dir}/GetGenotypingPriors.java .
             javac GetGenotypingPriors.java
         fi
-        ${TIME_COMMAND} truvari bench --sizemin 50 --sizefilt 50 ~{truvari_bench_args} --base ~{dipcall_vcf_gz} --comp ~{kanpig_vcf_gz} --includebed ~{dipcall_bed} --output ./truvari_out/
+        mv ~{dipcall_vcf_gz} dipcall.vcf.gz
+        mv ~{dipcall_tbi} dipcall.vcf.gz.tbi
+        mv ~{kanpig_vcf_gz} kanpig.vcf.gz
+        mv ~{kanpig_tbi} kanpig.vcf.gz.tbi
+        ${TIME_COMMAND} truvari bench --sizemin 50 --sizefilt 50 ~{truvari_bench_args} --base dipcall.vcf.gz --comp kanpig.vcf.gz --includebed ~{dipcall_bed} --output ./truvari_out/
         ${TIME_COMMAND} java GetGenotypingPriors ./truvari_out/tp-comp.vcf.gz ./truvari_out/tp-base.vcf.gz ./truvari_out/fp.vcf.gz ./~{id}_distributions
         ls -laht
     >>>
