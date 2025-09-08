@@ -300,3 +300,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/FixUnsupportedGts.wdl
   testParameterFiles:
+- name: GetGenotypingPriors
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetGenotypingPriors.wdl
+  testParameterFiles:
+

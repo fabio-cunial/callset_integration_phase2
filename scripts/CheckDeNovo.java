@@ -16,13 +16,15 @@ public class CheckDeNovo {
         final int MAX_AD = Integer.parseInt(args[1]);
         
         boolean isMissing;
-        int i, x, y;
+        int i, j, x, y;
         int nTrios, nRecords, nAltChild, adAltChild, adAltFather, adAltMother, adRefChild, adRefFather, adRefMother;
+        int minDepth, maxDepth, avgDepth;
         String str, gtChild, gtFather, gtMother;
         BufferedReader br;
         BufferedWriter bw;
-        String[] tokens, tokensPrime;
+        String[] tokens, tokensPrime1, tokensPrime2, tokensPrime3;
         int[] numerator, denominator;  // De novo rates for each trio
+        long[][] depth_to_numerator, depth_to_denominator;
         // Number of de novos with a given GT, AD_ALT_CHILD=X, and
         // AD_ALT_FATHER+AD_ALT_MOTHER=Y.
         long[][] denovo_01_adAlt, denovo_11_adAlt;
@@ -51,6 +53,8 @@ public class CheckDeNovo {
         nondenovo_11_adAlt = new long[MAX_AD+1][MAX_AD+1];
         nondenovo_01_adRef = new long[MAX_AD+1][MAX_AD+1];
         nondenovo_11_adRef = new long[MAX_AD+1][MAX_AD+1];
+        depth_to_numerator = new long[MAX_AD+1][nTrios];
+        depth_to_denominator = new long[MAX_AD+1][nTrios];
         
         // Computing counts
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
@@ -59,25 +63,37 @@ public class CheckDeNovo {
         while (str!=null) { 
             tokens=str.split("\t");
             for (i=0; i<nTrios; i++) {
-                tokensPrime=tokens[3*i+0].split(",");
-                gtChild=tokensPrime[0]; adRefChild=Integer.parseInt(tokensPrime[1]); adAltChild=Integer.parseInt(tokensPrime[2]);
-                tokensPrime=tokens[3*i+1].split(",");
-                gtFather=tokensPrime[0]; adRefFather=Integer.parseInt(tokensPrime[1]); adAltFather=Integer.parseInt(tokensPrime[2]);
-                tokensPrime=tokens[3*i+2].split(",");
-                gtMother=tokensPrime[0]; adRefMother=Integer.parseInt(tokensPrime[1]); adAltMother=Integer.parseInt(tokensPrime[2]);
-                if (gtChild.indexOf("1")<0 || gtChild.length()!=3 || gtFather.length()!=3 || gtMother.length()!=3) {
-                    // Must occur in the child and be on an autosome.
-                    continue;
-                }
+                tokensPrime1=tokens[3*i+0].split(",");
+                gtChild=tokensPrime1[0];
+                tokensPrime2=tokens[3*i+1].split(",");
+                gtFather=tokensPrime2[0];
+                tokensPrime3=tokens[3*i+2].split(",");
+                gtMother=tokensPrime3[0];
                 isMissing=gtFather.indexOf(".")>=0||gtMother.indexOf(".")>=0;
                 if (isMissing) {
                     // At least one GT in the triplet is missing
                     continue;
                 }
+                if (gtChild.indexOf("1")<0 || gtChild.length()!=3 || gtFather.length()!=3 || gtMother.length()!=3) {
+                    // Must occur in the child and be on an autosome.
+                    continue;
+                }
+                adRefChild=Integer.parseInt(tokensPrime1[1]); adAltChild=Integer.parseInt(tokensPrime1[2]);
+                adRefFather=Integer.parseInt(tokensPrime2[1]); adAltFather=Integer.parseInt(tokensPrime2[2]);
+                adRefMother=Integer.parseInt(tokensPrime3[1]); adAltMother=Integer.parseInt(tokensPrime3[2]);
                 denominator[i]++;
+                minDepth=adRefChild+adAltChild; maxDepth=minDepth; avgDepth=minDepth;
+                if (adRefFather+adAltFather<minDepth) minDepth=adRefFather+adAltFather;
+                if (adRefMother+adAltMother<minDepth) minDepth=adRefMother+adAltMother;
+                if (adRefFather+adAltFather>maxDepth) maxDepth=adRefFather+adAltFather;
+                if (adRefMother+adAltMother>maxDepth) maxDepth=adRefMother+adAltMother;
+                avgDepth+=adRefFather+adAltFather+adRefMother+adAltMother;
+                avgDepth/=3;
+                depth_to_denominator[(adRefChild+adAltChild)>MAX_AD?MAX_AD:(adRefChild+adAltChild)][i]++;
                 if (gtFather.indexOf("1")<0 && gtMother.indexOf("1")<0) {
-                    // De novo
                     numerator[i]++;
+                    depth_to_numerator[(adRefChild+adAltChild)>MAX_AD?MAX_AD:(adRefChild+adAltChild)][i]++;
+                    // De novo
                     nAltChild=(gtChild.charAt(0)=='1'?1:0)+(gtChild.charAt(2)=='1'?1:0);
                     x=adAltChild>MAX_AD?MAX_AD:adAltChild;
                     y=adAltFather+adAltMother;
@@ -121,6 +137,18 @@ public class CheckDeNovo {
         printMatrix(nondenovo_11_adAlt,TRIO_MATRIX_TSV+"_nondenovo_11_adAlt.txt");
         printMatrix(nondenovo_01_adRef,TRIO_MATRIX_TSV+"_nondenovo_01_adRef.txt");
         printMatrix(nondenovo_11_adRef,TRIO_MATRIX_TSV+"_nondenovo_11_adRef.txt");
+        bw = new BufferedWriter(new FileWriter(TRIO_MATRIX_TSV+"_depth_to_denovo_rate.txt"));
+        for (i=0; i<depth_to_numerator.length; i++) {
+            for (j=0; j<depth_to_numerator[i].length; j++) bw.write((depth_to_denominator[i][j]==0?"0":(((double)depth_to_numerator[i][j])/depth_to_denominator[i][j]))+",");
+            bw.newLine();
+        }
+        bw.close();
+        bw = new BufferedWriter(new FileWriter(TRIO_MATRIX_TSV+"_depth_to_ncalls.txt"));
+        for (i=0; i<depth_to_numerator.length; i++) {
+            for (j=0; j<depth_to_numerator[i].length; j++) bw.write((depth_to_numerator[i][j]+depth_to_denominator[i][j])+",");
+            bw.newLine();
+        }
+        bw.close();
     }
     
     
@@ -130,7 +158,7 @@ public class CheckDeNovo {
         
         bw = new BufferedWriter(new FileWriter(fileName));
         for (i=0; i<matrix.length; i++) {
-            for (j=0; j<matrix[i].length; j++) bw.write(matrix[j]+",");
+            for (j=0; j<matrix[i].length; j++) bw.write(matrix[i][j]+",");
             bw.newLine();
         }
         bw.close();

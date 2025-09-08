@@ -2,9 +2,9 @@
 #
 TRIOS_TSV="/Users/fcunial/Downloads/trios_only_5.tsv"
 INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish"
-INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/fixed_gts_2"
+INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/fixed_gts_2_prime"
 
-IDS="fixed_gts_2"
+IDS="fixed_gts_2_prime"
 
 set -euxo pipefail
 
@@ -21,10 +21,10 @@ while read CHILD_ID; do
             N_MERR=$(grep ^nmerr ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}.txt | cut -f 2)
             ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
         done
-        DENOVO=$(java CheckDeNovo ${INPUT_DIR}/${CHILD_ID}_cohort_regenotyped_07_${SUFFIX}_gtmatrix.txt)
+        DENOVO=$(java CheckDeNovoOld ${INPUT_DIR}/${CHILD_ID}_cohort_regenotyped_07_${SUFFIX}_gtmatrix.txt)
         ROW="${ROW},${DENOVO}"
         for ID in ${IDS}; do
-            DENOVO=$(java CheckDeNovo ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt)
+            DENOVO=$(java CheckDeNovo ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt 1)
             ROW="${ROW},${DENOVO}"
         done
         echo "${ROW}" >> squish_trios_${SUFFIX}.csv
