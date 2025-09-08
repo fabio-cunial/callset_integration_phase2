@@ -28,7 +28,7 @@ workflow GetGenotypingPriors {
                 kanpig_tbi = kanpig_tbi[i],
                 dipcall_bed = dipcall_bed[i],
                 script_java = script_java,
-                truvari_bench_args = script_java
+                truvari_bench_args = truvari_bench_args
         }
     }
     
