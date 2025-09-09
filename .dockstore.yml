@@ -305,4 +305,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetGenotypingPriors.wdl
   testParameterFiles:
-
+- name: Workpackage9Palt
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Workpackage9Palt.wdl
+  testParameterFiles:

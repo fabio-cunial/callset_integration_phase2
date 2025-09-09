@@ -109,6 +109,9 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
     && chmod +x ./kanpig \
     && ./kanpig --help
 
+# Kanpig modified
+COPY ./kanpig-fabio .
+
 # TRUVARI
 ARG truvari_version=5.2.0
 RUN pip3 install truvari==${truvari_version} \
