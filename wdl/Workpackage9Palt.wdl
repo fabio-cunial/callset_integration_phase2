@@ -137,7 +137,7 @@ task Workpackage9SquishImpl {
             fi
             export RUST_BACKTRACE="full"
             chmod +x ~{docker_dir}/kanpig-fabio
-            ${TIME_COMMAND} ~{docker_dir}/kanpig-fabio gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input truvari_collapsed_for_kanpig.vcf.gz --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf
+            ${TIME_COMMAND} ~{docker_dir}/kanpig-custom gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input truvari_collapsed_for_kanpig.vcf.gz --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf
 
             # Building the GT-only output file
             echo "ID\t${SAMPLE_ID}" > ${SAMPLE_ID}_gts.txt

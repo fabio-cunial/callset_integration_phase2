@@ -109,8 +109,25 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
     && chmod +x ./kanpig \
     && ./kanpig --help
 
-# Kanpig modified
-COPY ./kanpig-fabio .
+# Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > script.sh \
+    && chmod +x script.sh \
+    && ./script.sh -y
+#    && . "$HOME/.cargo/env"
+    
+# Custom Kanpig
+ARG commit_id=262b89805a3c32b2a1b4beb99b3414b080a2b3ac
+RUN mkdir kanpig-custom \
+    && cd kanpig-custom \
+    && git clone https://github.com/fabio-cunial/kanpig.git \
+    && cd kanpig \
+    && git checkout ${commit_id} \
+    && $HOME/.cargo/bin/cargo build --release \
+    && mv ./target/release/kanpig ../../kanpig-tmp \
+    && cd ../.. \
+    && rm -rf kanpig-custom/ \
+    && mv kanpig-tmp kanpig-custom \
+    && ./kanpig-custom gt --help
 
 # TRUVARI
 ARG truvari_version=5.2.0
