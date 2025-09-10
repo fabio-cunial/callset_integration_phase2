@@ -113,7 +113,6 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > script.sh \
     && chmod +x script.sh \
     && ./script.sh -y
-#    && . "$HOME/.cargo/env"
     
 # Custom Kanpig
 ARG commit_id=262b89805a3c32b2a1b4beb99b3414b080a2b3ac
@@ -134,6 +133,14 @@ ARG truvari_version=5.2.0
 RUN pip3 install truvari==${truvari_version} \
     && truvari --help
 
+# Beta-binomial
+COPY ./pyro-kanpig-environment.yml .
+#RUN conda install --channel conda-forge --channel bioconda pyro-ppl matplotlib scikit-allel tqdm
+RUN conda env create -f ./pyro-kanpig-environment.yml
+#SHELL ["conda", "run", "-n", "pyro-kanpig", "/bin/bash", "-c"]
+# SHELL ["/bin/bash", "-c"]
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
+COPY genotype-beta-binomial-mixture.py .
