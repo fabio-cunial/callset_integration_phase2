@@ -11,6 +11,7 @@ workflow TestBetaBinomial {
         File intersample_tbi
         
         String betabinomial_params = ""
+        String remote_output_dir
     }
     parameter_meta {
         sample_ids: "Only these samples in `intersample_vcf_gz` will be re-genotyped."
@@ -22,18 +23,16 @@ workflow TestBetaBinomial {
                 sample_id = sample_ids[i],
                 intersample_vcf_gz = intersample_vcf_gz,
                 intersample_tbi = intersample_tbi,
-                betabinomial_params = betabinomial_params
+                betabinomial_params = betabinomial_params,
+                remote_output_dir = remote_output_dir
         }
     }
     call Merge {
         input:
-            sample_vcf_gz = BetaBinomial.regenotyped_vcf_gz,
-            sample_tbi = BetaBinomial.regenotyped_tbi
+            remote_output_dir = remote_output_dir
     }
     
     output {
-        File merged_vcf_gz = Merge.merged_vcf_gz
-        File merged_tbi = Merge.merged_tbi
     }
 }
 
@@ -47,6 +46,7 @@ task BetaBinomial {
         File intersample_tbi
         
         String betabinomial_params
+        String remote_output_dir
         
         Int n_cpu = 4
         Int ram_size_gb = 32
@@ -71,37 +71,41 @@ task BetaBinomial {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
-        
-        source activate pyro-kanpig
+        # Computing new genotypes for the sample
         ${TIME_COMMAND} bcftools view --samples ~{sample_id} --output-type z ~{intersample_vcf_gz} > kanpig.vcf.gz
         tabix -f kanpig.vcf.gz
+        source activate pyro-kanpig
         ${TIME_COMMAND} python3 ~{docker_dir}/genotype-beta-binomial-mixture.py --kanpig-vcf kanpig.vcf.gz --output-prefix out
-        ls -laht
-        df -h
-        ${TIME_COMMAND} bgzip out.delta.tsv
+        
+        # Annotating the input VCF
         bcftools view --header-only kanpig.vcf.gz > annotations.vcf
         cat out.annot.tsv >> annotations.vcf
         rm -f out.annot.tsv
         ${TIME_COMMAND} bgzip annotations.vcf
         tabix -f annotations.vcf.gz
-        ls -laht
-        df -h
         ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --columns CHROM,POS,REF,ALT,FORMAT/GT,FORMAT/GQ,FORMAT/SQ --annotations annotations.vcf.gz --output-type z kanpig.vcf.gz > ~{sample_id}_kanpig_betabinomial.vcf.gz
-        ls -laht
-        df -h
         rm -f kanpig.vcf.gz*
         tabix -f ~{sample_id}_kanpig_betabinomial.vcf.gz
+        
+        # Outputting
         mv annotations.vcf.gz ~{sample_id}_annotations.vcf.gz
+        ${TIME_COMMAND} bgzip out.delta.tsv
         mv out.delta.tsv.gz ~{sample_id}_delta.tsv.gz
-        ls -laht
-        df -h
+        for FILE in $(ls *.png); do
+            mv ${FILE} ~{sample_id}_${FILE}
+        done
+        while : ; do
+            TEST=$(gsutil -m cp ~{sample_id}'_*' ~{remote_output_dir} && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
     >>>
     
     output {
-        File regenotyped_vcf_gz = sample_id + "_kanpig_betabinomial.vcf.gz"
-        File regenotyped_tbi = sample_id + "_kanpig_betabinomial.vcf.gz.tbi"
-        File annotations_vcf_gz = sample_id + "_annotations.vcf.gz"
-        File deltas_tsv_gz = sample_id + "_delta.tsv.gz"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_squish"
@@ -116,8 +120,7 @@ task BetaBinomial {
 #
 task Merge {
     input {
-        Array[File] sample_vcf_gz
-        Array[File] sample_tbi
+        String remote_output_dir
         
         Int n_cpu = 4
         Int ram_size_gb = 32
@@ -139,15 +142,24 @@ task Merge {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        SAMPLES=~{sep="," sample_vcf_gz}
-        SAMPLES=$(echo ${SAMPLES} | tr ',' ' ')
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --output-type z ${SAMPLES} > merged.vcf.gz
+        # Merging
+        gsutil -m cp ~{remote_output_dir}/'*_kanpig_betabinomial.vcf.gz*' .
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --output-type z *_kanpig_betabinomial.vcf.gz > merged.vcf.gz
         ${TIME_COMMAND} tabix -f merged.vcf.gz
+        
+        # Outputting
+        while : ; do
+            TEST=$(gsutil -m cp merged.vcf.'gz*' ~{remote_output_dir} && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
     >>>
     
     output {
-        File merged_vcf_gz = "merged.vcf.gz"
-        File merged_tbi = "merged.vcf.gz.tbi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_squish"

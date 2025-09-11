@@ -93,8 +93,6 @@ task BetaBinomial {
                 break
             fi
         done
-        
-        gsutil -m cp ~{remote_output_dir}/
     >>>
     
     output {
