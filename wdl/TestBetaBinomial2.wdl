@@ -66,17 +66,25 @@ task BetaBinomial {
         
         source activate pyro-kanpig
         ${TIME_COMMAND} python3 ~{docker_dir}/genotype-beta-binomial-mixture.py --kanpig-vcf ~{kanpig_vcf_gz} --output-prefix out
+        ls -laht
+        df -h
         ${TIME_COMMAND} bgzip out.delta.tsv
         bcftools view --header-only ~{kanpig_vcf_gz} > annotations.vcf
         cat out.annot.tsv >> annotations.vcf
         rm -f out.annot.tsv
         ${TIME_COMMAND} bgzip annotations.vcf
         tabix -f annotations.vcf.gz
+        ls -laht
+        df -h
         ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --columns CHROM,POS,REF,ALT,FORMAT/GT,FORMAT/GQ,FORMAT/SQ --annotations annotations.vcf.gz --output-type z ~{kanpig_vcf_gz} > ~{sample_id}_kanpig_betabinomial.vcf.gz
+        ls -laht
+        df -h
         rm -f ~{kanpig_vcf_gz}
         tabix -f ~{sample_id}_kanpig_betabinomial.vcf.gz
         mv annotations.vcf.gz ~{sample_id}_annotations.vcf.gz
         mv out.delta.tsv.gz ~{sample_id}_delta.tsv.gz
+        ls -laht
+        df -h
     >>>
     
     output {
