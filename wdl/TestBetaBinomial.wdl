@@ -29,6 +29,7 @@ workflow TestBetaBinomial {
     }
     call Merge {
         input:
+            out_txt = BetaBinomial.out_txt,
             remote_output_dir = remote_output_dir
     }
     
@@ -103,9 +104,11 @@ task BetaBinomial {
                 break
             fi
         done
+        touch out.txt
     >>>
     
     output {
+        File out_txt = "out.txt"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_squish"
@@ -122,6 +125,7 @@ task Merge {
     input {
         String remote_output_dir
         
+        Array[File] out_txt
         Int n_cpu = 4
         Int ram_size_gb = 32
         Int disk_size_gb = 200
