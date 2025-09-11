@@ -124,11 +124,11 @@ task Merge {
         
         Int n_cpu = 4
         Int ram_size_gb = 32
+        Int disk_size_gb = 200
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*( ceil(size(sample_vcf_gz,"GB")) ) + 50
     String docker_dir = "/callset_integration"
     String work_dir = "/cromwell_root/callset_integration"
     
