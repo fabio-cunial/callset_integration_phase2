@@ -11,6 +11,7 @@ workflow TestBetaBinomial2 {
         File kanpig_tbi
         
         String betabinomial_params = ""
+        String remote_output_dir
     }
     parameter_meta {
     }
@@ -20,12 +21,11 @@ workflow TestBetaBinomial2 {
             sample_id = sample_id,
             kanpig_vcf_gz = kanpig_vcf_gz,
             kanpig_tbi = kanpig_tbi,
-            betabinomial_params = betabinomial_params
+            betabinomial_params = betabinomial_params,
+            remote_output_dir = remote_output_dir
     }
     
     output {
-        File out_vcf_gz = BetaBinomial.regenotyped_vcf_gz
-        File out_tbi = BetaBinomial.regenotyped_tbi
     }
 }
 
@@ -39,6 +39,7 @@ task BetaBinomial {
         File kanpig_tbi
         
         String betabinomial_params
+        String remote_output_dir
         
         Int n_cpu = 4
         Int ram_size_gb = 32
@@ -85,13 +86,21 @@ task BetaBinomial {
         mv out.delta.tsv.gz ~{sample_id}_delta.tsv.gz
         ls -laht
         df -h
+        
+        while : ; do
+            TEST=$(gsutil -m cp ~{sample_id}'_*' ~{remote_output_dir} && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        
+        gsutil -m cp ~{remote_output_dir}/
     >>>
     
     output {
-        File regenotyped_vcf_gz = sample_id + "_kanpig_betabinomial.vcf.gz"
-        File regenotyped_tbi = sample_id + "_kanpig_betabinomial.vcf.gz.tbi"
-        File annotations_vcf_gz = sample_id + "_annotations.vcf.gz"
-        File deltas_tsv_gz = sample_id + "_delta.tsv.gz"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_squish"
