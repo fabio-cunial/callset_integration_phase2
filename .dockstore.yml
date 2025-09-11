@@ -315,3 +315,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TestBetaBinomial.wdl
   testParameterFiles:
+- name: TestBetaBinomial2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/TestBetaBinomial2.wdl
+  testParameterFiles:      

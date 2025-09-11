@@ -135,12 +135,9 @@ RUN pip3 install truvari==${truvari_version} \
 
 # Beta-binomial
 COPY ./pyro-kanpig-environment.yml .
-#RUN conda install --channel conda-forge --channel bioconda pyro-ppl matplotlib scikit-allel tqdm
+COPY ./genotype-beta-binomial-mixture.py .
 RUN conda env create -f ./pyro-kanpig-environment.yml
-#SHELL ["conda", "run", "-n", "pyro-kanpig", "/bin/bash", "-c"]
-# SHELL ["/bin/bash", "-c"]
 
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
-COPY genotype-beta-binomial-mixture.py .
