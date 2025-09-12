@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial_Merge.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamplesBetaBinomial.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial2.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial.wdl
