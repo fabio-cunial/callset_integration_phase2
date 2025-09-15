@@ -2,9 +2,10 @@
 #
 TRIOS_TSV="/Users/fcunial/Downloads/trios_only_5.tsv"
 INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish"
-INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/fixed_gts_2_prime"
+INPUT_DIR_NEW="/Users/fcunial/Downloads/BenchCohortTrios_squish/beta_binomial"
 
-IDS="fixed_gts_2_prime"
+IDS_1="beta_binomial"
+IDS_2="p_alt_00_01 p_alt_00_001 p_alt_00_02 p_alt_no10"
 
 set -euxo pipefail
 
@@ -16,15 +17,24 @@ while read CHILD_ID; do
         N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_cohort_regenotyped_07_${SUFFIX}.txt | cut -f 2)
         N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_cohort_regenotyped_07_${SUFFIX}.txt | cut -f 2)
         ROW="${N_GOOD_ALT},${N_MERR}"
-        for ID in ${IDS}; do
+        for ID in ${IDS_1}; do
+            N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}.txt | cut -f 2)
+            N_MERR=$(grep ^nmerr ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}.txt | cut -f 2)
+            ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
+        done
+        for ID in ${IDS_2}; do
             N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}.txt | cut -f 2)
             N_MERR=$(grep ^nmerr ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}.txt | cut -f 2)
             ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
         done
         DENOVO=$(java CheckDeNovoOld ${INPUT_DIR}/${CHILD_ID}_cohort_regenotyped_07_${SUFFIX}_gtmatrix.txt)
         ROW="${ROW},${DENOVO}"
-        for ID in ${IDS}; do
+        for ID in ${IDS_1}; do
             DENOVO=$(java CheckDeNovo ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt 1)
+            ROW="${ROW},${DENOVO}"
+        done
+        for ID in ${IDS_2}; do
+            DENOVO=$(java CheckDeNovoOldPrime ${INPUT_DIR_NEW}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt 1)
             ROW="${ROW},${DENOVO}"
         done
         echo "${ROW}" >> squish_trios_${SUFFIX}.csv

@@ -330,3 +330,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TestBetaBinomial_Merge.wdl
   testParameterFiles:      
+- name: BenchCohortTriosSquish3
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTriosSquish3.wdl
+  testParameterFiles:

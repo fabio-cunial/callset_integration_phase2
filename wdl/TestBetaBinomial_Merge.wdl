@@ -4,8 +4,6 @@ version 1.0
 #
 workflow TestBetaBinomial_Merge {
     input {
-        Array[String] sample_ids
-        
         String remote_output_dir
     }
     parameter_meta {

@@ -69,7 +69,7 @@ public class CheckDeNovo {
                 gtFather=tokensPrime2[0];
                 tokensPrime3=tokens[3*i+2].split(",");
                 gtMother=tokensPrime3[0];
-                isMissing=gtFather.indexOf(".")>=0||gtMother.indexOf(".")>=0;
+                isMissing=gtChild.indexOf(".")>=0||gtFather.indexOf(".")>=0||gtMother.indexOf(".")>=0;
                 if (isMissing) {
                     // At least one GT in the triplet is missing
                     continue;
@@ -78,9 +78,12 @@ public class CheckDeNovo {
                     // Must occur in the child and be on an autosome.
                     continue;
                 }
-                adRefChild=Integer.parseInt(tokensPrime1[1]); adAltChild=Integer.parseInt(tokensPrime1[2]);
-                adRefFather=Integer.parseInt(tokensPrime2[1]); adAltFather=Integer.parseInt(tokensPrime2[2]);
-                adRefMother=Integer.parseInt(tokensPrime3[1]); adAltMother=Integer.parseInt(tokensPrime3[2]);
+                adRefChild=tokensPrime1[1].indexOf(".")>=0?0:Integer.parseInt(tokensPrime1[1]); 
+                adAltChild=tokensPrime1[2].indexOf(".")>=0?0:Integer.parseInt(tokensPrime1[2]);
+                adRefFather=tokensPrime2[1].indexOf(".")>=0?0:Integer.parseInt(tokensPrime2[1]); 
+                adAltFather=tokensPrime2[2].indexOf(".")>=0?0:Integer.parseInt(tokensPrime2[2]);
+                adRefMother=tokensPrime3[1].indexOf(".")>=0?0:Integer.parseInt(tokensPrime3[1]); 
+                adAltMother=tokensPrime3[2].indexOf(".")>=0?0:Integer.parseInt(tokensPrime3[2]);
                 denominator[i]++;
                 minDepth=adRefChild+adAltChild; maxDepth=minDepth; avgDepth=minDepth;
                 if (adRefFather+adAltFather<minDepth) minDepth=adRefFather+adAltFather;
@@ -89,10 +92,10 @@ public class CheckDeNovo {
                 if (adRefMother+adAltMother>maxDepth) maxDepth=adRefMother+adAltMother;
                 avgDepth+=adRefFather+adAltFather+adRefMother+adAltMother;
                 avgDepth/=3;
-                depth_to_denominator[(adRefChild+adAltChild)>MAX_AD?MAX_AD:(adRefChild+adAltChild)][i]++;
+                depth_to_denominator[avgDepth>MAX_AD?MAX_AD:avgDepth][i]++;
                 if (gtFather.indexOf("1")<0 && gtMother.indexOf("1")<0) {
                     numerator[i]++;
-                    depth_to_numerator[(adRefChild+adAltChild)>MAX_AD?MAX_AD:(adRefChild+adAltChild)][i]++;
+                    depth_to_numerator[avgDepth>MAX_AD?MAX_AD:avgDepth][i]++;
                     // De novo
                     nAltChild=(gtChild.charAt(0)=='1'?1:0)+(gtChild.charAt(2)=='1'?1:0);
                     x=adAltChild>MAX_AD?MAX_AD:adAltChild;
