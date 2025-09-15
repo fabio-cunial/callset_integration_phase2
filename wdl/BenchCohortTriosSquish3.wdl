@@ -135,11 +135,13 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local ID=$2
             
-            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ${INPUT_VCF_GZ} > tmp_${ID}.vcf.gz
-            tabix -f tmp_${ID}.vcf.gz
-            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp_${ID}.vcf.gz > ${ID}.vcf.gz
+            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ${INPUT_VCF_GZ} > tmp1_${ID}.vcf.gz
+            tabix -f tmp1_${ID}.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp1_${ID}.vcf.gz > tmp2_${ID}.vcf.gz
+            tabix -f tmp2_${ID}.vcf.gz
+            truvari anno numneigh --refdist 1000 --sizemin 1 tmp2_${ID}.vcf.gz | bcftools view --output-type z ${ID}.vcf.gz
             tabix -f ${ID}.vcf.gz
-            rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi tmp_${ID}.vcf.gz tmp_${ID}.vcf.gz.tbi
+            rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi tmp*_${ID}.vcf.gz*
         }
         
         
@@ -151,33 +153,33 @@ task BenchTrio {
             
             if [ ~{only_50_bp} -ne 0 ]; then
                 ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
                 # Inside TRs
                 ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
                 tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
                 ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
                 rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
                 # Outside TRs
                 ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
                 tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
                 ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
                 rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             else
                 ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
                 # Inside TRs
                 ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
                 tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
                 ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
                 rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
                 # Outside TRs
                 ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
                 tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
                 ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+                ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors,[%GT,%AD\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
                 rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
             fi
         }
