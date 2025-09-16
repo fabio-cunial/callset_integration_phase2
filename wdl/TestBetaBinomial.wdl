@@ -1,7 +1,9 @@
 version 1.0
 
 
-# 
+# Given an inter-sample VCF re-genotyped with kanpig, the program recomputes the
+# genotypes of specific samples with beta binomial, then merges the resulting
+# VCFs.
 #
 workflow TestBetaBinomial {
     input {

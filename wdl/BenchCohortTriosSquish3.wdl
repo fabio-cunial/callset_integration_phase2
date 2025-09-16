@@ -1,8 +1,8 @@
 version 1.0
 
 
-# Measures Mendelian concordance after some parametrizations of kanpig
-# inter-sample.
+# Same as `BenchCohortTriosSquish2`, just with more information in the output GT
+# matrix.
 #
 workflow BenchCohortTriosSquish3 {
     input {
@@ -139,7 +139,7 @@ task BenchTrio {
             tabix -f tmp1_${ID}.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp1_${ID}.vcf.gz > tmp2_${ID}.vcf.gz
             tabix -f tmp2_${ID}.vcf.gz
-            truvari anno numneigh --refdist 1000 --sizemin 1 tmp2_${ID}.vcf.gz | bcftools view --output-type z ${ID}.vcf.gz
+            truvari anno numneigh --sizemin 1 --refdist 1000 tmp2_${ID}.vcf.gz | bgzip > ${ID}.vcf.gz
             tabix -f ${ID}.vcf.gz
             rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi tmp*_${ID}.vcf.gz*
         }
@@ -198,6 +198,7 @@ task BenchTrio {
         cat list.txt
         
         # Preprocessing the VCFs
+        source activate truvari5
         while read ROW; do
             VCF_FILE=$(echo ${ROW} | cut -d , -f 1)
             ID=$(echo ${ROW} | cut -d , -f 2)
@@ -217,7 +218,7 @@ task BenchTrio {
         Array[File] out_txt = glob("*.txt")
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"

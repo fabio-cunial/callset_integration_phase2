@@ -1,6 +1,7 @@
 version 1.0
 
 
+# Just the merge part of `TestBetaBinomial.wdl`.
 #
 workflow TestBetaBinomial_Merge {
     input {

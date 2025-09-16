@@ -1,7 +1,8 @@
 version 1.0
 
 
-# 
+# Given a single-sample VCF re-genotyped with kanpig, the program recomputes its
+# genotypes with beta binomial.
 #
 workflow TestBetaBinomial2 {
     input {
@@ -49,7 +50,6 @@ task BetaBinomial {
     
     Int disk_size_gb = 10*( ceil(size(kanpig_vcf_gz,"GB")) ) + 50
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
