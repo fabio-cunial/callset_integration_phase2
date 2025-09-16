@@ -216,12 +216,10 @@ task BenchTrio {
         gsutil -m cp ~{remote_input_dir}/${PROBAND_ID}_kanpig.vcf.gz* .
         gsutil -m cp ~{remote_input_dir}/${FATHER_ID}_kanpig.vcf.gz* .
         gsutil -m cp ~{remote_input_dir}/${MOTHER_ID}_kanpig.vcf.gz* .
-        source activate truvari5
         ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${PROBAND_ID}_kanpig.vcf.gz | bgzip > ${PROBAND_ID}.vcf.gz &
         ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${FATHER_ID}_kanpig.vcf.gz | bgzip > ${FATHER_ID}.vcf.gz &
         ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${MOTHER_ID}_kanpig.vcf.gz | bgzip > ${MOTHER_ID}.vcf.gz &
         wait
-        conda deactivate
         tabix -f ${PROBAND_ID}.vcf.gz &
         tabix -f ${FATHER_ID}.vcf.gz &
         tabix -f ${MOTHER_ID}.vcf.gz &
@@ -236,11 +234,9 @@ task BenchTrio {
         conda deactivate
         
         # Merging
-        source activate truvari5
         merge_thread ${PROBAND_ID}_betabinomial.vcf.gz ${FATHER_ID}_betabinomial.vcf.gz ${MOTHER_ID}_betabinomial.vcf.gz beta_binomial &
         merge_thread ${PROBAND_ID}.vcf.gz ${FATHER_ID}.vcf.gz ${MOTHER_ID}.vcf.gz kanpig &
         wait
-        conda deactivate
         
         # Benchmarking
         bench_thread beta_binomial_merged.vcf.gz beta_binomial ${PROBAND_ID} &
@@ -252,7 +248,7 @@ task BenchTrio {
         Array[File] out_txt = glob("*.txt")
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "fcunial/callset_integration_phase2_squish"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
