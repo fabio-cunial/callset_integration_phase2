@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 TRIOS_TSV="/Users/fcunial/Downloads/trios_only_5.tsv"
-INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish/ad_denovo_plot/gt_matrix_new"
+INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish/ad_denovo_plot/gt_matrix_numneigh"
 
 MAX_AD="50"
 IDS="v1 beta_binomial"
@@ -16,7 +16,7 @@ while read CHILD_ID; do
     ROW=""
     for SUFFIX in all tr not_tr; do
         for ID in ${IDS}; do
-            DENOVO=$(java CheckDeNovoSvlen ${INPUT_DIR}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt ${MAX_AD})
+            DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_${ID}_${SUFFIX}_gtmatrix.txt ${MAX_AD})
             ROW="${ROW},${DENOVO}"
         done
         echo "${ROW}" >> ad_denovo_plot_${SUFFIX}.csv
