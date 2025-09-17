@@ -102,7 +102,7 @@ task PasteGTs {
                 exit 1
             fi
             head -n 1 ${SAMPLE_ID}_sorted.txt > s.${i}.txt
-            tail -n +2 ${SAMPLE_ID}_sorted.txt | cut -d ':' -f 1 > b.${i}.txt
+            tail -n +2 ${SAMPLE_ID}_sorted.txt > b.${i}.txt
             rm -f ${SAMPLE_ID}_sorted.txt
             i=$(( ${i} + 1 ))
         done < ~{samples_file}
