@@ -17,6 +17,7 @@ workflow TestKanpigIntersample {
         String remote_outdir
         
         File samples_file
+        String format_field = "GT:FT:SQ:GQ:PS:NE:DP:AD:KS"
     }
     parameter_meta {
         truvari_collapse_intersample_vcf_gz: "The file given in input to inter-sample kanpig. Its FORMAT field contains just `GT`."
@@ -30,7 +31,8 @@ workflow TestKanpigIntersample {
             truvari_collapse_intersample_tbi = truvari_collapse_intersample_tbi,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
-            samples_file = samples_file
+            samples_file = samples_file,
+            format_field = format_field
     }
     
     output {
@@ -57,6 +59,7 @@ task PasteGTs {
         String remote_indir
         String remote_outdir
         File samples_file
+        String format_field
         
         Int n_cpu = 4
         Int ram_size_gb = 16
@@ -118,7 +121,7 @@ task PasteGTs {
         cat fields_all.txt
         rm -f ${FIELDS_FILES}
         date
-        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 > calls.txt
+        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 | awk -v format_field=~{format_field} -F '\t' 'BEGIN { } { if ($9=="GT") printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,$6,$7,$8,format_field,$10); else print $0 }' > calls.txt
         ls -lh calls.txt
         date
         cat header.txt fields_all.txt > out.vcf
