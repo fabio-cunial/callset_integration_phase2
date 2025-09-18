@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l TestKanpigIntersample.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage9Squish.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial3.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish3.wdl
@@ -19,7 +20,6 @@ java -jar ${WOMTOOL_PATH} validate -l Workpackage9Subsets.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetMapqDistribution.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish2.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish.wdl
-java -jar ${WOMTOOL_PATH} validate -l TestKanpigIntersample.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHweFocusedTruvariCollapse.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTrios.wdl
 java -jar ${WOMTOOL_PATH} validate -l PlotHweFocusedAc.wdl

@@ -121,7 +121,7 @@ task PasteGTs {
         cat fields_all.txt
         rm -f ${FIELDS_FILES}
         date
-        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 | awk -v format_field=~{format_field} -F '\t' 'BEGIN { } { if ($9=="GT") printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,$6,$7,$8,format_field,$10); else print $0 }' > calls.txt
+        bcftools view --threads ${N_THREADS} --no-header ~{truvari_collapse_intersample_vcf_gz} | cut -f 1-9 | awk -v format_field=~{format_field} -F '\t' 'BEGIN { } { if ($9=="GT") printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,$6,$7,$8,format_field); else print $0 }' > calls.txt
         ls -lh calls.txt
         date
         cat header.txt fields_all.txt > out.vcf
