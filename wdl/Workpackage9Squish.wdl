@@ -8,6 +8,7 @@ workflow Workpackage9Squish {
         File sv_integration_chunk_tsv
         String remote_indir
         String remote_outdir
+        Int only_50_bp
         
         File reference_fa
         File reference_fai
@@ -28,6 +29,7 @@ workflow Workpackage9Squish {
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
+            only_50_bp = only_50_bp,
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             ploidy_bed_female = ploidy_bed_female,
@@ -53,6 +55,7 @@ task Workpackage9SquishImpl {
         File sv_integration_chunk_tsv
         String remote_indir
         String remote_outdir
+        Int only_50_bp
         
         File reference_fa
         File reference_fai
@@ -157,6 +160,12 @@ task Workpackage9SquishImpl {
                 break
             fi
         done
+        if [ ~{only_50_bp} -ne 0 ]; then
+            bcftools filter --include 'SVLEN>=50 || SVLEN<=-50' --output-type z truvari_collapsed_for_kanpig.vcf.gz > tmp.vcf.gz
+            rm -f truvari_collapsed_for_kanpig.vcf.gz*
+            mv tmp.vcf.gz truvari_collapsed_for_kanpig.vcf.gz
+            tabix -f truvari_collapsed_for_kanpig.vcf.gz
+        fi
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
