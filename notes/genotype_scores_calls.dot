@@ -1,0 +1,35 @@
+digraph G {
+
+genotype_scores [label="genotype_scores() \n metrics.rs" shape="none"];
+genotyper [label="genotyper() \n metrics.rs" shape="none"];
+genotype_quals [label="genotype_quals() \n metrics.rs" shape="none"];
+finalize_annotation [label="finalize_annotation() \n annotator.rs" shape="none"];
+handle_diploid_single_path [label="handle_diploid_single_path() \n annotator.rs" shape="none"];
+haploid [label="haploid() \n annotator.rs" shape="none"];
+diploid [label="diploid() \n annotator.rs" shape="none"];
+diploid_haplotypes [label="diploid_haplotypes() \n cluster.rs" shape="none"];
+cluster [label="cluster() \n ploidy.rs" shape="none"];
+task_thread [label="task_thread() \n genotype_main.rs" shape="none"];
+genotype_anno_new [label="GenotypeAnno.new() \n annotator.rs" shape="none"];
+variants_clone_annotated [label="Variants.__clone_annotated() \n vargraph.rs" shape="none"];
+variants_take_annotated [label="Variants.take_annotated() \n vargraph.rs" shape="none"];
+
+genotyper -> genotype_scores;
+genotype_quals -> genotype_scores;
+finalize_annotation -> genotyper;
+finalize_annotation -> genotype_quals;
+handle_diploid_single_path -> genotyper;
+haploid -> finalize_annotation;
+diploid -> finalize_annotation;
+diploid -> handle_diploid_single_path;
+diploid_haplotypes -> genotyper;
+cluster -> diploid_haplotypes;
+task_thread -> cluster;
+genotype_anno_new -> haploid;
+genotype_anno_new -> diploid;
+variants_clone_annotated -> genotype_anno_new;
+variants_take_annotated -> genotype_anno_new;
+
+
+
+}
