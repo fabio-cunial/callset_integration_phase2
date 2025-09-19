@@ -1,14 +1,15 @@
 SOURCE_DIR='.';
-FONT_SIZE=14;
+FONT_SIZE=16;
 DELTA=0.4;
 %LABELS={'V1','ND1','ND2', 'ND3','HS1','HS2', 'HS3','HS4','SZ1', 'SZ2','SS1','SS2', 'MQ1','MQ2','MQ3', 'MQ4'};
 %LABELS={'V1','SZ1','SZ2','SS1','SS2','MQ1','MQ2','MQ3','MQ4'};
-LABELS={'V1','BB','0.1','0.01','0.2','no<10'};
+LABELS={'V1','>=50','T','S','S>=50'};
 N_ARGS=length(LABELS);
 %N_TOTAL_ARGS=16;
-N_TOTAL_ARGS=6;
-MAX_MENDELIAN_ERROR=0.15;
-MAX_DE_NOVO=0.16;
+N_TOTAL_ARGS=5;
+MAX_MENDELIAN_ERROR=0.16;
+MAX_DE_NOVO=0.2;
+PREFIX='triomerge';  %   'squish_trios';
 
 % Columns:
 % ${N_GOOD_ALT_i},${N_MERR_i},
@@ -21,7 +22,7 @@ MAX_DE_NOVO=0.16;
 figure(1);
 
 # All, 07.
-A=load(sprintf('%s/squish_trios_all.csv',SOURCE_DIR));
+A=load(sprintf('%s/%s_all.csv',SOURCE_DIR,PREFIX));
 
 [nrows,ncolumns]=size(A);
 
@@ -47,7 +48,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 # TR, 07.
-A=load(sprintf('%s/squish_trios_tr.csv',SOURCE_DIR));
+A=load(sprintf('%s/%s_tr.csv',SOURCE_DIR,PREFIX));
 [nrows,ncolumns]=size(A);
 
 subplot(2,3,2); hold on;
@@ -72,7 +73,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 
 # Not TR, 07.
-A=load(sprintf('%s/squish_trios_not_tr.csv',SOURCE_DIR));
+A=load(sprintf('%s/%s_not_tr.csv',SOURCE_DIR,PREFIX));
 [nrows,ncolumns]=size(A);
 
 subplot(2,3,3); hold on;

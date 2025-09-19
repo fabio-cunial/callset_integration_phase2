@@ -35,6 +35,7 @@ public class CheckDeNovoNumneigh {
         long[][] ins_len_to_numerator, ins_len_to_denominator;
         long[][] del_len_to_numerator, del_len_to_denominator;
         long[][] numneigh_to_numerator, numneigh_to_denominator;
+        long[] numerator, denominator;
         
         // Computing the number of trios
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
@@ -55,6 +56,8 @@ public class CheckDeNovoNumneigh {
         del_len_to_denominator = new long[N_LENGTHS][nTrios];
         numneigh_to_numerator = new long[N_NEIGHBORS.length][nTrios];
         numneigh_to_denominator = new long[N_NEIGHBORS.length][nTrios];
+        numerator = new long[nTrios];
+        denominator = new long[nTrios];
         
         // Computing counts
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
@@ -118,6 +121,7 @@ public class CheckDeNovoNumneigh {
                     continue;
                 }
                 numneigh_to_denominator[numneighIndex][i]++;
+                denominator[i]++;
                 if (gtFather.indexOf("1")<0 && gtMother.indexOf("1")<0) {
                     // De novo
                     if (svtype.equalsIgnoreCase("INS")) {
@@ -129,6 +133,7 @@ public class CheckDeNovoNumneigh {
                         del_len_to_numerator[lengthIndex][i]++;
                     }
                     numneigh_to_numerator[numneighIndex][i]++;
+                    numerator[i]++;
                 }
                 else {
                     // Not a de novo
@@ -147,6 +152,7 @@ public class CheckDeNovoNumneigh {
         printMatrix(del_len_to_numerator,del_len_to_denominator,TRIO_MATRIX_TSV+"_del_len_to_denovo_rate.txt");
         printMatrix(numneigh_to_numerator,numneigh_to_denominator,TRIO_MATRIX_TSV+"_numneigh_to_denovo_rate.txt");
         printMatrix(numneigh_to_denominator,TRIO_MATRIX_TSV+"_numneigh.txt");
+        for (i=0; i<nTrios; i++) System.out.println(((double)numerator[i])/denominator[i]);
     }
     
     

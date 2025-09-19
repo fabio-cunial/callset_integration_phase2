@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 TRIOS_TSV="/Users/fcunial/Downloads/trios_only_5.tsv"
-INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish/ad_denovo_plot/gt_matrix_numneigh"
+INPUT_DIR="/Users/fcunial/Downloads/BenchCohortTrios_squish/ad_denovo_plot/gt_matrix_only50bp"
 
 MAX_AD="50"
-IDS="v1 beta_binomial"
+IDS="only_50bp"  #"v1 beta_binomial"
 
 
 set -euxo pipefail
