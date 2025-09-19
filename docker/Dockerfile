@@ -168,6 +168,11 @@ RUN wget https://github.com/TimD1/vcfdist/archive/refs/tags/v${vcfdist_version}.
     && make install \
     && vcfdist --help
 
+# MAFFT
+ARG mafft_version=mafft_7.505-1_amd64.deb
+RUN wget https://mafft.cbrc.jp/alignment/software/${mafft_version} \
+    && dpkg -i ${mafft_version} && rm ${mafft_version}
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java

@@ -340,3 +340,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TestBetaBinomial3.wdl
   testParameterFiles:      
+- name: PhabTrios
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PhabTrios.wdl
+  testParameterFiles:      
