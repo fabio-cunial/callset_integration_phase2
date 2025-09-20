@@ -16,6 +16,7 @@ workflow PhabTrios {
         File tandem_bed
         
         String phab_align = "wfa"
+        Int max_region_length = 10000
     }
     parameter_meta {
         intersample_vcf_gz: "Assumed to contain only a few samples, i.e. we do not subset to only the samples in the trios internally."
@@ -30,7 +31,8 @@ workflow PhabTrios {
     }
     call GetRegions {
         input:
-            intersample_vcf_gz = intersample_vcf_gz
+            intersample_vcf_gz = intersample_vcf_gz,
+            max_region_length = max_region_length
     }
     scatter (i in range(n_trios)) {
         call PhabTrio {
@@ -59,6 +61,7 @@ workflow PhabTrios {
 task GetRegions {
     input {
         File intersample_vcf_gz
+        Int max_region_length
     }
     parameter_meta {
         intersample_vcf_gz: "A VCF that has been re-genotyped with kanpig and carries all the corresponding annotations."
@@ -73,7 +76,7 @@ task GetRegions {
         TIME_COMMAND="/usr/bin/time --verbose"
         
         
-        ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigRegions ~{intersample_vcf_gz} > regions.bed
+        ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigRegions ~{intersample_vcf_gz} ~{max_region_length} > regions.bed
     >>>
 
     output {
