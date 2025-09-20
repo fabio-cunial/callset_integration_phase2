@@ -203,10 +203,15 @@ task PhabTrio {
         ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
         ${TIME_COMMAND} bcftools query -f '[%GT]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
         rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
+        
+        # Outputting
+        mv harmonized.vcf.gz ${PROBAND_ID}_harmonized.vcf.gz
+        mv harmonized.vcf.gz.tbi ${PROBAND_ID}_harmonized.vcf.gz.tbi
     >>>
     
     output {
         Array[File] out_txt = glob("*.txt")
+        Array[File] out_vcf_gz = glob("*_harmonized.vcf.gz*")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
