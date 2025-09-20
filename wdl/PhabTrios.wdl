@@ -133,6 +133,20 @@ task ComplementBed {
 }
 
 
+# Remark: the output of `truvari phab` does not preserve any input field, e.g.:
+#
+# chr1    996401  .       A       C       .       .       .       GT      1/0
+# chr1    996410  .       T       G       .       .       .       GT      1/0
+# chr1    996414  .       G       A       .       .       .       GT      1/0
+# chr1    996427  .       G       A       .       .       .       GT      1/0
+# chr1    996458  .       A       G       .       .       .       GT      1/0
+#
+# Performance on a VM with 16 virtual cores and 32GB of RAM:
+#
+# METHOD    CPU%    RAM     TIME
+# wfa       700%    1.3G    1h20m
+# poa       1000%   4.2G    2h15m
+# mafft     1500%   2.6G    50m
 #
 task PhabTrio {
     input {
@@ -190,18 +204,18 @@ task PhabTrio {
         # Benchmarking
         OUTPUT_PREFIX="phab"
         ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
         # Inside TRs
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
         tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
         ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
         rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
         # Outside TRs
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
         tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
         ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
         rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
         
         # Outputting
