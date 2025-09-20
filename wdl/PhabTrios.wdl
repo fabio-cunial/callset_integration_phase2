@@ -188,6 +188,7 @@ task PhabTrio {
         rm -f trio.vcf.gz*
         
         # Benchmarking
+        OUTPUT_PREFIX="phab"
         ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
         ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
         # Inside TRs
