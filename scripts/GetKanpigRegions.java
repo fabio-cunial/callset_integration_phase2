@@ -14,6 +14,7 @@ public class GetKanpigRegions {
      */
     public static void main(String[] args) throws IOException {
         final String KANPIG_VCF_GZ = args[0];
+        final int MAX_REGION_LENGTH = Integer.parseInt(args[1]);
         
         final int QUANTUM = 10000;  // Arbitrary
         
@@ -52,7 +53,7 @@ public class GetKanpigRegions {
                 end=pos+(refLength-1)-1;
             }
             if (region!=currentRegion) {
-                if (currentRegion!=-1) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1));
+                if (currentRegion!=-1 && currentEnd-currentStart+1<=MAX_REGION_LENGTH) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1));
                 currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end;
             }
             else {
