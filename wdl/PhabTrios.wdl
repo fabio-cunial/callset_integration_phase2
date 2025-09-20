@@ -190,18 +190,18 @@ task PhabTrio {
         # Benchmarking
         OUTPUT_PREFIX="phab"
         ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-        ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
         # Inside TRs
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
         tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
         ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-        ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
         rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
         # Outside TRs
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
         tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
         ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-        ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+        ${TIME_COMMAND} bcftools query -f '[%GT]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
         rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
     >>>
     
