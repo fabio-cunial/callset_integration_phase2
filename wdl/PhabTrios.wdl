@@ -183,7 +183,7 @@ task PhabTrio {
         rm -f tmp.vcf.gz*
         
         # Harmonizing
-        ${TIME_COMMAND} truvari phab --debug --threads ${N_THREADS} --align ~{phab_align} --baseline trio.vcf.gz --region ~{regions_bed} --reference ~{reference_fa} --output harmonized.vcf.gz
+        ${TIME_COMMAND} truvari phab --debug -t ${N_THREADS} --align ~{phab_align} -b trio.vcf.gz -r ~{regions_bed} -f ~{reference_fa} -o harmonized.vcf.gz
         tabix -f harmonized.vcf.gz
         rm -f trio.vcf.gz*
         
