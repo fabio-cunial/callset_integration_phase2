@@ -16,11 +16,15 @@ workflow PhabTrios {
         File tandem_bed
         
         String phab_align = "wfa"
+        Int only_50_bp_construct = 0
+        Int only_50_bp_bench = 1
         Int max_region_length = 10000
     }
     parameter_meta {
         intersample_vcf_gz: "Assumed to contain only a few samples, i.e. we do not subset to only the samples in the trios internally."
         phab_align: "Possible values: mafft, wfa, poa."
+        only_50_bp_construct: "Use only calls >=50bp to build haplotypes for harmonization."
+        only_50_bp_bench: "Benchmark only calls >=50bp."
     }
     
     
@@ -48,7 +52,9 @@ workflow PhabTrios {
                 not_tandem_bed = ComplementBed.complement_bed,
             
                 phab_align = phab_align,
-                regions_bed = GetRegions.regions_bed
+                regions_bed = GetRegions.regions_bed,
+                only_50_bp_construct = only_50_bp_construct,
+                only_50_bp_bench = only_50_bp_bench
         }
     }
     
@@ -162,6 +168,8 @@ task PhabTrio {
         
         String phab_align
         File regions_bed
+        Int only_50_bp_construct
+        Int only_50_bp_bench
         
         Int n_cpu
         Int ram_size_gb
@@ -170,6 +178,8 @@ task PhabTrio {
     parameter_meta {
         intersample_vcf_gz: "Assumed to contain only a few samples, i.e. we do not subset to only the samples in the trios internally."
         phab_align: "Possible values: mafft, wfa, poa."
+        only_50_bp_construct: "Use only calls >=50bp to build haplotypes for harmonization."
+        only_50_bp_bench: "Benchmark only calls >=50bp."
     }
     
     String docker_dir = "/callset_integration"
@@ -190,33 +200,57 @@ task PhabTrio {
         PROBAND_ID=$(cut -f 2 ped.tsv)
         FATHER_ID=$(cut -f 3 ped.tsv)
         MOTHER_ID=$(cut -f 4 ped.tsv)
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > tmp.vcf.gz
+        if [ ~{only_50_bp_construct} -ne 0 ]; then
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'SVLEN>=50 || SVLEN<=-50' --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > tmp.vcf.gz
+        else
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > tmp.vcf.gz
+        fi
         tabix -f tmp.vcf.gz
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp.vcf.gz > trio.vcf.gz
         tabix -f trio.vcf.gz
         rm -f tmp.vcf.gz*
         
         # Harmonizing
-        ${TIME_COMMAND} truvari phab --debug -t ${N_THREADS} --align ~{phab_align} -b trio.vcf.gz -r ~{regions_bed} -f ~{reference_fa} -o harmonized.vcf.gz
-        tabix -f harmonized.vcf.gz
+        ${TIME_COMMAND} truvari phab --debug -t ${N_THREADS} --align ~{phab_align} -b trio.vcf.gz -r ~{regions_bed} -f ~{reference_fa} -o tmp.vcf.gz
+        tabix -f tmp.vcf.gz
         rm -f trio.vcf.gz*
+        ${TIME_COMMAND} truvari anno svinfo -o harmonized.vcf.gz tmp.vcf.gz
+        tabix -f harmonized.vcf.gz
+        rm -f tmp.vcf.gz*
         
         # Benchmarking
         OUTPUT_PREFIX="phab"
-        ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
-        # Inside TRs
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-        tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-        ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
-        rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
-        # Outside TRs
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-        tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-        ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-        ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
-        rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
+        if [ ~{only_50_bp_bench} -ne 0 ]; then
+            ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT\t]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+            # Inside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
+            # Outside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
+        else
+            ${TIME_COMMAND} bcftools +mendelian2 harmonized.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' harmonized.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+            # Inside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
+            # Outside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z harmonized.vcf.gz > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT\t]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
+        fi    
         
         # Outputting
         mv harmonized.vcf.gz ${PROBAND_ID}_harmonized.vcf.gz
