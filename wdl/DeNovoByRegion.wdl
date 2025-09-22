@@ -130,14 +130,13 @@ task Impl {
         FATHER_ID=$(cut -f 3 ped.tsv)
         MOTHER_ID=$(cut -f 4 ped.tsv)
         if [ ~{only_50_bp} -ne 0 ]; then
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'SVLEN>=50 || SVLEN<=-50' --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > tmp.vcf.gz
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'SVLEN>=50 || SVLEN<=-50' --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > trio.vcf.gz
         else
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > tmp.vcf.gz
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ~{intersample_vcf_gz} > trio.vcf.gz
         fi
-        tabix -f tmp.vcf.gz
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp.vcf.gz > trio.vcf.gz
         tabix -f trio.vcf.gz
-        rm -f tmp.vcf.gz*
+        # Keeping all calls in the inter-sample VCF, including those that do
+        # not appear in the trio, since they are needed by `GetKanpigRegions`.
         
         # Counting
         ${TIME_COMMAND} bcftools +mendelian2 trio.vcf.gz -m a -P ped.tsv -O z -o annotated.vcf.gz

@@ -9,7 +9,10 @@ import java.io.*;
 public class GetKanpigRegions {
     
     /**
-     * @param args 0 a VCF whose FORMAT field is assumed to be:
+     * Remark: the program handles calls that do not occur in any individual of
+     * the first trio.
+     *
+     * @param args 0 a VCF with >=3 samples and whose FORMAT field is:
      *
      * GT:FT:SQ:GQ:PS:NE:DP:AD:KS
      *
@@ -25,8 +28,8 @@ public class GetKanpigRegions {
         final String MERR_STR = "MERR=";
         final int MERR_STR_LENGTH = MERR_STR.length();
         
-        boolean merr;
-        int p;
+        boolean merr, presentChild, presentFather, presentMother;
+        int p, q;
         int pos, region, refLength, altLength, start, end, currentRegion, currentStart, currentEnd, nRecords, numerator, denominator;
         String str, chr, currentChr;
         BufferedReader br;
@@ -66,18 +69,28 @@ public class GetKanpigRegions {
                 merr=tokens[7].charAt(p+MERR_STR_LENGTH)=='1'?true:false;
             }
             else merr=false;
+            p=tokens[9].indexOf(":"); q=tokens[9].indexOf("1"); presentChild=q>=0&&q<p;
+            p=tokens[10].indexOf(":"); q=tokens[10].indexOf("1"); presentFather=q>=0&&q<p;
+            p=tokens[11].indexOf(":"); q=tokens[11].indexOf("1"); presentMother=q>=0&&q<p;
             if (region!=currentRegion) {
-                if (currentRegion!=-1 && currentEnd-currentStart+1<=MAX_REGION_LENGTH) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
-                currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end; numerator=merr?1:0; denominator=1;
+                if (currentRegion!=-1 && currentEnd-currentStart+1<=MAX_REGION_LENGTH && denominator>0) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
+                currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end; 
+                if (presentChild||presentFather||presentMother) { numerator=merr?1:0; denominator=1; }
+                else { numerator=0; denominator=0; }
             }
             else {
                 if (end>currentEnd) currentEnd=end;
-                if (merr) numerator++;
-                denominator++;
+                if (presentChild||presentFather||presentMother) {
+                    if (merr) numerator++;
+                    denominator++;
+                }
+                else {
+                    // NOP
+                }
             }
             str=br.readLine();
         }
-        System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
+        if (denominator>0) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
         br.close();
     }
     
