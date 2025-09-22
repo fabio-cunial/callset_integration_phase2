@@ -139,7 +139,8 @@ task ComplementBed {
 }
 
 
-# Remark: the output of `truvari phab` does not preserve any input field, e.g.:
+# Remark: the output of `truvari phab` can include also short calls and does
+# not preserve any input field, e.g.:
 #
 # chr1    996401  .       A       C       .       .       .       GT      1/0
 # chr1    996410  .       T       G       .       .       .       GT      1/0

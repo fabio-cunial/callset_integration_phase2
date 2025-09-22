@@ -345,3 +345,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PhabTrios.wdl
   testParameterFiles:      
+- name: DeNovoByRegion
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/DeNovoByRegion.wdl
+  testParameterFiles:

@@ -10,22 +10,31 @@ public class GetKanpigRegions {
     
     /**
      * @param args 0 a VCF whose FORMAT field is assumed to be:
+     *
      * GT:FT:SQ:GQ:PS:NE:DP:AD:KS
+     *
+     * If the VCF was annotated with `bcftools +mendelian2 -m a`, the output BED
+     * contains two additional columns: number of calls with a Mendelian error
+     * in the region; total number of calls in the region.
      */
     public static void main(String[] args) throws IOException {
         final String KANPIG_VCF_GZ = args[0];
         final int MAX_REGION_LENGTH = Integer.parseInt(args[1]);
         
         final int QUANTUM = 10000;  // Arbitrary
+        final String MERR_STR = "MERR=";
+        final int MERR_STR_LENGTH = MERR_STR.length();
         
-        int pos, region, refLength, altLength, start, end, currentRegion, currentStart, currentEnd, nRecords;
+        boolean merr;
+        int p;
+        int pos, region, refLength, altLength, start, end, currentRegion, currentStart, currentEnd, nRecords, numerator, denominator;
         String str, chr, currentChr;
         BufferedReader br;
         String[] tokens, tokensPrime;
         
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(KANPIG_VCF_GZ))));
         str=br.readLine(); nRecords=0; 
-        currentRegion=-1; currentChr=""; currentStart=-1; currentEnd=-1;
+        currentRegion=-1; currentChr=""; currentStart=-1; currentEnd=-1; numerator=0; denominator=0;
         while (str!=null) { 
             if (str.charAt(0)=='#') { str=br.readLine(); continue; }
             nRecords++;
@@ -52,16 +61,23 @@ public class GetKanpigRegions {
                 start=(pos+1)-1;
                 end=pos+(refLength-1)-1;
             }
+            p=tokens[7].indexOf(MERR_STR);
+            if (p>=0) {
+                merr=tokens[7].charAt(p+MERR_STR_LENGTH)=='1'?true:false;
+            }
+            else merr=false;
             if (region!=currentRegion) {
-                if (currentRegion!=-1 && currentEnd-currentStart+1<=MAX_REGION_LENGTH) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1));
-                currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end;
+                if (currentRegion!=-1 && currentEnd-currentStart+1<=MAX_REGION_LENGTH) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
+                currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end; numerator=merr?1:0; denominator=1;
             }
             else {
                 if (end>currentEnd) currentEnd=end;
+                if (merr) numerator++;
+                denominator++;
             }
             str=br.readLine();
         }
-        System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1));
+        System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+denominator+"\t"+numerator);
         br.close();
     }
     
