@@ -6,6 +6,8 @@ version 1.0
 workflow Workpackage9Squish {
     input {
         File sv_integration_chunk_tsv
+        Int n_rows
+        
         String remote_indir
         String remote_outdir
         Int only_50_bp
@@ -24,20 +26,23 @@ workflow Workpackage9Squish {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
     }
     
-    call Workpackage9SquishImpl {
-        input:
-            sv_integration_chunk_tsv = sv_integration_chunk_tsv,
-            remote_indir = remote_indir,
-            remote_outdir = remote_outdir,
-            only_50_bp = only_50_bp,
-            reference_fa = reference_fa,
-            reference_fai = reference_fai,
-            ploidy_bed_female = ploidy_bed_female,
-            ploidy_bed_male = ploidy_bed_male,
-            n_cpu = n_cpu,
-            ram_size_gb = ram_size_gb,
-            disk_size_gb = disk_size_gb,
-            kanpig_params_multisample = kanpig_params_multisample
+    scatter (i in range(n_rows)) {
+        call Workpackage9SquishImpl {
+            input:
+                sv_integration_chunk_tsv = sv_integration_chunk_tsv,
+                selected_row = i+1,
+                remote_indir = remote_indir,
+                remote_outdir = remote_outdir,
+                only_50_bp = only_50_bp,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                ploidy_bed_female = ploidy_bed_female,
+                ploidy_bed_male = ploidy_bed_male,
+                n_cpu = n_cpu,
+                ram_size_gb = ram_size_gb,
+                disk_size_gb = disk_size_gb,
+                kanpig_params_multisample = kanpig_params_multisample
+        }
     }
     
     output {
@@ -53,6 +58,8 @@ workflow Workpackage9Squish {
 task Workpackage9SquishImpl {
     input {
         File sv_integration_chunk_tsv
+        Int selected_row
+        
         String remote_indir
         String remote_outdir
         Int only_50_bp
@@ -166,7 +173,7 @@ task Workpackage9SquishImpl {
             mv tmp.vcf.gz truvari_collapsed_for_kanpig.vcf.gz
             tabix -f truvari_collapsed_for_kanpig.vcf.gz
         fi
-        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
+        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' | head -n ~{selected_row} | tail -n 1 > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)

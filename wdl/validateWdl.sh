@@ -3,10 +3,10 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l Workpackage9Squish.wdl
 java -jar ${WOMTOOL_PATH} validate -l DeNovoByRegion.wdl
 java -jar ${WOMTOOL_PATH} validate -l PhabTrios.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestKanpigIntersample.wdl
-java -jar ${WOMTOOL_PATH} validate -l Workpackage9Squish.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial3.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish3.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestBetaBinomial_Merge.wdl

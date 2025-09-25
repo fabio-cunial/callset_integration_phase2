@@ -18,9 +18,10 @@ public class GetKanpigRegions {
      *
      * If the VCF was annotated with `bcftools +mendelian2 -m a`, the output BED
      * contains 3 additional columns for each region: 
-     * 1. number of calls with a Mendelian error; 
-     * 2. total number of calls that occur in >=1 samples;
-     * 3. total number of calls in the input VCF.
+     * 4. total number of calls that are non-missing in every sample and that 
+     *    occur in some sample;
+     * 5. number of calls above that have a Mendelian error; 
+     * 6. total number of calls in the input VCF (no constraints on their GTs).
      */
     public static void main(String[] args) throws IOException {
         final String KANPIG_VCF_GZ = args[0];

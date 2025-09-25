@@ -3,13 +3,13 @@ FONT_SIZE=16;
 DELTA=0.4;
 %LABELS={'V1','ND1','ND2', 'ND3','HS1','HS2', 'HS3','HS4','SZ1', 'SZ2','SS1','SS2', 'MQ1','MQ2','MQ3', 'MQ4'};
 %LABELS={'V1','SZ1','SZ2','SS1','SS2','MQ1','MQ2','MQ3','MQ4'};
-LABELS={'V1','>=50','T','S','S>=50'};
+LABELS={'V1','MAF_1','MAF_2','POA','WFA'};
 N_ARGS=length(LABELS);
 %N_TOTAL_ARGS=16;
 N_TOTAL_ARGS=5;
-MAX_MENDELIAN_ERROR=0.16;
-MAX_DE_NOVO=0.2;
-PREFIX='triomerge';  %   'squish_trios';
+MAX_MENDELIAN_ERROR=0.14;
+MAX_DE_NOVO=0.4;
+PREFIX='triophab';     %'triomerge';  %   'squish_trios';
 
 % Columns:
 % ${N_GOOD_ALT_i},${N_MERR_i},
