@@ -1,7 +1,6 @@
 version 1.0
 
 
-# Simpler variant with just one BAM in input.
 #
 workflow SubsampleAlignedBam {
     input {
@@ -114,6 +113,6 @@ task SubsampleImpl {
         cpu: n_cores
         memory: mem_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 2
     }
 }
