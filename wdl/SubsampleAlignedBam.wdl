@@ -37,7 +37,7 @@ workflow SubsampleAlignedBam {
 # Performance with 16 cores and 32GB of RAM on a 66x, 158GB BAM:
 #
 # COMMAND           CPU     RAM     TIME
-# samtools view     XXXX%   XXG     XXm
+# samtools view     400%    30M     20m       // regardless of sampling factor
 #
 task SubsampleImpl {
     input {
@@ -50,8 +50,8 @@ task SubsampleImpl {
         String target_coverages
         String remote_output_dir
 
-        Int n_cores = 16
-        Int mem_gb = 32
+        Int n_cores = 8
+        Int mem_gb = 8
     }
     parameter_meta {
         target_coverages: "Comma-separated. Each coverage is sampled independently, so there is no guarantee that a bigger-coverage sample contains the alignments in a smaller-coverage sample."
@@ -87,10 +87,13 @@ task SubsampleImpl {
         echo ~{target_coverages} | tr ',' '\n' > coverages.txt
         N_COVERAGES=$(wc -l < coverages.txt)
         N_THREADS_PER_COVERAGE=$(( ${N_THREADS} / ${N_COVERAGES} ))
+        date
         while read COVERAGE; do
             subsample ${COVERAGE} ~{sample_id} ${N_THREADS_PER_COVERAGE} &
         done < coverages.txt
         wait
+        date
+        ls -laht
         
         # Uploading
         while : ; do
