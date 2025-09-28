@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SubsampleAlignedBam.wdl
 java -jar ${WOMTOOL_PATH} validate -l Workpackage9Squish.wdl
 java -jar ${WOMTOOL_PATH} validate -l DeNovoByRegion.wdl
 java -jar ${WOMTOOL_PATH} validate -l PhabTrios.wdl
