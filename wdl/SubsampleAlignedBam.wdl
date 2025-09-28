@@ -54,7 +54,7 @@ task SubsampleImpl {
         Int mem_gb = 32
     }
     parameter_meta {
-        target_coverages: "Comma-separated. Each coverage is sampled independently, so there is guarantee that a bigger coverage contains the alignments in a smaller coverage."
+        target_coverages: "Comma-separated. Each coverage is sampled independently, so there is no guarantee that a bigger-coverage sample contains the alignments in a smaller-coverage sample."
         n_cores: ">=1 per coverage"
     }
     
