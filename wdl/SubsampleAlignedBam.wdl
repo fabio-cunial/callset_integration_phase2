@@ -9,7 +9,7 @@ workflow SubsampleAlignedBam {
         
         File aligned_bam
         File aligned_bai
-        File aligned_bam_coverage
+        Float aligned_bam_coverage
         
         String target_coverages = "15,30"
         String remote_output_dir
@@ -34,7 +34,7 @@ workflow SubsampleAlignedBam {
 }
 
 
-# Performance with 16 cores and 32GB of RAM on a XXXGB BAM:
+# Performance with 16 cores and 32GB of RAM on a 66x, 158GB BAM:
 #
 # COMMAND           CPU     RAM     TIME
 # samtools view     XXXX%   XXG     XXm
@@ -45,7 +45,7 @@ task SubsampleImpl {
         
         File aligned_bam
         File aligned_bai
-        File aligned_bam_coverage
+        Float aligned_bam_coverage
         
         String target_coverages
         String remote_output_dir
