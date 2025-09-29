@@ -220,6 +220,11 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/MapCCSPhase2Prime.wdl
   testParameterFiles:
+- name: MapCCSPhase2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/MapCCSPhase2.wdl
+  testParameterFiles:
 - name: AddReadGroup
   subclass: wdl
   publish: True
