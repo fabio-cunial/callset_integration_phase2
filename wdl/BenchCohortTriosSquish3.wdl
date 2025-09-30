@@ -16,10 +16,12 @@ workflow BenchCohortTriosSquish3 {
         
         File tandem_bed
         File reference_fai
+        File? hardfilter_bed
     }
     parameter_meta {
         ped_tsv: "In the format used by `bcftools +mendelian2`: `<ignored>,proband,father,mother,sex(1:male,2:female)`."
         squish_ids: "Unique ID of each file in `squish_vcf_gz` (comma-separated)."
+        hardfilter_bed: "If defined, every VCF is hard-filtered to these regions before benchmarking."
     }
     
     call ComplementBed {
@@ -39,7 +41,8 @@ workflow BenchCohortTriosSquish3 {
                 squish_ids = squish_ids,
                 
                 tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed
+                not_tandem_bed = ComplementBed.complement_bed,
+                hardfilter_bed = hardfilter_bed
         }
     }
     
@@ -108,6 +111,7 @@ task BenchTrio {
         
         File tandem_bed
         File not_tandem_bed
+        File? hardfilter_bed
         
         Int n_cpu = 22
         Int ram_size_gb = 128
@@ -115,6 +119,7 @@ task BenchTrio {
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
         squish_ids: "Unique ID of each file in `squish_vcf_gz` (comma-separated)."
+        hardfilter_bed: "If defined, every VCF is hard-filtered to these regions before benchmarking."
     }
     
     Int n_squish = length(squish_vcf_gz)
@@ -135,7 +140,14 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local ID=$2
             
-            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ${INPUT_VCF_GZ} > tmp1_${ID}.vcf.gz
+            if [ ~{defined(hardfilter_bed)} ]; then
+                ${TIME_COMMAND} bcftools view --threads 1 --regions-file ~{hardfilter_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp0_${ID}.vcf.gz
+                tabix -f tmp0_${ID}.vcf.gz
+                HARDFILTERED_VCF_GZ="tmp0_${ID}.vcf.gz"
+            else
+                HARDFILTERED_VCF_GZ=${INPUT_VCF_GZ}
+            fi
+            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z ${HARDFILTERED_VCF_GZ} > tmp1_${ID}.vcf.gz
             tabix -f tmp1_${ID}.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp1_${ID}.vcf.gz > tmp2_${ID}.vcf.gz
             tabix -f tmp2_${ID}.vcf.gz

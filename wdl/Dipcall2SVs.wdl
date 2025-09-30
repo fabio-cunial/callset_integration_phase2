@@ -38,12 +38,9 @@ task Dipcall2SVsImpl {
     Int disk_size_gb = 10*ceil(size(input_vcf_gz,"GB"))
     Int ram_size_gb = 4
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
@@ -58,8 +55,8 @@ task Dipcall2SVsImpl {
     >>>
     
     output {
-        File sv_vcf_gz = work_dir + "/" + sample_id + "_sv.vcf.gz"
-        File sv_tbi = work_dir + "/" + sample_id + "_sv.vcf.gz.tbi"
+        File sv_vcf_gz = sample_id + "_sv.vcf.gz"
+        File sv_tbi = sample_id + "_sv.vcf.gz.tbi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"

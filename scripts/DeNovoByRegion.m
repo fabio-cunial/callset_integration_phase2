@@ -64,6 +64,41 @@ ylabel('De novo rate per kanpig window'); xlabel('Center of a kanpig window (chr
 
 
 
+
+figure(3);
+QUANTUM=2500000;  % Arbitrary
+for i=[1:3]
+    subplot(5,1,i); hold on;
+    B=zeros(100,3);
+    A=load(sprintf('%s/%s_all_chr1.tsv',INPUT_DIR,SAMPLES{i}));
+    for k=[1:length(A)]
+        j=floor( (A(k,2)+A(k,1))/(2*QUANTUM) )+1;
+        if (j<=100) 
+            B(j,1)=B(j,1)+A(k,3);
+            B(j,2)=B(j,2)+A(k,4);
+            B(j,3)=B(j,3)+A(k,5);
+        endif
+    endfor
+    bar([1:100].*QUANTUM,B(:,2)./B(:,1),'stacked');
+    xlabel('chr1 POS'); title(sprintf('Mendelian error rate, child %s',SAMPLES{i})); grid on; axis([0,250000000,0,0.4]); set(gca,'fontsize',FONT_SIZE);
+endfor
+
+
+# Computed with bcftools view on every chunk of length 25000 of
+# `truvari_collapsed_for_kanpig.vcf.gz` (stringent).
+ALL_CALLS_07_CHR1=load(sprintf('%s/all_calls_07_chr1.txt',INPUT_DIR));
+subplot(5,1,4);
+bar([1:100].*QUANTUM,ALL_CALLS_07_CHR1);
+xlabel('chr1 POS'); title('Total calls in the stringent inter-sample VCF'); grid on; axis([0,250000000,0,12000]); set(gca,'fontsize',FONT_SIZE);
+
+ALL_CALLS_09_CHR1=load(sprintf('%s/all_calls_09_chr1.txt',INPUT_DIR));
+subplot(5,1,5);
+bar([1:100].*QUANTUM,ALL_CALLS_09_CHR1);
+xlabel('chr1 POS'); title('Total calls in the lenient inter-sample VCF'); grid on; axis([0,250000000,0,25000]); set(gca,'fontsize',FONT_SIZE);
+
+
+
+
 %
 % centers=zeros(23,2);
 % radii=zeros(23,1);

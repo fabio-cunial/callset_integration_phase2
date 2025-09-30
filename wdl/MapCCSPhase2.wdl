@@ -56,24 +56,26 @@ task MapCCSImpl {
     }
     
     Int disk_size_gb = ceil(size(reads_fastq_gz, "GB")) + ceil(size(reference_fa, "GB")) + disk_gb
-    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
         
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         # Remark: pbmm2 automatically uses all cores.
+        df -h
         pbmm2 align --preset CCS --sort --sample ~{sample_id} ~{reference_fa} ~{reads_fastq_gz} out.bam
         samtools calmd -@ ${N_THREADS} --no-PG -b out.bam ~{reference_fa} > ~{sample_id}.bam
         samtools index -@ ${N_THREADS} ~{sample_id}.bam
+        df -h
+        ls -laht
     >>>
     
     output {
-        File output_bam = work_dir + "/" + sample_id + ".bam"
-        File output_bai = work_dir + "/" + sample_id + ".bam.bai"
+        File output_bam = sample_id + ".bam"
+        File output_bai = sample_id + ".bam.bai"
     }
     runtime {
         docker: docker
