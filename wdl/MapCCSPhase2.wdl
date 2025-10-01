@@ -15,7 +15,6 @@ workflow MapCCSPhase2 {
         File reads_fastq_gz
         Int n_cpus
         Int ram_size_gb
-        Int disk_gb
         String docker = "us.gcr.io/broad-dsp-lrma/lr-smrttools:12.0.0.176214"
     }
     parameter_meta {
@@ -29,7 +28,6 @@ workflow MapCCSPhase2 {
             reads_fastq_gz = reads_fastq_gz,
             n_cpus = n_cpus,
             ram_size_gb = ram_size_gb,
-            disk_gb = disk_gb,
             docker = docker
     }
     
@@ -49,13 +47,12 @@ task MapCCSImpl {
         File reads_fastq_gz
         Int n_cpus
         Int ram_size_gb
-        Int disk_gb
         String docker
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = ceil(size(reads_fastq_gz, "GB")) + ceil(size(reference_fa, "GB")) + disk_gb
+    Int disk_size_gb = 4*(ceil(size(reads_fastq_gz, "GB")) + ceil(size(reference_fa, "GB")))
     
     command <<<
         set -euxo pipefail
