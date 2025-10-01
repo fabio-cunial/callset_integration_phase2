@@ -8,7 +8,7 @@ workflow FilterTruvariIntersample {
         File truvari_collapsed_vcf_gz
         File truvari_collapsed_tbi
         
-        Array[Int] ids
+        Array[String] ids
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
@@ -39,7 +39,7 @@ task Impl {
         File truvari_collapsed_vcf_gz
         File truvari_collapsed_tbi
         
-        Array[Int] ids
+        Array[String] ids
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
