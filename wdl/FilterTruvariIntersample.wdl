@@ -10,6 +10,7 @@ workflow FilterTruvariIntersample {
         
         Array[Int] ids
         Array[Int] min_depth
+        Array[Int] max_depth
         Array[Int] min_alt_reads
 
         Int n_cpus
@@ -24,6 +25,7 @@ workflow FilterTruvariIntersample {
             truvari_collapsed_tbi = truvari_collapsed_tbi,
             ids = ids,
             min_depth = min_depth,
+            max_depth = max_depth,
             min_alt_reads = min_alt_reads,
             n_cpus = n_cpus,
             ram_size_gb = ram_size_gb
@@ -44,6 +46,7 @@ task Impl {
         
         Array[Int] ids
         Array[Int] min_depth
+        Array[Int] max_depth
         Array[Int] min_alt_reads
 
         Int n_cpus
@@ -65,9 +68,10 @@ task Impl {
         function filter_thread() {
             local ID=$1
             local MIN_DEPTH=$2
-            local MIN_ALT_READS=$3
+            local MAX_DEPTH=$3
+            local MIN_ALT_READS=$4
             
-            FILTER_STRING="GT=\"alt\" && (DP < ${MIN_DEPTH} || AD[*:1] < ${MIN_ALT_READS})"
+            FILTER_STRING="GT=\"alt\" && (DP < ${MIN_DEPTH} || DP > ${MAX_DEPTH} || AD[*:1] < ${MIN_ALT_READS})"
             ${TIME_COMMAND} bcftools filter --exclude ${FILTER_STRING} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp.vcf.gz
             tabix -f ${ID}_tmp.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp.vcf.gz > ${ID}_filtered.vcf.gz
@@ -79,13 +83,15 @@ task Impl {
         # Main program
         echo ~{sep="," ids} | tr ',' '\n' > ids.txt
         echo ~{sep="," min_depth} | tr ',' '\n' > min_depth.txt
+        echo ~{sep="," max_depth} | tr ',' '\n' > max_depth.txt
         echo ~{sep="," min_alt_reads} | tr ',' '\n' > min_alt_reads.txt
-        paste -d , ids.txt min_depth.txt min_alt_reads.txt > tasks.tsv
+        paste -d , ids.txt min_depth.txt max_depth.txt min_alt_reads.txt > tasks.tsv
         while read ROW; do
             ID=$(echo ${ROW} | cut -d , -f 1)
             MIN_DEPTH=$(echo ${ROW} | cut -d , -f 2)
-            MIN_ALT_READS=$(echo ${ROW} | cut -d , -f 3)
-            filter_thread ${ID} ${MIN_DEPTH} ${MIN_ALT_READS} &
+            MAX_DEPTH=$(echo ${ROW} | cut -d , -f 3)
+            MIN_ALT_READS=$(echo ${ROW} | cut -d , -f 4)
+            filter_thread ${ID} ${MIN_DEPTH} ${MAX_DEPTH} ${MIN_ALT_READS} &
         done < tasks.tsv
         wait
         ls -laht
