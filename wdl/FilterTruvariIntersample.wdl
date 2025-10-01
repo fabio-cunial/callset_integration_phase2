@@ -1,0 +1,105 @@
+version 1.0
+
+
+# 
+#
+workflow FilterTruvariIntersample {
+    input {
+        File truvari_collapsed_vcf_gz
+        File truvari_collapsed_tbi
+        
+        Array[Int] ids
+        Array[Int] min_depth
+        Array[Int] min_alt_reads
+
+        Int n_cpus
+        Int ram_size_gb
+    }
+    parameter_meta {
+    }
+    
+    call Impl {
+        input:
+            truvari_collapsed_vcf_gz = truvari_collapsed_vcf_gz,
+            truvari_collapsed_tbi = truvari_collapsed_tbi,
+            ids = ids,
+            min_depth = min_depth,
+            min_alt_reads = min_alt_reads,
+            n_cpus = n_cpus,
+            ram_size_gb = ram_size_gb
+    }
+    
+    output {
+        Array[File] filtered_vcf_gz = Impl.filtered_vcf_gz
+        Array[File] filtered_tbi = Impl.filtered_tbi
+    }
+}
+
+
+#
+task Impl {
+    input {
+        File truvari_collapsed_vcf_gz
+        File truvari_collapsed_tbi
+        
+        Array[Int] ids
+        Array[Int] min_depth
+        Array[Int] min_alt_reads
+
+        Int n_cpus
+        Int ram_size_gb
+    }
+    parameter_meta {
+    }
+    
+    Int disk_size_gb = (length(ids)+1)*ceil(size(truvari_collapsed_vcf_gz, "GB"))
+    
+    command <<<
+        set -euxo pipefail
+        
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        function filter_thread() {
+            local ID=$1
+            local MIN_DEPTH=$2
+            local MIN_ALT_READS=$3
+            
+            FILTER_STRING="GT=\"alt\" && (DP < ${MIN_DEPTH} || AD[*:1] < ${MIN_ALT_READS})"
+            ${TIME_COMMAND} bcftools filter --exclude ${FILTER_STRING} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp.vcf.gz
+            tabix -f ${ID}_tmp.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp.vcf.gz > ${ID}_filtered.vcf.gz
+            tabix -f ${ID}_filtered.vcf.gz
+            rm -f ${ID}_tmp.vcf.gz*
+        }
+        
+        
+        # Main program
+        echo ~{sep="," ids} | tr ',' '\n' > ids.txt
+        echo ~{sep="," min_depth} | tr ',' '\n' > min_depth.txt
+        echo ~{sep="," min_alt_reads} | tr ',' '\n' > min_alt_reads.txt
+        paste -d , ids.txt min_depth.txt min_alt_reads.txt > tasks.tsv
+        while read ROW; do
+            ID=$(echo ${ROW} | cut -d , -f 1)
+            MIN_DEPTH=$(echo ${ROW} | cut -d , -f 2)
+            MIN_ALT_READS=$(echo ${ROW} | cut -d , -f 3)
+            filter_thread ${ID} ${MIN_DEPTH} ${MIN_ALT_READS} &
+        done < tasks.tsv
+        wait
+        ls -laht
+    >>>
+    
+    output {
+        Array[File] filtered_vcf_gz = glob("*_filtered.vcf.gz")
+        Array[File] filtered_tbi = glob("*_filtered.vcf.gz.tbi")
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2"
+        cpu: n_cpus
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: 0
+    }
+}

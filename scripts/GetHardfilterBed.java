@@ -5,6 +5,8 @@ import java.io.*;
 /**
  * Creates BED files that limit chromosomes to their parts outside telomeres 
  * and centromeres.
+ *
+ * To do: remove non-canonical chromosomes.
  */
 public class GetHardfilterBed {
     

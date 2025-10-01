@@ -360,3 +360,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SubsampleAlignedBam.wdl
   testParameterFiles:
+- name: FilterTruvariIntersample
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/FilterTruvariIntersample.wdl
+  testParameterFiles:
