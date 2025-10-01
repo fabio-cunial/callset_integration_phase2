@@ -66,8 +66,7 @@ task Impl {
             local MAX_DEPTH=$3
             local MIN_ALT_READS=$4
             
-            FILTER_STRING="GT=\"alt\" && (DP < ${MIN_DEPTH} || DP > ${MAX_DEPTH} || AD[*:1] < ${MIN_ALT_READS})"
-            ${TIME_COMMAND} bcftools filter --exclude ${FILTER_STRING} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
+            ${TIME_COMMAND} bcftools filter --exclude $(printf 'GT="alt" && (DP < %d || DP > %d || AD[*:1] < %d)' ${MIN_DEPTH} ${MAX_DEPTH} ${MIN_ALT_READS}) --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
             tabix -f ${ID}_tmp1.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp1.vcf.gz > ${ID}_tmp2.vcf.gz
             tabix -f ${ID}_tmp2.vcf.gz
