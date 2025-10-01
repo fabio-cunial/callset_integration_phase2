@@ -12,6 +12,8 @@ workflow FilterTruvariIntersample {
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
+        
+        File Printf_java
     }
     parameter_meta {
     }
@@ -23,7 +25,8 @@ workflow FilterTruvariIntersample {
             ids = ids,
             min_depth = min_depth,
             max_depth = max_depth,
-            min_alt_reads = min_alt_reads
+            min_alt_reads = min_alt_reads,
+            Printf_java = Printf_java
     }
     
     output {
@@ -43,6 +46,8 @@ task Impl {
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
+        
+        File Printf_java
     }
     parameter_meta {
     }
@@ -66,10 +71,7 @@ task Impl {
             local MAX_DEPTH=$3
             local MIN_ALT_READS=$4
             
-            echo "'GT=\"alt\" && (DP < ${MIN_DEPTH} || DP > ${MAX_DEPTH} || AD[*:1] < ${MIN_ALT_READS})'" > ${ID}_filter.txt
-            while read FILTER; do
-                ${TIME_COMMAND} bcftools filter --exclude ${FILTER} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
-            done < ${ID}_filter.txt
+            ${TIME_COMMAND} bcftools filter --exclude $(java Printf ${MIN_DEPTH} ${MAX_DEPTH} ${MIN_ALT_READS}) --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
             tabix -f ${ID}_tmp1.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp1.vcf.gz > ${ID}_tmp2.vcf.gz
             tabix -f ${ID}_tmp2.vcf.gz
@@ -87,6 +89,8 @@ task Impl {
         
         
         # Main program
+        mv ~{Printf_java} Printf.java
+        javac Printf.java
         echo ~{sep="," ids} | tr ',' '\n' > ids.txt
         echo ~{sep="," min_depth} | tr ',' '\n' > min_depth.txt
         echo ~{sep="," max_depth} | tr ',' '\n' > max_depth.txt
