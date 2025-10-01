@@ -12,9 +12,6 @@ workflow FilterTruvariIntersample {
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
-
-        Int n_cpus
-        Int ram_size_gb
     }
     parameter_meta {
     }
@@ -26,9 +23,7 @@ workflow FilterTruvariIntersample {
             ids = ids,
             min_depth = min_depth,
             max_depth = max_depth,
-            min_alt_reads = min_alt_reads,
-            n_cpus = n_cpus,
-            ram_size_gb = ram_size_gb
+            min_alt_reads = min_alt_reads
     }
     
     output {
@@ -48,14 +43,13 @@ task Impl {
         Array[Int] min_depth
         Array[Int] max_depth
         Array[Int] min_alt_reads
-
-        Int n_cpus
-        Int ram_size_gb
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = (length(ids)+1)*ceil(size(truvari_collapsed_vcf_gz, "GB"))
+    Int n_cpus = 4*length(ids)
+    Int ram_size_gb = 8*length(ids)
+    Int disk_size_gb = (length(ids)+1)*10*ceil(size(truvari_collapsed_vcf_gz, "GB"))
     
     command <<<
         set -euxo pipefail
@@ -72,11 +66,20 @@ task Impl {
             local MIN_ALT_READS=$4
             
             FILTER_STRING="GT=\"alt\" && (DP < ${MIN_DEPTH} || DP > ${MAX_DEPTH} || AD[*:1] < ${MIN_ALT_READS})"
-            ${TIME_COMMAND} bcftools filter --exclude ${FILTER_STRING} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp.vcf.gz
-            tabix -f ${ID}_tmp.vcf.gz
-            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp.vcf.gz > ${ID}_filtered.vcf.gz
-            tabix -f ${ID}_filtered.vcf.gz
-            rm -f ${ID}_tmp.vcf.gz*
+            ${TIME_COMMAND} bcftools filter --exclude ${FILTER_STRING} --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
+            tabix -f ${ID}_tmp1.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp1.vcf.gz > ${ID}_tmp2.vcf.gz
+            tabix -f ${ID}_tmp2.vcf.gz
+            rm -f ${ID}_tmp1.vcf.gz*
+            bcftools view --header-only ${ID}_tmp2.vcf.gz > ${ID}_header.txt
+            N_ROWS=$(wc -l < ${ID}_header.txt)
+            head -n $(( ${N_ROWS} - 1 )) ${ID}_header.txt > ${ID}_filtered.vcf
+            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> ${ID}_filtered.vcf
+            echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" >> ${ID}_filtered.vcf
+            bcftools view --no-header ${ID}_tmp2.vcf.gz | awk 'BEGIN { i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' >> ${ID}_filtered.vcf
+            rm -f ${ID}_tmp2.vcf.gz*
+            ${TIME_COMMAND} bgzip -@ 4 ${ID}_filtered.vcf
+            ${TIME_COMMAND} tabix -f ${ID}_filtered.vcf.gz
         }
         
         
@@ -105,7 +108,7 @@ task Impl {
         docker: "fcunial/callset_integration_phase2"
         cpu: n_cpus
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
