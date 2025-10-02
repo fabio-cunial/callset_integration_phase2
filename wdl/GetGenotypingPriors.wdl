@@ -69,7 +69,7 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))    
         
         
-        if [ ~{defined(script_java)} ]; then
+        if ~{defined(script_java)}; then
             mv ~{script_java} ./GetGenotypingPriors.java
             javac GetGenotypingPriors.java
         else

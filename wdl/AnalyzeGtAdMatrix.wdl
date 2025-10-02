@@ -47,7 +47,7 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))    
         
         
-        if [ ~{defined(script_java)} ]; then
+        if ~{defined(script_java)}; then
             mv ~{script_java} ./AnalyzeGtAdMatrix.java
             javac AnalyzeGtAdMatrix.java
         else

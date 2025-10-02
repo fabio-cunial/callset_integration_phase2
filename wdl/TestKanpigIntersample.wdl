@@ -47,7 +47,7 @@ workflow TestKanpigIntersample {
 # Performance on 10'070 samples, 15x, GRCh38, stringent (_S) and lenient (_L):
 #
 # TOOL                      CPU_S   RAM_S   TIME_S  CPU_L   RAM_L   TIME_L
-# bcftools view | cut                       3.5h                    6h
+# bcftools view | awk                       3.5h                    6h
 # paste                     100%    50M     2h      100%    50M     3h
 # bgzip                     200%    20M     1h      200%    20M     2h
 #

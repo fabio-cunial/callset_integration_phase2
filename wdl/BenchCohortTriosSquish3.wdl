@@ -140,7 +140,7 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local ID=$2
             
-            if [ ~{defined(hardfilter_bed)} ]; then
+            if ~{defined(hardfilter_bed)}; then
                 ${TIME_COMMAND} bcftools view --threads 1 --regions-file ~{hardfilter_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp0_${ID}.vcf.gz
                 tabix -f tmp0_${ID}.vcf.gz
                 HARDFILTERED_VCF_GZ="tmp0_${ID}.vcf.gz"
