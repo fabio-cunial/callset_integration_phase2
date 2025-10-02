@@ -228,16 +228,17 @@ task BenchSample {
                 START=$(echo ${ROW} | cut -d , -f 2)
                 END=$(echo ${ROW} | cut -d , -f 3)
                 echo -e "${CHR}\t${START}\t${END}" > ${OUTPUT_PREFIX}_window.bed
+                cat ${OUTPUT_PREFIX}_window.bed
                 
                 if [ ~{bench_method} -eq 0 ]; then
                     # Assumed to be one of many jobs running in parallel, so
                     # using only one core.
-                    rm -rf ./${OUTPUT_PREFIX}_truvari_*
+                    rm -rf ./${OUTPUT_PREFIX}_truvari/
                     ${TIME_COMMAND} truvari bench --includebed ${OUTPUT_PREFIX}_window.bed -b truth.vcf.gz -c ${OUTPUT_PREFIX}_input.vcf.gz ${FILTER_STRING_TRUVARI} -o ./${OUTPUT_PREFIX}_truvari/
                     mv ./${OUTPUT_PREFIX}_truvari/summary.json ./~{sample_id}_${OUTPUT_PREFIX}_${i}.txt
                 else
                     # Assumed to be the only job running, so using all cores.
-                    rm -f ./${OUTPUT_PREFIX}_vcfdist_*
+                    rm -f ./${OUTPUT_PREFIX}_vcfdist/
                     ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_input.vcf.gz truth.vcf.gz ~{reference_fa} --max-threads ${N_THREADS} --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} --bed ${OUTPUT_PREFIX}_window.bed --prefix ./${OUTPUT_PREFIX}_vcfdist/
                     mv ./${OUTPUT_PREFIX}_vcfdist/precision-recall-summary.tsv ./~{sample_id}_${OUTPUT_PREFIX}_${i}.txt
                 fi
