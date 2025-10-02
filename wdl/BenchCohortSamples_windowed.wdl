@@ -227,7 +227,7 @@ task BenchSample {
                 CHR=$(echo ${ROW} | cut -d , -f 1)
                 START=$(echo ${ROW} | cut -d , -f 2)
                 END=$(echo ${ROW} | cut -d , -f 3)
-                echo ${CHR}:${START}-${END} > ${OUTPUT_PREFIX}_window.bed
+                echo -e "${CHR}\t${START}\t${END}" > ${OUTPUT_PREFIX}_window.bed
                 
                 if [ ~{bench_method} -eq 0 ]; then
                     # Assumed to be one of many jobs running in parallel, so

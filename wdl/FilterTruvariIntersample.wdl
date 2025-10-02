@@ -1,7 +1,9 @@
 version 1.0
 
 
-# 
+# Removes from a truvari inter-sample VCF every GT that does not have a given
+# total depth or whose ALT is not supported by a given min number of reads. 
+# Then, removes every record where no GT passes such filters.
 #
 workflow FilterTruvariIntersample {
     input {
@@ -71,8 +73,8 @@ task Impl {
             local MAX_DEPTH=$3
             local MIN_ALT_READS=$4
             
-            FILTER_STRING=$(java Printf ${MIN_DEPTH} ${MAX_DEPTH} ${MIN_ALT_READS})
-            ${TIME_COMMAND} bcftools filter --exclude "${FILTER_STRING}" --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
+            EXCLUDE_STRING=$(java Printf ${MIN_DEPTH} ${MAX_DEPTH} ${MIN_ALT_READS})
+            ${TIME_COMMAND} bcftools filter --exclude "${EXCLUDE_STRING}" --set-GTs . --output-type z ~{truvari_collapsed_vcf_gz} > ${ID}_tmp1.vcf.gz
             tabix -f ${ID}_tmp1.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${ID}_tmp1.vcf.gz > ${ID}_tmp2.vcf.gz
             tabix -f ${ID}_tmp2.vcf.gz
