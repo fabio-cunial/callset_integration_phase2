@@ -370,3 +370,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortSamples_windowed.wdl
   testParameterFiles:
+- name: FilterTruvariIntersample2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/FilterTruvariIntersample2.wdl
+  testParameterFiles:

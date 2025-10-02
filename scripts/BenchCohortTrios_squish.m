@@ -4,13 +4,14 @@ DELTA=0.4;
 %LABELS={'V1','ND1','ND2', 'ND3','HS1','HS2', 'HS3','HS4','SZ1', 'SZ2','SS1','SS2', 'MQ1','MQ2','MQ3', 'MQ4'};
 %LABELS={'V1','SZ1','SZ2','SS1','SS2','MQ1','MQ2','MQ3','MQ4'};
 %LABELS={'V1','MAF_1','MAF_2','POA','WFA'};
-LABELS={'V1','MF_4','MF_6','PM_{20}','H_{20}','H','K_8'};
+%LABELS={'V1','MF_4','MF_6','PM_{20}','H_{20}','H','K_8'};
+LABELS={'V1','3-25-3','10-25-3'};
 N_ARGS=length(LABELS);
 %N_TOTAL_ARGS=16;
-N_TOTAL_ARGS=7;
+N_TOTAL_ARGS=3;
 MAX_MENDELIAN_ERROR=0.2;
 MAX_DE_NOVO=0.2;
-PREFIX='triohispanics';     %'triomerge';  %   'squish_trios';
+PREFIX='filtered_truvari';  %'triohispanics';     %'triomerge';  %   'squish_trios';
 
 % Columns:
 % ${N_GOOD_ALT_i},${N_MERR_i},
