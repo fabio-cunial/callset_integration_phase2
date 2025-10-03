@@ -74,7 +74,7 @@ task Impl {
         N_THREADS_PER_VALUE=$(( ${N_THREADS} / ${N_VALUES} ))
         while read N_SAMPLES; do
             filter_thread ${N_SAMPLES} &
-        done < tasks.tsv
+        done < min_n_samples.txt
         wait
         ls -laht
     >>>
