@@ -6,7 +6,7 @@ import java.io.*;
 /**
  * Uses the NE field printed by kanpig to build a BED of kanpig regions.
  */
-public class GetComplexSvs {
+public class GetCompositeSvs {
     
     /**
      * 
@@ -37,7 +37,7 @@ public class GetComplexSvs {
             tokensPrime=tokens[9].split(":");
             region=Integer.parseInt(tokensPrime[5]);
             if (region!=currentRegion) {
-                if (currentRegion!=-1) getComplexSvs(calls,lastCall);
+                if (currentRegion!=-1) getCompositeSvs(calls,lastCall);
                 currentRegion=region; lastCall=0; calls[0]=tokens;
             }
             else {
@@ -50,40 +50,74 @@ public class GetComplexSvs {
             }
             str=br.readLine();
         }
-        if (currentRegion!=-1) getComplexSvs(calls,lastCall);
+        if (currentRegion!=-1) getCompositeSvs(calls,lastCall);
         br.close();
     }
     
     
     /**
      * @param maxDistance maximum distance between two calls to be considered
-     * part of the same complex event;
-     * @param minCalls (>=2) min number of calls in a complex event.
+     * part of the same composite event;
+     * @param minCalls (>=2) min number of calls in a composite event.
      */
-    private static final void getComplexSvs(String[][] calls, int lastCall, int maxDistance, int minCalls) {
+    private static final void getCompositeSvs(String[][] calls, int lastCall, int maxDistance, int minCalls, String[] columns) {
         final int N_COLUMNS = calls[0].length;
         final boolean IS_AUTOSOMAL = calls[0][9].indexOf(":")==3;
         
         final int CAPACITY = 20;  // Arbitrary
         
-        int i, j;
-        int last;
+        int i, j, k;
+        int lastCompositeSv, callId;
+        String key;
         int[] haplotype, tmpArray;
+        String[] tokens;
+        int[][] compositeSvs;
+        Vector<String> value;
+        HashMap<String,Vector<String>> compositeSv2samples;
+        Iterator<Map.Entry<String,Vector<String>>> iterator;
+        Map.Entry<String,Vector<String>> entry;
         
+        compositeSv2samples = new HashMap<String,Vector<String>>();
+        compositeSvs = new int[calls.length][2];
         haplotype = new int[CAPACITY];
         tmpArray = new int[2];
         for (j=10; j<N_COLUMNS; j++) {
             loadHaplotype(calls,lastCall,false,IS_AUTOSOMAL);
-            getComplexSVs(calls,maxDistance,minCalls,tmpArray);
+            getCompositeSVs(calls,maxDistance,minCalls,tmpArray);
+            lastCompositeSv=getCompositeSvs(calls,maxDistance,minCalls,compositeSvs,tmpArray);
+            for (k=0; k<=lastCompositeSv; k++) {
+                key=compositeSv2key(compositeSvs[k][0],compositeSvs[k][1]);
+                compositeSv2samples.put(key,columns[j]+"_0");
+            }
             if (IS_AUTOSOMAL) {
                 loadHaplotype(calls,lastCall,true,true);
-                getComplexSVs(calls,maxDistance,minCalls,tmpArray);
+                getCompositeSVs(calls,maxDistance,minCalls,tmpArray);
+                lastCompositeSv=getCompositeSvs(calls,maxDistance,minCalls,compositeSvs,tmpArray);
+                for (k=0; k<=lastCompositeSv; k++) {
+                    key=compositeSv2key(compositeSvs[k][0],compositeSvs[k][1]);
+                    compositeSv2samples.put(key,columns[j]+"_1");
+                }
             }
-            
-            
         }
         
-        
+        // Outputting
+        iterator=compositeSv2samples.entrySet().iterator();
+        while (iterator.hasNext()) {
+            entry=iterator.next();
+            key=entry.getKey();
+            tokens=key.split("-");
+            value=entry.getValue();
+            System.out.println("Composite event:");
+            for (i=0; i<tokens.length; i++) {
+                callId=Integer.parseInt(tokens[i]);
+                for (j=0; j<=7; j++) System.out.print(calls[callId][j]+"\t");
+                System.out.println();
+            }
+            System.out.println("n_samples: "+value.size());
+            System.out.println("Samples:");
+            for (i=0; i<value.size(); i++) System.out.print(value.elementAt(i)+",");
+            System.out.println();
+        }
     }
     
     
@@ -118,27 +152,40 @@ public class GetComplexSvs {
     }
     
     
-    private static final void getComplexSVs(String[][] calls, int maxDistance, int minCalls, int[] tmpArray) {
+    /**
+     * Simply scans `haplotype` for blocks of >=`minCalls` consecutive calls at 
+     * distance <=`maxDistance` from each other, and stores `(i,j)` pairs in 
+     * `out`, where `i` (resp. `j`) is the index of the first (resp. last) call 
+     * in a block.
+     *
+     * @param tmpArray temporary space with >=2 cells;
+     * @return the last element in `out`.
+     */
+    private static final int getCompositeSvs(String[][] calls, int maxDistance, int minCalls, int[][] out, int[] tmpArray) {
+        int i;
+        int lastCompositeEvent, currentFirst, currentLast, currentStart, currentEnd;
         
-        
+        lastCompositeEvent=-1;
         getInterval(calls,haplotype[0],tmpArray);
         currentFirst=0; currentLast=0; currentStart=tmpArray[0]; currentEnd=tmpArray[1];
         for (i=1; i<=haplotypeLast; i++) {
             getInterval(calls,haplotype[i],tmpArray);
             if (tmpArray[0]-currentEnd>maxDistance) {
                 if (currentLast-currentFirst+1>=minCalls) {
-                    // Print complex SV...
-                    
-                    // Increment its count to get AF in the end...
-                    
-                    // Next iteration
-                    currentFirst=i; currentStart=tmpArray[0];
+                    lastCompositeEvent++;
+                    out[lastCompositeEvent][0]=currentFirst;
+                    out[lastCompositeEvent][1]=currentLast;
                 }
-                currentLast=i; currentEnd=tmpArray[1];
+                currentFirst=i; currentStart=tmpArray[0];
             }
-            
+            currentLast=i; currentEnd=tmpArray[1];
         }
-        
+        if (currentLast-currentFirst+1>=minCalls) {
+            lastCompositeEvent++;
+            out[lastCompositeEvent][0]=currentFirst;
+            out[lastCompositeEvent][1]=currentLast;
+        }
+        return lastCompositeEvent;
     }
     
     
@@ -166,6 +213,16 @@ public class GetComplexSvs {
             end=pos+ref.length();
         }
         out[0]=start; out[1]=end;
+    }
+    
+    
+    private static final String compositeSv2key(int first, int last) {
+        int i;
+        String out;
+        
+        out=haplotype[first];
+        for (i=first+1; i<=last; i++) out+="-"+haplotype[i];
+        return out;
     }
     
     
