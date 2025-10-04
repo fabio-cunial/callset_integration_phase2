@@ -57,6 +57,7 @@ public class GetCompositeSvs {
                 if (lastCall==calls.length) {
                     String[][] newCalls = new String[calls.length<<1][calls[0].length];
                     System.arraycopy(calls,0,newCalls,0,calls.length);
+                    calls=newCalls;
                 }
                 calls[lastCall]=tokens;
             }
@@ -133,15 +134,15 @@ public class GetCompositeSvs {
             entry=iterator.next();
             key=entry.getKey(); value=entry.getValue();
             tokens=key.split("-");
-            System.out.println("Composite event:");
+            System.out.println("Composite event with "+tokens.length+" calls:");
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
                 for (j=0; j<=7; j++) System.out.print(calls[callId][j]+"\t");
                 System.out.println();
             }
-            System.out.println("Occurs in "+value.size()+" samples:");
+            System.out.println("Occurs in "+value.size()+" haplotypes:");
             for (i=0; i<value.size(); i++) System.out.print(value.elementAt(i)+",");
-            System.out.println();
+            System.out.println(); System.out.println();
         }
     }
     
