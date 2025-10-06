@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SubsetToAncestry.wdl
 java -jar ${WOMTOOL_PATH} validate -l FilterTruvariIntersample2.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamples_windowed.wdl
 java -jar ${WOMTOOL_PATH} validate -l FilterTruvariIntersample.wdl

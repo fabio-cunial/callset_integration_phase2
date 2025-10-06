@@ -375,3 +375,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/FilterTruvariIntersample2.wdl
   testParameterFiles:
+- name: SubsetToAncestry
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SubsetToAncestry.wdl
+  testParameterFiles:
