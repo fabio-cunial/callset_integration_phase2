@@ -80,7 +80,7 @@ task BenchTrio {
         hardfilter_bed: "If defined, every VCF is hard-filtered to these regions before benchmarking."
     }
     
-    Int disk_size_gb = 10*( ceil(size(squish_vcf_gz,"GB")) )
+    Int disk_size_gb = 10*( ceil(size(squish_vcf_gz,"GB") + size(tandem_bed,"GB")) )
     
     command <<<
         set -euxo pipefail
