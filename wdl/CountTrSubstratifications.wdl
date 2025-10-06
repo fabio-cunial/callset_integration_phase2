@@ -11,7 +11,7 @@ workflow CountTrSubstratifications {
         File reference_fai
         
         Array[File] tandem_bed
-        Array[String] bed_ids
+        String bed_ids
     }
     parameter_meta {
         bed_ids: "Comma-separated"
@@ -42,7 +42,7 @@ task Impl {
         File reference_fai
         
         Array[File] tandem_bed
-        Array[String] bed_ids
+        String bed_ids
         
         Int n_cpu = 16
         Int ram_size_gb = 64
