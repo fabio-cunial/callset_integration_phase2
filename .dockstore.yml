@@ -380,3 +380,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SubsetToAncestry.wdl
   testParameterFiles:
+- name: BenchCohortTriosSquish4
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTriosSquish4.wdl
+  testParameterFiles:
