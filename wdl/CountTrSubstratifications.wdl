@@ -10,25 +10,29 @@ workflow CountTrSubstratifications {
         Int only_50_bp
         File reference_fai
         
-        Array[File] tandem_bed
-        String bed_ids
+        Array[File] tandem_beds
+        Array[String] bed_ids
+        Int n_beds
     }
     parameter_meta {
-        bed_ids: "Comma-separated"
     }
     
-    call Impl {
-        input:
-            vcf_gz = vcf_gz,
-            tbi = tbi,
-            only_50_bp = only_50_bp,
-            reference_fai = reference_fai,
-            tandem_bed = tandem_bed,
-            bed_ids = bed_ids
+    scatter (i in range(n_beds)) {
+        call Impl {
+            input:
+                only_50_bp = only_50_bp,
+                
+                vcf_gz = vcf_gz,
+                tbi = tbi,
+                reference_fai = reference_fai,
+                
+                bed_id = bed_ids[i],
+                tandem_bed = tandem_beds[i]
+        }
     }
     
     output {
-        Array[File] out_txt = Impl.out_txt
+        Array[Array[File]] out_txt = Impl.out_txt
     }
 }
 
@@ -36,21 +40,22 @@ workflow CountTrSubstratifications {
 #
 task Impl {
     input {
+        Int only_50_bp
+        
         File vcf_gz
         File tbi
-        Int only_50_bp
         File reference_fai
         
-        Array[File] tandem_bed
-        String bed_ids
+        String bed_id
+        File tandem_bed
         
-        Int n_cpu = 16
-        Int ram_size_gb = 64
+        Int n_cpu = 4
+        Int ram_size_gb = 32
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB")) )
+    Int disk_size_gb = 10*( ceil(size(vcf_gz,"GB") + size(tandem_bed,"GB")) )
     
     command <<<
         set -euxo pipefail
@@ -61,35 +66,20 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        # Sorting BED files in parallel
-        echo ~{sep="," tandem_bed} | tr ',' '\n' > bed_files.txt
-        echo ~{bed_ids} | tr ',' '\n' > bed_ids.txt
-        paste -d , bed_files.txt bed_ids.txt > bed_list.txt
-        while read ROW; do
-            BED_FILE=$(echo ${ROW} | cut -d , -f 1)
-            BED_ID=$(echo ${ROW} | cut -d , -f 2)
-            ${TIME_COMMAND} bedtools sort -i ${BED_FILE} -faidx ~{reference_fai} > ${BED_ID}_sorted.bed &
-        done < bed_list.txt
-        wait
-        while read ROW; do
-            BED_FILE=$(echo ${ROW} | cut -d , -f 1)
-            rm -f ${BED_FILE}
-        done < bed_list.txt
+        # Sorting the BED file
+        ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > ~{bed_id}_sorted.bed
+        rm -f ~{tandem_bed}
         
-        # Counting in parallel
-        while read ROW; do
-            BED_ID=$(echo ${ROW} | cut -d , -f 2)
-            if [ ~{only_50_bp} -ne 0 ]; then
-                ${TIME_COMMAND} bcftools view --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ${BED_ID}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ${BED_ID}_count.txt &
-            else
-                ${TIME_COMMAND} bcftools view --regions-file ${BED_ID}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ${BED_ID}_count.txt &
-            fi    
-        done < bed_list.txt
-        wait
+        # Counting
+        if [ ~{only_50_bp} -ne 0 ]; then
+            ${TIME_COMMAND} bcftools view --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{bed_id}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+        else
+            ${TIME_COMMAND} bcftools view --regions-file ~{bed_id}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+        fi
     >>>
     
     output {
-        Array[File] out_txt = glob("*.txt")
+        Array[File] out_txt = glob("*_count.txt")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
