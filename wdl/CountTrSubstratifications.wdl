@@ -73,9 +73,9 @@ task Impl {
         # Counting
         date
         if [ ~{only_50_bp} -ne 0 ]; then
-            bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{bed_id}_sorted.bed --regions-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+            bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --targets-file ~{bed_id}_sorted.bed --targets-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
         else
-            bcftools query                                     --regions-file ~{bed_id}_sorted.bed --regions-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+            bcftools query                                     --targets-file ~{bed_id}_sorted.bed --targets-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
         fi
         date
         cat ~{bed_id}_count.txt
