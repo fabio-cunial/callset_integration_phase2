@@ -50,7 +50,7 @@ task Impl {
         File tandem_bed
         
         Int n_cpu = 4
-        Int ram_size_gb = 32
+        Int ram_size_gb = 16
     }
     parameter_meta {
     }
@@ -71,11 +71,14 @@ task Impl {
         rm -f ~{tandem_bed}
         
         # Counting
+        date
         if [ ~{only_50_bp} -ne 0 ]; then
-            ${TIME_COMMAND} bcftools view --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{bed_id}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+            bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --regions-file ~{bed_id}_sorted.bed --regions-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
         else
-            ${TIME_COMMAND} bcftools view --regions-file ~{bed_id}_sorted.bed --regions-overlap pos ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
+            bcftools query                                     --regions-file ~{bed_id}_sorted.bed --regions-overlap pos --format '%CHROM' ~{vcf_gz} | wc -l > ~{bed_id}_count.txt
         fi
+        date
+        cat ~{bed_id}_count.txt
     >>>
     
     output {
