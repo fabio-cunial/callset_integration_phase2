@@ -14,7 +14,7 @@ N_TOTAL_ARGS=N_ARGS;
 MAX_MENDELIAN_ERROR=0.25;
 MAX_DE_NOVO=0.35;
 PREFIX='tr_substrat';  %'filtered_truvari';  %'triohispanics';     %'triomerge';  %   'squish_trios';
-TOTAL_RECORDS_07_50BP=__________; % All records, of any length: 2816177
+TOTAL_RECORDS_07_50BP=1018505;  % All records, of any length: 2816177
 
 % Columns:
 % ${N_GOOD_ALT_i},${N_MERR_i},
@@ -52,7 +52,7 @@ ylabel('De novo rate'); set(gca,'fontsize',FONT_SIZE);
 
 subplot(3,1,3); hold on;
 A=load(sprintf('%s_counts.txt',PREFIX));
-bar(A./TOTAL_RECORDS_07);
-title(sprintf('Fraction of all records in 07 (%d)',TOTAL_RECORDS_07)); axis([0,N_ARGS+1,0,1]); grid on; 
+bar(A./TOTAL_RECORDS_07_50BP);
+title(sprintf('Fraction of all records >=50bp in 07 (total: %d)',TOTAL_RECORDS_07_50BP)); axis([0,N_ARGS+1,0,1]); grid on; 
 xticks([1:N_ARGS]); xticklabels(LABELS);
 set(gca,'fontsize',FONT_SIZE);

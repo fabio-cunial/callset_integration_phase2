@@ -120,7 +120,7 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local BED_ID=$2
             
-            ${TIME_COMMAND} bcftools view --regions-file ${BED_ID}_sorted.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${BED_ID}.vcf.gz
+            ${TIME_COMMAND} bcftools view --targets-file ${BED_ID}_sorted.bed --targets-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${BED_ID}.vcf.gz
             tabix -f tmp_${BED_ID}.vcf.gz
             if [ ~{only_50_bp} -ne 0 ]; then
                 ${TIME_COMMAND} bcftools +mendelian2 tmp_${BED_ID}.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${BED_ID}.txt
