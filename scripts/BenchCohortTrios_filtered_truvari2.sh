@@ -23,19 +23,12 @@ while read CHILD_ID; do
         N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_v1_${SUFFIX}.txt | cut -f 2)
         ROW="${N_GOOD_ALT},${N_MERR}"
         
-        # 2_samples
-        N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_2_samples_${SUFFIX}.txt | cut -f 2)
-        N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_2_samples_${SUFFIX}.txt | cut -f 2)
-        ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
-        # 3_samples
-        N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_3_samples_${SUFFIX}.txt | cut -f 2)
-        N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_3_samples_${SUFFIX}.txt | cut -f 2)
-        ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
-        # 4_samples
-        N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_4_samples_${SUFFIX}.txt | cut -f 2)
-        N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_4_samples_${SUFFIX}.txt | cut -f 2)
-        ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
-        
+        # n_samples
+        for N_SAMPLES in 2 3 4 8 16 32 64 128; do
+            N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}.txt | cut -f 2)
+            N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}.txt | cut -f 2)
+            ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
+        done        
         
         # 2. De novo rate
         ## V1 original
@@ -44,15 +37,12 @@ while read CHILD_ID; do
         # V1 latest run
         DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_v1_${SUFFIX}_gtmatrix.txt ${MAX_AD})
         ROW="${ROW},${DENOVO}"
-        # 2_samples
-        DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_2_samples_${SUFFIX}_gtmatrix.txt ${MAX_AD})
-        ROW="${ROW},${DENOVO}"
-        # 3_samples
-        DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_3_samples_${SUFFIX}_gtmatrix.txt ${MAX_AD})
-        ROW="${ROW},${DENOVO}"
-        # 4_samples
-        DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_4_samples_${SUFFIX}_gtmatrix.txt ${MAX_AD})
-        ROW="${ROW},${DENOVO}"
+        
+        # n_samples
+        for N_SAMPLES in 2 3 4 8 16 32 64 128; do
+            DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}_gtmatrix.txt ${MAX_AD})
+            ROW="${ROW},${DENOVO}"
+        done
 
         echo "${ROW}" >> filtered_truvari_${SUFFIX}.csv
     done

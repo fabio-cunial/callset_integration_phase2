@@ -40,6 +40,7 @@ public class CheckDeNovoNumneigh {
         // Computing the number of trios
         br = new BufferedReader(new FileReader(TRIO_MATRIX_TSV));
         str=br.readLine();
+        if (str==null || str.length()==0) { System.out.println("0"); System.exit(0); }
         tokens=str.split("\t");
         br.close();
         nTrios=tokens.length/3;
@@ -64,6 +65,7 @@ public class CheckDeNovoNumneigh {
         nRecords=0;
         str=br.readLine();
         while (str!=null) { 
+            if (str.length()==0) { str=br.readLine(); continue; }
             tokens=str.split("\t");
             p=tokens[0].indexOf(",");
             svtype=tokens[0].substring(0,p);
