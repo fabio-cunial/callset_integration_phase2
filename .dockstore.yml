@@ -395,3 +395,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortTriosSquish5.wdl
   testParameterFiles:
+- name: GetNCalls
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetNCalls.wdl
+  testParameterFiles:
