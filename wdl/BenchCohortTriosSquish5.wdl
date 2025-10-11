@@ -7,7 +7,6 @@ version 1.0
 workflow BenchCohortTriosSquish5 {
     input {
         File ped_tsv
-        Int ped_tsv_row
         Int n_trios
         
         File squish_vcf_gz
