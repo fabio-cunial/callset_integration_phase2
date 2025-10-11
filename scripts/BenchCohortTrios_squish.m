@@ -6,15 +6,15 @@ DELTA=0.4;
 %LABELS={'V1','MAF_1','MAF_2','POA','WFA'};
 %LABELS={'V1','MF_4','MF_6','PM_{20}','H_{20}','H','K_8'};
 %LABELS={'V1','3-25-3','10-25-3'};
-%LABELS={'V1','>=2','>=3','>=4'};
 %LABELS={'V1','H','TR','S','SD','SD_{10k}','NU','G_{<15}','G_{20}','G_{25}','G_{30}','G_{55}','G_{60}','G_{65}','G_{70}','G_{75}','G_{80}','G_{85}','G_{>85}'};
-LABELS={'V1','AFR'};
+%LABELS={'V1','AFR'};
+LABELS={'V1','2','3','4','8','16','32','64','128'};
 N_ARGS=length(LABELS);
 %N_TOTAL_ARGS=16;
-N_TOTAL_ARGS=2;
+N_TOTAL_ARGS=N_ARGS;
 MAX_MENDELIAN_ERROR=0.2;
 MAX_DE_NOVO=0.2;
-PREFIX='ancestry_only';  %'tr_substrat';  %'filtered_truvari';  %'triohispanics';     %'triomerge';  %   'squish_trios';
+PREFIX='filtered_truvari';  %'ancestry_only';  %'tr_substrat';  %'filtered_truvari';  %'triohispanics';     %'triomerge';  %   'squish_trios';
 
 % Columns:
 % ${N_GOOD_ALT_i},${N_MERR_i},
