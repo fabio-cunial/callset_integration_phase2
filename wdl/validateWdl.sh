@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish5.wdl
 java -jar ${WOMTOOL_PATH} validate -l CountTrSubstratifications.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortTriosSquish4.wdl
 java -jar ${WOMTOOL_PATH} validate -l SubsetToAncestry.wdl

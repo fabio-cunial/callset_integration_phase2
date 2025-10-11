@@ -390,3 +390,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/CountTrSubstratifications.wdl
   testParameterFiles:
+- name: BenchCohortTriosSquish5
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortTriosSquish5.wdl
+  testParameterFiles:
