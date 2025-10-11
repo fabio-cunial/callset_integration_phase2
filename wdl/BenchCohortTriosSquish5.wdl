@@ -96,7 +96,7 @@ task BenchTrio {
             
             ${TIME_COMMAND} bcftools view --threads 1 --regions-file ~{tandems_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp0_${ID}.vcf.gz
             tabix -f tmp0_${ID}.vcf.gz
-            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z tmp0_${ID}.vc.gz > tmp1_${ID}.vcf.gz
+            ${TIME_COMMAND} bcftools view --threads 1 --samples ${PROBAND_ID},${FATHER_ID},${MOTHER_ID} --output-type z tmp0_${ID}.vcf.gz > tmp1_${ID}.vcf.gz
             tabix -f tmp1_${ID}.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z tmp1_${ID}.vcf.gz > tmp2_${ID}.vcf.gz
             tabix -f tmp2_${ID}.vcf.gz
