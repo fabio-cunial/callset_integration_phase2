@@ -144,7 +144,7 @@ task BenchTrio {
         SVLEN_FROM=~{min_svlen}
         for SVLEN_TO in ${SVLEN_THRESHOLDS}; do
             bench_thread ~{squish_id}.vcf.gz ${SVLEN_FROM} ${SVLEN_TO} &
-            SVLEN_FROM=SVLEN_TO
+            SVLEN_FROM=${SVLEN_TO}
         done
         wait
     >>>
