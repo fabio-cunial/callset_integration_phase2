@@ -1,5 +1,5 @@
 SOURCE_DIR='.';
-FONT_SIZE=16;
+FONT_SIZE=10;
 DELTA=0.4;
 %LABELS={'V1','ND1','ND2', 'ND3','HS1','HS2', 'HS3','HS4','SZ1', 'SZ2','SS1','SS2', 'MQ1','MQ2','MQ3', 'MQ4'};
 %LABELS={'V1','SZ1','SZ2','SS1','SS2','MQ1','MQ2','MQ3','MQ4'};
@@ -8,7 +8,7 @@ DELTA=0.4;
 %LABELS={'V1','3-25-3','10-25-3'};
 %LABELS={'V1','H','TR','S','SD','SD_{10k}','NU','G_{<15}','G_{20}','G_{25}','G_{30}','G_{55}','G_{60}','G_{65}','G_{70}','G_{75}','G_{80}','G_{85}','G_{>85}'};
 %LABELS={'V1','AFR'};
-LABELS={'V1','2','3','4','8','16','32','64','128'};
+LABELS={'V1','2','3','4','8','16','32','64','128','256','512','1024','2048'};
 N_ARGS=length(LABELS);
 %N_TOTAL_ARGS=16;
 N_TOTAL_ARGS=N_ARGS;

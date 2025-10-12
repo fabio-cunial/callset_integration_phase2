@@ -24,7 +24,7 @@ while read CHILD_ID; do
         ROW="${N_GOOD_ALT},${N_MERR}"
         
         # n_samples
-        for N_SAMPLES in 2 3 4 8 16 32 64 128; do
+        for N_SAMPLES in 2 3 4 8 16 32 64 128 256 512 1024 2048; do
             N_GOOD_ALT=$(grep ^ngood_alt ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}.txt | cut -f 2)
             N_MERR=$(grep ^nmerr ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}.txt | cut -f 2)
             ROW="${ROW},${N_GOOD_ALT},${N_MERR}"
@@ -39,7 +39,7 @@ while read CHILD_ID; do
         ROW="${ROW},${DENOVO}"
         
         # n_samples
-        for N_SAMPLES in 2 3 4 8 16 32 64 128; do
+        for N_SAMPLES in 2 3 4 8 16 32 64 128 256 512 1024 2048; do
             DENOVO=$(java CheckDeNovoNumneigh ${INPUT_DIR}/${CHILD_ID}_${N_SAMPLES}_samples_${SUFFIX}_gtmatrix.txt ${MAX_AD})
             ROW="${ROW},${DENOVO}"
         done
