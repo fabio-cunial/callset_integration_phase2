@@ -64,7 +64,9 @@ task GetNCalls {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include '(SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}')' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_~{svlen_to}.txt
+        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="INS" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_ins_~{svlen_to}.txt &
+        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="DEL" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_del_~{svlen_to}.txt &
+        wait
     >>>
     
     output {

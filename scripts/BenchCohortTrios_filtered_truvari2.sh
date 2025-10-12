@@ -48,3 +48,25 @@ while read CHILD_ID; do
     done
 done < children.txt
 rm -f children.txt
+
+
+
+# Counts
+rm -f filtered_truvari_counts.csv
+COUNT_ALL=$(cat ${INPUT_DIR}/v1_all.txt)
+COUNT_ALL_50=$(cat ${INPUT_DIR}/v1_all_50.txt)
+COUNT_TR=$(cat ${INPUT_DIR}/v1_tr_all.txt)
+COUNT_TR_50=$(cat ${INPUT_DIR}/v1_tr_50.txt)
+COUNT_NOT_TR=$(cat ${INPUT_DIR}/v1_not_tr_all.txt)
+COUNT_NOT_TR_50=$(cat ${INPUT_DIR}/v1_not_tr_50.txt)
+echo "${COUNT_ALL},${COUNT_ALL_50},${COUNT_TR},${COUNT_TR_50},${COUNT_NOT_TR},${COUNT_NOT_TR_50}" >> filtered_truvari_counts.csv
+for N_SAMPLES in 2 3 4 8 16 32 64 128 256 512 1024 2048; do
+    COUNT_ALL=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_all.txt)
+    COUNT_ALL_50=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_all_50.txt)
+    COUNT_TR=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_tr_all.txt)
+    COUNT_TR_50=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_tr_50.txt)
+    COUNT_NOT_TR=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_not_tr_all.txt)
+    COUNT_NOT_TR_50=$(cat ${INPUT_DIR}/v1_${N_SAMPLES}_not_tr_50.txt)
+    
+    echo "${COUNT_ALL},${COUNT_ALL_50},${COUNT_TR},${COUNT_TR_50},${COUNT_NOT_TR},${COUNT_NOT_TR_50}" >> filtered_truvari_counts.csv
+done
