@@ -90,7 +90,7 @@ task GetNCalls {
         File not_tandem_bed
         
         Int n_cpu = 6
-        Int ram_size_gb = 12
+        Int ram_size_gb = 32
     }
     parameter_meta {
     }
@@ -106,14 +106,14 @@ task GetNCalls {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
             
         # Total
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header                                     ~{vcf_gz} | wc -l > ~{vcf_id}_all.txt &
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header --include 'SVLEN>=50 || SVLEN<=-50' ~{vcf_gz} | wc -l > ~{vcf_id}_all_50.txt &
+        ${TIME_COMMAND} bcftools query                                     --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_all.txt &
+        ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_all_50.txt &
         # Inside TR
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header --regions-file ~{tandem_bed} --regions-overlap pos                                     ~{vcf_gz} | wc -l > ~{vcf_id}_tr_all.txt &
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header --regions-file ~{tandem_bed} --regions-overlap pos --include 'SVLEN>=50 || SVLEN<=-50' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_50.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_bed} --regions-overlap pos                                     --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_all.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{tandem_bed} --regions-overlap pos --include 'SVLEN>=50 || SVLEN<=-50' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_50.txt &
         # Outside TR
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header --regions-file ~{not_tandem_bed} --regions-overlap pos                                     ~{vcf_gz} | wc -l > ~{vcf_id}_not_tr_all.txt &
-        ${TIME_COMMAND} bcftools view --threads 1 --no-header --regions-file ~{not_tandem_bed} --regions-overlap pos --include 'SVLEN>=50 || SVLEN<=-50' ~{vcf_gz} | wc -l > ~{vcf_id}_not_tr_50.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{not_tandem_bed} --regions-overlap pos                                     --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_not_tr_all.txt &
+        ${TIME_COMMAND} bcftools query --regions-file ~{not_tandem_bed} --regions-overlap pos --include 'SVLEN>=50 || SVLEN<=-50' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_not_tr_50.txt &
         wait
     >>>
     
