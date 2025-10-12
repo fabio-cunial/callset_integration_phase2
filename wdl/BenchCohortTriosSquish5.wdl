@@ -115,12 +115,14 @@ task BenchTrio {
             
             ${TIME_COMMAND} bcftools view --include 'SVTYPE=="INS" && (SVLEN>='${SVLEN_FROM}' && SVLEN<'${SVLEN_TO}')' --output-type z ${INPUT_VCF_GZ} > tmp_${SVLEN_TO}.vcf.gz
             tabix -f tmp_${SVLEN_TO}.vcf.gz
+            bcftools index --nrecords tmp_${SVLEN_TO}.vcf.gz.tbi > ${PROBAND_ID}_${SVLEN_TO}_ins_count.txt
             ${TIME_COMMAND} bcftools +mendelian2 tmp_${SVLEN_TO}.vcf.gz -P ped.tsv > ${PROBAND_ID}_${SVLEN_TO}_ins.txt
             ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${SVLEN_TO}.vcf.gz > ${PROBAND_ID}_${SVLEN_TO}_ins_gtmatrix.txt
             rm -f tmp_${SVLEN_TO}.vcf.gz*
             
             ${TIME_COMMAND} bcftools view --include 'SVTYPE=="DEL" && (SVLEN>='${SVLEN_FROM}' && SVLEN<'${SVLEN_TO}')' --output-type z ${INPUT_VCF_GZ} > tmp_${SVLEN_TO}.vcf.gz
             tabix -f tmp_${SVLEN_TO}.vcf.gz
+            bcftools index --nrecords tmp_${SVLEN_TO}.vcf.gz.tbi > ${PROBAND_ID}_${SVLEN_TO}_del_count.txt
             ${TIME_COMMAND} bcftools +mendelian2 tmp_${SVLEN_TO}.vcf.gz -P ped.tsv > ${PROBAND_ID}_${SVLEN_TO}_del.txt
             ${TIME_COMMAND} bcftools query -f '%INFO/SVTYPE,%INFO/SVLEN,[%GT,%AD\t]\n' tmp_${SVLEN_TO}.vcf.gz > ${PROBAND_ID}_${SVLEN_TO}_del_gtmatrix.txt
             rm -f tmp_${BED_ID}.vcf.gz*
