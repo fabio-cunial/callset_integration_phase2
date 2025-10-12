@@ -400,3 +400,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetNCalls.wdl
   testParameterFiles:
+- name: GetNCalls2
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetNCalls2.wdl
+  testParameterFiles:
