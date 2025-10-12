@@ -1,7 +1,7 @@
 version 1.0
 
 
-# Like `GetNCalls.wdl`, but only considers TRs of given lengths.
+# Given a VCF, counts all calls in TRs and of given lengths.
 #
 workflow GetNCalls2 {
     input {        
@@ -64,7 +64,7 @@ task GetNCalls {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include '(SVLEN>='~{svlen_from}' && SVLEN<='~{svlen_to}') || (SVLEN>=-'~{svlen_to}' && SVLEN<=-'~{svlen_from}')' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_~{svlen_to}.txt
+        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include '(SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}')' --format '%CHROM' ~{vcf_gz} | wc -l > ~{vcf_id}_tr_~{svlen_to}.txt
     >>>
     
     output {

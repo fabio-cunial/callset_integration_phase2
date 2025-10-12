@@ -1,7 +1,7 @@
 version 1.0
 
 
-# 
+# Counts the number of calls in each VCF in an array.
 #
 workflow GetNCalls {
     input {        
