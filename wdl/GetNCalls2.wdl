@@ -64,15 +64,16 @@ task GetNCalls {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        
+        # Making sure every call has the SVLEN and SVTYPE fields
         source activate truvari5
         date
         truvari anno svinfo -m 1 ~{vcf_gz} | bgzip > input.vcf.gz
         date
         tabix -f input.vcf.gz
         
-        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="INS" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' input.vcf_gz | wc -l > ~{vcf_id}_tr_ins_~{svlen_to}.txt &
-        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="DEL" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' input.vcf_gz | wc -l > ~{vcf_id}_tr_del_~{svlen_to}.txt &
+        # Counting
+        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="INS" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' input.vcf.gz | wc -l > ~{vcf_id}_tr_ins_~{svlen_to}.txt &
+        ${TIME_COMMAND} bcftools query --targets-file ~{tandem_bed} --targets-overlap pos --include 'SVTYPE=="DEL" && ( (SVLEN>='~{svlen_from}' && SVLEN<'~{svlen_to}') || (SVLEN>-'~{svlen_to}' && SVLEN<=-'~{svlen_from}') )' --format '%CHROM' input.vcf.gz | wc -l > ~{vcf_id}_tr_del_~{svlen_to}.txt &
         wait
     >>>
     
