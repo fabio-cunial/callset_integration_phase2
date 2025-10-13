@@ -9,6 +9,15 @@ set -euxo pipefail
 
 cut -f 2 ${TRIOS_TSV} > children.txt
 
+# Count
+for SUFFIX in del ins; do
+    rm -f tr_svlen_${SUFFIX}_count.csv
+    for SVLEN in ${SV_LENGTHS}; do
+        COUNT=$(cat ${INPUT_DIR}/v1_tr_${SUFFIX}_${SVLEN}.txt)
+        echo "${COUNT}" >> tr_svlen_${SUFFIX}_count.csv
+    done
+done
+
 # Mendelian error
 for SUFFIX in del ins; do
     rm -f tr_svlen_${SUFFIX}.csv
@@ -22,18 +31,4 @@ for SUFFIX in del ins; do
         echo "${ROW}" >> tr_svlen_${SUFFIX}.csv
     done < children.txt
 done
-
-# Count
-for SUFFIX in del ins; do
-    rm -f tr_svlen_${SUFFIX}_count.csv
-    while read CHILD_ID; do
-        ROW=""
-        for SVLEN in ${SV_LENGTHS}; do
-            COUNT=$(cat ${INPUT_DIR}/${CHILD_ID}_${SVLEN}_${SUFFIX}_count.txt)
-            ROW="${ROW}${COUNT},"
-        done
-        echo "${ROW}" >> tr_svlen_${SUFFIX}_count.csv
-    done < children.txt
-done
-
 rm -f children.txt

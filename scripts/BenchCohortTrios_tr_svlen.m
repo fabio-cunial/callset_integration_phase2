@@ -20,7 +20,7 @@ for i=[1:nrows]
         plot(X,Y,'.');
     endfor
 endfor
-xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('DEL inside TR / Mendelian error'); grid on; set(gca,'fontsize',FONT_SIZE);
+xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('DEL inside TR / Mendelian error'); grid on; axis([1,N_LENGTHS,0,0.5]); set(gca,'fontsize',FONT_SIZE);
 
 subplot(2,2,2); hold on;
 A=load(sprintf('%s/tr_svlen_ins.csv',SOURCE_DIR));
@@ -32,9 +32,20 @@ for i=[1:nrows]
         plot(X,Y,'.');
     endfor
 endfor
-xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('INS inside TR / Mendelian error'); grid on; set(gca,'fontsize',FONT_SIZE);
+xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('INS inside TR / Mendelian error'); grid on; axis([1,N_LENGTHS,0,0.5]); set(gca,'fontsize',FONT_SIZE);
 
 
+
+
+subplot(2,2,3); hold on;
+A=load(sprintf('%s/tr_svlen_del_count.csv',SOURCE_DIR));
+bar(A);
+xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('DEL inside TR / Count'); grid on; axis([1,N_LENGTHS,0,700000]); set(gca,'fontsize',FONT_SIZE);
+
+subplot(2,2,4); hold on;
+A=load(sprintf('%s/tr_svlen_ins_count.csv',SOURCE_DIR));
+bar(A);
+xlabel('SVLEN'); xticks([1:N_LENGTHS]); xticklabels(LABELS); title('INS inside TR / Count'); grid on; axis([1,N_LENGTHS,0,700000]); set(gca,'fontsize',FONT_SIZE);
 
 
 
