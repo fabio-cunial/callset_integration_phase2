@@ -49,7 +49,7 @@ task GetNCalls {
         Int svlen_to
         
         Int n_cpu = 2
-        Int ram_size_gb = 8
+        Int ram_size_gb = 32
     }
     parameter_meta {
     }
