@@ -57,7 +57,8 @@ task ExcludeTRs {
     parameter_meta {
     }
     
-    Int disk_size_gb = 10*ceil(size(tandem_bed,"GB"))
+    Int disk_size_gb = 5*ceil( size(cohort_vcf_gz,"GB") )
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
