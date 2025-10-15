@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l GetCompositeSvs.wdl
 java -jar ${WOMTOOL_PATH} validate -l Bam2Fastq.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetNCalls2.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetNCalls.wdl

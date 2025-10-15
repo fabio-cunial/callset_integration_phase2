@@ -410,3 +410,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Bam2Fastq.wdl
   testParameterFiles:
+- name: GetCompositeSvs
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetCompositeSvs.wdl
+  testParameterFiles:
