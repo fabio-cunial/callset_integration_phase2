@@ -32,7 +32,7 @@ workflow Bam2Fastq {
 # Performance with 16 cores and 32GB of RAM on a 66x, 158GB BAM:
 #
 # COMMAND           CPU     RAM     TIME
-# 
+# samtools fastq    15%     15M     1h
 #
 task Impl {
     input {
@@ -44,8 +44,8 @@ task Impl {
         
         String remote_output_dir
 
-        Int n_cores = 16
-        Int mem_gb = 32
+        Int n_cores = 2
+        Int mem_gb = 4
     }
     parameter_meta {
     }
