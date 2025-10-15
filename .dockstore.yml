@@ -405,3 +405,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetNCalls2.wdl
   testParameterFiles:
+- name: Bam2Fastq
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Bam2Fastq.wdl
+  testParameterFiles:
