@@ -76,9 +76,16 @@ task SubsampleImpl {
             local PREFIX=$2
             local NT=$3
             
-            FACTOR=$(echo "scale=2; ${COVERAGE}/~{aligned_bam_coverage} " | bc)
-            ${TIME_COMMAND} samtools view -@ ${NT} --subsample ${FACTOR} --bam ~{aligned_bam} > ${PREFIX}_${COVERAGE}x.bam
-            samtools index ${PREFIX}_${COVERAGE}x.bam
+            OVERSAMPLE=$(echo "${COVERAGE} > ~{aligned_bam_coverage}" | bc -l)
+            if [ ${OVERSAMPLE} -eq 1 ]; then
+                echo "Warning: ${COVERAGE}x sampling from a ~{aligned_bam_coverage}x BAM. Just copying the input."
+                cp ~{aligned_bam} ${PREFIX}_${COVERAGE}x.bam
+                cp ~{aligned_bai} ${PREFIX}_${COVERAGE}x.bam.bai
+            else
+                FACTOR=$(echo "scale=2; ${COVERAGE}/~{aligned_bam_coverage} " | bc)
+                ${TIME_COMMAND} samtools view -@ ${NT} --subsample ${FACTOR} --bam ~{aligned_bam} > ${PREFIX}_${COVERAGE}x.bam
+                samtools index ${PREFIX}_${COVERAGE}x.bam
+            fi
         }
         
         
