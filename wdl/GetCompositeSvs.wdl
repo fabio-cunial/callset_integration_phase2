@@ -9,6 +9,7 @@ workflow GetCompositeSvs {
         
         File tandem_bed
         File reference_fai
+        Int slop_bp
         
         Int max_distance
         Int min_calls
@@ -21,7 +22,8 @@ workflow GetCompositeSvs {
             cohort_vcf_gz = cohort_vcf_gz,
             cohort_tbi = cohort_tbi,
             tandem_bed = tandem_bed,
-            reference_fai = reference_fai
+            reference_fai = reference_fai,
+            slop_bp = slop_bp
     }
     call Impl {
         input:
@@ -50,6 +52,7 @@ task ExcludeTRs {
         
         File tandem_bed
         File reference_fai
+        Int slop_bp
         
         Int n_cpu = 16
         Int ram_size_gb = 32
@@ -70,7 +73,8 @@ task ExcludeTRs {
 
         # Complementing the TR track
         ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
-        ${TIME_COMMAND} bedtools complement -i sorted.bed -L -g ~{reference_fai} > complement.bed
+        ${TIME_COMMAND} bedtools slop -i sorted.bed -g ~{reference_fai} -b ~{slop_bp} > sorted_slop.bed
+        ${TIME_COMMAND} bedtools complement -i sorted_slop.bed -L -g ~{reference_fai} > complement.bed
         
         # Subsetting the VCF
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --targets-file complement.bed --targets-overlap pos --output-type z ~{cohort_vcf_gz} > filtered.vcf.gz
