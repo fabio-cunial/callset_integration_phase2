@@ -415,3 +415,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetCompositeSvs.wdl
   testParameterFiles:
+- name: PersonalizedCohortVcf
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PersonalizedCohortVcf.wdl
+  testParameterFiles:
