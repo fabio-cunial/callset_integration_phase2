@@ -73,7 +73,7 @@ task ExcludeTRs {
         ${TIME_COMMAND} bedtools complement -i sorted.bed -L -g ~{reference_fai} > complement.bed
         
         # Subsetting the VCF
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --targets complement.bed --targets-overlap pos --output-type z ~{cohort_vcf_gz} > filtered.vcf.gz
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --targets-file complement.bed --targets-overlap pos --output-type z ~{cohort_vcf_gz} > filtered.vcf.gz
         tabix -f filtered.vcf.gz
     >>>
     
