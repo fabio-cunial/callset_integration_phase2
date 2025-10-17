@@ -4,10 +4,13 @@ version 1.0
 # Merges a cohort VCF and a single-sample VCF before re-genotyping using the
 # reads of every sample.
 #
+# We work on 5 HPRC samples: HG03579 NA18906 NA19240 NA20129 NA21309
+#
 workflow PersonalizedCohortVcf {
     input {
         File sv_integration_chunk_tsv
         Int n_rows
+        String filter_string = "FORMAT/CALIBRATION_SENSITIVITY<=0.7"
         
         File cohort_vcf_gz
         String remote_outdir
@@ -32,6 +35,7 @@ workflow PersonalizedCohortVcf {
             input:
                 sv_integration_chunk_tsv = sv_integration_chunk_tsv,
                 selected_row = i+1,
+                filter_string = filter_string,
                 
                 cohort_vcf_gz = cohort_vcf_gz,
                 remote_outdir = remote_outdir,
@@ -63,6 +67,7 @@ task Impl {
     input {
         File sv_integration_chunk_tsv
         Int selected_row
+        String filter_string
         
         File cohort_vcf_gz
         String remote_outdir
@@ -79,6 +84,8 @@ task Impl {
         String kanpig_params_multisample
     }
     parameter_meta {
+        sv_integration_chunk_tsv: "The single-sample VCFs in this file are assumed to have been scored by xgboost but not to have been filtered based on such scores."
+        filter_string: "The same single-sample filters used to build `cohort_vcf_gz`."
     }
     
     String docker_dir = "/callset_integration"
@@ -174,9 +181,17 @@ task Impl {
                 mv ${SAMPLE_ID}_filtered.vcf.gz ${SAMPLE_VCF_GZ}
                 tabix -f ${SAMPLE_VCF_GZ}
             fi
-            ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples samples.txt ${SAMPLE_VCF_GZ} > ${SAMPLE_ID}_reheader.vcf.gz
-            tabix -f ${SAMPLE_ID}_reheader.vcf.gz
+            
+            FILTER_STRING="~{filter_string}"
+            INCLUDE_STR="--include ${FILTER_STRING}"
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} ${INCLUDE_STR} --output-type z ${SAMPLE_VCF_GZ} > ${SAMPLE_ID}_filtered.vcf.gz
+            tabix -f ${SAMPLE_ID}_filtered.vcf.gz
             rm -f ${SAMPLE_VCF_GZ}*
+            
+            ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples samples.txt ${SAMPLE_ID}_filtered.vcf.gz > ${SAMPLE_ID}_reheader.vcf.gz
+            tabix -f ${SAMPLE_ID}_reheader.vcf.gz
+            rm -f ${SAMPLE_ID}_filtered.vcf.gz*
+            
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ${COHORT_VCF_GZ} ${SAMPLE_ID}_reheader.vcf.gz > ${SAMPLE_ID}_merged.vcf.gz
             tabix -f ${SAMPLE_ID}_merged.vcf.gz
             rm -f ${SAMPLE_ID}_reheader.vcf.gz*
