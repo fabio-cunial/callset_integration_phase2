@@ -27,7 +27,7 @@ workflow PersonalizedCohortVcf {
         String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
     parameter_meta {
-        sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
+        sv_integration_chunk_tsv: "A subset of the rows of table `hprc_grch38_hg38`, without the header."
     }
     
     scatter (i in range(n_rows)) {
@@ -111,8 +111,8 @@ task Impl {
             
             ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
             ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
-            SAMPLE_VCF_GZ=$(echo ${LINE} | cut -d , -f 5)
-            SAMPLE_TBI=$(echo ${LINE} | cut -d , -f 6)
+            SAMPLE_TBI=$(echo ${LINE} | cut -d , -f 5)
+            SAMPLE_VCF_GZ=$(echo ${LINE} | cut -d , -f 6)
             while : ; do
                 TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
