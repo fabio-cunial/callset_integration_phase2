@@ -10,7 +10,7 @@ workflow PersonalizedCohortVcf {
     input {
         File sv_integration_chunk_tsv
         Int n_rows
-        String filter_string = "FORMAT/CALIBRATION_SENSITIVITY<=0.7"
+        String filter_string = "INFO/CALIBRATION_SENSITIVITY<=0.7"
         
         File cohort_vcf_gz
         String remote_outdir
@@ -27,7 +27,8 @@ workflow PersonalizedCohortVcf {
         String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
     parameter_meta {
-        sv_integration_chunk_tsv: "A subset of the rows of table `hprc_grch38_hg38`, without the header."
+        sv_integration_chunk_tsv: "A subset of the rows of table `hprc_grch38_hg38`, without the header. The single-sample VCFs in this file are assumed to have been scored by xgboost but not to have been filtered based on such scores."
+        filter_string: "The same single-sample filters used to build `cohort_vcf_gz`. Remark: at this stage, CALIBRATION_SENSITIVITY is in the INFO field, not in the FORMAT field, of a single-sample xgboost-scored VCF."
     }
     
     scatter (i in range(n_rows)) {
@@ -84,8 +85,6 @@ task Impl {
         String kanpig_params_multisample
     }
     parameter_meta {
-        sv_integration_chunk_tsv: "The single-sample VCFs in this file are assumed to have been scored by xgboost but not to have been filtered based on such scores."
-        filter_string: "The same single-sample filters used to build `cohort_vcf_gz`."
     }
     
     String docker_dir = "/callset_integration"
