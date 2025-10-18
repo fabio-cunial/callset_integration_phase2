@@ -211,7 +211,8 @@ task Impl {
             fi
             export RUST_BACKTRACE="full"
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_multisample} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_kanpig.vcf
-            ${TIME_COMMAND} bgzip ${SAMPLE_ID}_kanpig.vcf
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_kanpig.vcf > ${SAMPLE_ID}_kanpig.vcf.gz
+            rm -f ${SAMPLE_ID}_kanpig.vcf            
             tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
         }
         
