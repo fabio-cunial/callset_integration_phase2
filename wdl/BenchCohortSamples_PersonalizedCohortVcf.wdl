@@ -290,13 +290,22 @@ task BenchSample {
         # Localizing the personalized VCFs
         MIN_N_SAMPLES=$(echo ~{sep="," min_n_samples} | tr ',' ' ')
         for M in ${MIN_N_SAMPLES}; do
-            gsutil -m cp ~{remote_input_dir}/${M}_samples/~{sample_id}_kanpig.vcf.gz ./${M}.vcf.gz &
+            gsutil -m cp ~{remote_input_dir}/${M}_samples/~{sample_id}_kanpig.vcf.gz ./${M}_tmp1.vcf.gz &
+        done
+        wait
+        for M in ${MIN_N_SAMPLES}; do
+            tabix -f ${M}_tmp1.vcf.gz &
+        done
+        wait
+        for M in ${MIN_N_SAMPLES}; do
+            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${M}_tmp1.vcf.gz > ${M}.vcf.gz &
         done
         wait
         for M in ${MIN_N_SAMPLES}; do
             tabix -f ${M}.vcf.gz &
         done
         wait
+        rm -f *_tmp1.vcf.gz*
         
         # Benchmarking
         if [ ~{bench_method} -eq 0 ]; then
