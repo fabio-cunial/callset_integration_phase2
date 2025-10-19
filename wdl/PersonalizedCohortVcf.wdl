@@ -59,10 +59,13 @@ workflow PersonalizedCohortVcf {
 }
 
 
-# Performance on 10'070 samples, 15x, GRCh38:
+# Performance on a 10k 0.7 cohort VCF, filtered to calls >=50bp that occur in
+# >=2048 samples, on a VM with 6 CPUs and 20GB of RAM:
 #
-# CAL_SENS  CPU     RAM     TIME
-# <=0.7     500%    16G     30m
+# TASK              CPU     RAM     TIME
+# bcftools concat   500%    40M     1m
+# kanpig            32%     3G      10m
+# bcftools sort     100%    1G      2m
 #
 task Impl {
     input {
@@ -247,9 +250,9 @@ task Impl {
             MergeVcfs ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz cohort.vcf.gz
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_aligned.bam ${SAMPLE_ID}_merged.vcf.gz
             while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_kanpig.vcf.gz ~{remote_outdir}/ && echo 0 || echo 1)
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_kanpig.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
-                    echo "Error uploading the GT file. Trying again..."
+                    echo "Error uploading the personalized, re-genotyped file. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
                 else
                     break

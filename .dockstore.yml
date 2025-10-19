@@ -420,3 +420,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PersonalizedCohortVcf.wdl
   testParameterFiles:
+- name: BenchCohortSamples_PersonalizedCohortVcf
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BenchCohortSamples_PersonalizedCohortVcf.wdl
+  testParameterFiles:
