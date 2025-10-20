@@ -267,6 +267,8 @@ task BenchSample {
 
 
         # Main program
+        ls -laht
+        df -h
         
         # Preprocessing the dipcall VCF
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{single_sample_dipcall_vcf_gz} > truth.vcf.gz
