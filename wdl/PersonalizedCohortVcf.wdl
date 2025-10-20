@@ -25,10 +25,12 @@ workflow PersonalizedCohortVcf {
         Int ram_size_gb = 20
         Int disk_size_gb = 100
         String kanpig_params_multisample = "--sizemin 20 --sizemax 10000 --neighdist 500 --gpenalty 0.04 --hapsim 0.97"
+        String docker_image = "fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `hprc_grch38_hg38`, without the header. The single-sample VCFs in this file are assumed to have been scored by xgboost but not to have been filtered based on such scores."
         filter_string: "The same single-sample filters used to build `cohort_vcf_gz`. Remark: at this stage, CALIBRATION_SENSITIVITY is in the INFO field, not in the FORMAT field, of a single-sample xgboost-scored VCF."
+        docker_image: "The same used to build V1"
     }
     
     scatter (i in range(n_rows)) {
@@ -50,7 +52,8 @@ workflow PersonalizedCohortVcf {
                 n_cpu = n_cpu,
                 ram_size_gb = ram_size_gb,
                 disk_size_gb = disk_size_gb,
-                kanpig_params_multisample = kanpig_params_multisample
+                kanpig_params_multisample = kanpig_params_multisample,
+                docker_image = docker_image
         }
     }
     
@@ -86,6 +89,7 @@ task Impl {
         Int ram_size_gb
         Int disk_size_gb
         String kanpig_params_multisample
+        String docker_image
     }
     parameter_meta {
     }
@@ -266,7 +270,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_squish"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
