@@ -227,6 +227,7 @@ task Impl {
         
         
         # ---------------------------- Main program ----------------------------
+        source activate truvari5
         
         # Preprocessing the cohort VCF
         echo "SAMPLE" > samples.txt
