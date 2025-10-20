@@ -190,12 +190,12 @@ task BenchSample {
         File reference_fai
         
         Int ram_size_gb = 32
+        Int disk_size_gb = 512
     }
     parameter_meta {
     }
     
     Int n_personalized_vcfs = length(min_n_samples)
-    Int disk_size_gb = ( 1+n_personalized_vcfs )*( ceil(size(v1_07_cohort_vcf_gz,"GB")) )
     
     command <<<
         set -euxo pipefail
