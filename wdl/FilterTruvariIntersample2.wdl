@@ -34,12 +34,13 @@ task Impl {
         File truvari_collapsed_tbi
         
         Array[Int] min_n_samples
+        
+        Int ram_size_gb = 16
     }
     parameter_meta {
     }
     
     Int n_cpus = 4*length(min_n_samples)
-    Int ram_size_gb = 8*length(min_n_samples)
     Int disk_size_gb = (length(min_n_samples)+1)*10*ceil(size(truvari_collapsed_vcf_gz, "GB"))
     
     command <<<
