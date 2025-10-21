@@ -13,6 +13,7 @@ workflow GetCompositeSvs {
         
         Int max_distance
         Int min_calls
+        Int min_sv_length
     }
     parameter_meta {
     }
@@ -30,11 +31,12 @@ workflow GetCompositeSvs {
             cohort_vcf_gz = ExcludeTRs.filtered_vcf,
             cohort_tbi = ExcludeTRs.filtered_tbi,
             max_distance = max_distance,
-            min_calls = min_calls
+            min_calls = min_calls,
+            min_sv_length = min_sv_length
     }
     
     output {
-        File out_txt = Impl.out_txt
+        Array[File] out_txt = Impl.out_txt
     }
 }
 
@@ -108,6 +110,7 @@ task Impl {
         
         Int max_distance
         Int min_calls
+        Int min_sv_length
 
         Int n_cores = 2
         Int mem_gb = 8
@@ -131,12 +134,12 @@ task Impl {
         
                 
         bcftools index --nrecords ~{cohort_tbi}
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvs ~{cohort_vcf_gz} ~{max_distance} ~{min_calls} > out.txt
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvs ~{cohort_vcf_gz} ~{max_distance} ~{min_calls} ~{min_sv_length}
         ls -laht
     >>>
     
     output {
-        File out_txt = "out.txt"
+        Array[File] out_txt = glob("*.txt")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"

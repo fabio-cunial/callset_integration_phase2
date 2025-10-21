@@ -4,7 +4,7 @@ import java.io.*;
 
 
 /**
- * Uses the NE field printed by kanpig to build a BED of kanpig regions.
+ * Finds clusters of nearby SVs that are phased on the same haplotype.
  */
 public class GetCompositeSvs {
     /**
@@ -16,13 +16,17 @@ public class GetCompositeSvs {
     
     
     /**
-     * @param args 0 a sorted inter-sample VCF, whose FORMAT field is:
-     * GT:FT:SQ:GQ:PS:NE:DP:AD:KS
+     * @param args 
+     * 0: a sorted and phased inter-sample VCF. Only phased calls are
+     *    considered;
+     * 3: only clusters with at least one call of this length or longer are
+     *    considered.
      */
     public static void main(String[] args) throws IOException {
         final String COHORT_VCF_GZ = args[0];
         final int MAX_DISTANCE = Integer.parseInt(args[1]);
         final int MIN_CALLS = Integer.parseInt(args[2]);
+        final int MIN_SV_LENGTH = Integer.parseInt(args[3]);
         
         final int CAPACITY = 10;  // Arbitrary
         final int QUANTUM = 10000;  // Arbitrary
@@ -49,7 +53,7 @@ public class GetCompositeSvs {
             tokensPrime=tokens[9].split(":");
             region=Integer.parseInt(tokensPrime[5]);
             if (region!=currentRegion) {
-                if (currentRegion!=-1) getCompositeSvs(calls,lastCall,MAX_DISTANCE,MIN_CALLS,columns);
+                if (currentRegion!=-1) getCompositeSvs(calls,lastCall,MAX_DISTANCE,MIN_CALLS,MIN_SV_LENGTH,columns);
                 currentRegion=region; lastCall=0; calls[0]=tokens;
             }
             else {
@@ -63,7 +67,7 @@ public class GetCompositeSvs {
             }
             str=br.readLine();
         }
-        if (currentRegion!=-1) getCompositeSvs(calls,lastCall,MAX_DISTANCE,MIN_CALLS,columns);
+        if (currentRegion!=-1) getCompositeSvs(calls,lastCall,MAX_DISTANCE,MIN_CALLS,MIN_SV_LENGTH,columns);
         br.close();
     }
     
@@ -71,17 +75,21 @@ public class GetCompositeSvs {
     /**
      * @param maxDistance maximum distance between two calls that are present on
      * the same haplotype to be considered part of the same composite event;
-     * @param minCalls (>=2) min number of calls in a composite event.
+     * @param minCalls (>=2) min number of calls in a composite event;
+     * @param minSvLength only clusters with at least one call of this length or
+     * longer are printed in output.
      */
-    private static final void getCompositeSvs(String[][] calls, int lastCall, int maxDistance, int minCalls, String[] columns) {
+    private static final void getCompositeSvs(String[][] calls, int lastCall, int maxDistance, int minCalls, int minSvLength, String[] columns) throws IOException {
         final int N_COLUMNS = calls[0].length;
         final boolean IS_AUTOSOMAL = calls[0][9].indexOf(":")==3;
         
         final int CAPACITY = 20;  // Arbitrary
         
+        boolean found;
         int i, j, k;
-        int lastCompositeSv, callId;
+        int lastCompositeSv, callId, idGenerator, refLength, altLength;
         String key;
+        BufferedWriter bw1, bw2, bw3;
         int[] tmpArray;
         String[] tokens;
         int[][] compositeSvs;
@@ -98,6 +106,7 @@ public class GetCompositeSvs {
         for (j=10; j<N_COLUMNS; j++) {
             loadHaplotype(j,false,IS_AUTOSOMAL,calls,lastCall);
             lastCompositeSv=getCompositeSvs(calls,maxDistance,minCalls,compositeSvs,tmpArray);
+            found=false;
             for (k=0; k<=lastCompositeSv; k++) {
                 key=compositeSv2key(compositeSvs[k][0],compositeSvs[k][1]);
                 if (compositeSv2samples.containsKey(key)) {
@@ -129,27 +138,51 @@ public class GetCompositeSvs {
         }
         
         // Printing `compositeSvs` and `compositeSv2samples`.
+        idGenerator=0;
         iterator=compositeSv2samples.entrySet().iterator();
         while (iterator.hasNext()) {
             entry=iterator.next();
             key=entry.getKey(); value=entry.getValue();
-            tokens=key.split("-");
-            System.out.println("Composite event with "+tokens.length+" calls:");
+            tokens=key.split("-"); found=false;
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
-                for (j=0; j<=7; j++) System.out.print(calls[callId][j]+"\t");
-                System.out.println();
+                refLength=calls[callId][3].length();
+                altLength=calls[callId][4].length();
+                if (refLength-altLength>=minSvLength || altLength-refLength>=minSvLength) { found=true; break; }
             }
-            System.out.println("Occurs in "+value.size()+" haplotypes:");
-            for (i=0; i<value.size(); i++) System.out.print(value.elementAt(i)+",");
-            System.out.println(); System.out.println();
+            if (!found) continue;
+            idGenerator++;
+            bw1 = new BufferedWriter(new FileWriter(idGenerator+"_graph.txt"));
+            bw1.write("-> ");
+            bw2 = new BufferedWriter(new FileWriter(idGenerator+"_refalt.txt"));
+            for (i=0; i<tokens.length; i++) {
+                callId=Integer.parseInt(tokens[i]);
+                refLength=calls[callId][3].length();
+                altLength=calls[callId][4].length();
+                if (refLength==1 && altLength>1) {
+                    bw1.write("INS_"+(altLength-refLength)+" -> ");
+                    bw2.write(calls[callId][4]+"\n");
+                }
+                else if (refLength>1 && altLength==1) {
+                    bw1.write("DEL_"+(refLength-altLength)+" -> ");
+                    bw2.write(calls[callId][3]+"\n");
+                }
+                else {
+                    bw1.write("REPL_"+refLength+" -> ");
+                    bw2.write(calls[callId][3]+" -> "+calls[callId][4]+"\n");
+                }
+            }
+            bw1.close(); bw2.close();
+            bw3 = new BufferedWriter(new FileWriter(idGenerator+"_haps.txt"));
+            for (i=0; i<value.size(); i++) bw3.write(value.elementAt(i)+"\n");
+            bw3.close();
         }
     }
     
     
     /**
      * The procedure loads call IDs (i.e. indexes in `calls`) in global variable
-     * `haplotype`.
+     * `haplotype`. Only phased calls are loaded.
      *
      * @param which 0=left hap, 1=right hap.
      */
