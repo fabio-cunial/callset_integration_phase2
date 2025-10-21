@@ -13,11 +13,15 @@ for REGION in all tr not_tr; do
     for SAMPLE in ${SAMPLES}; do
         P=$(grep precision ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
         R=$(grep recall ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
-        ROW="${P}${R}"
+        F=$(grep f1 ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
+        C=$(grep gt_concordance ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
+        ROW="${P}${R}${F}${C}"
         for MIN in ${MIN_N_SAMPLES}; do
             P=$(grep precision ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
             R=$(grep recall ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
-            ROW="${ROW}${P}${R}"
+            F=$(grep f1 ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
+            C=$(grep gt_concordance ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
+            ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> ${INPUT_DIR}/personalized_${REGION}.csv
     done
@@ -29,11 +33,15 @@ for REGION in all tr not_tr; do
     for SAMPLE in ${SAMPLES}; do
         P=$(grep precision ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
         R=$(grep recall ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
-        ROW="${P}${R}"
+        F=$(grep f1 ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
+        C=$(grep gt_concordance ${INPUT_DIR}/${SAMPLE}_v1_07_${REGION}.txt | cut -w -f 3)
+        ROW="${P}${R}${F}${C}"
         for MIN in ${MIN_N_SAMPLES}; do
             P=$(grep precision ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
             R=$(grep recall ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
-            ROW="${ROW}${P}${R}"
+            F=$(grep f1 ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
+            C=$(grep gt_concordance ${INPUT_DIR}/${SAMPLE}_${MIN}_${REGION}.txt | cut -w -f 3)
+            ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> ${INPUT_DIR}/personalized_${REGION}.csv
     done

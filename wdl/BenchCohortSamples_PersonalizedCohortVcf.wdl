@@ -292,7 +292,12 @@ task BenchSample {
         # Localizing the personalized VCFs
         MIN_N_SAMPLES=$(echo ~{sep="," min_n_samples} | tr ',' ' ')
         for M in ${MIN_N_SAMPLES}; do
-            gsutil -m cp ~{remote_input_dir}/${M}_samples/~{sample_id}_kanpig.vcf.gz ./${M}_tmp1.vcf.gz &
+            if [[ ${M} -eq 1 ]]; then
+                SUFFIX=""
+            else
+                SUFFIX="s"
+            fi
+            gsutil -m cp ~{remote_input_dir}/${M}_sample${SUFFIX}/~{sample_id}_kanpig.vcf.gz ./${M}_tmp1.vcf.gz &
         done
         wait
         for M in ${MIN_N_SAMPLES}; do
