@@ -153,22 +153,22 @@ public class GetCompositeSvs {
             if (!found) continue;
             idGenerator++;
             bw1 = new BufferedWriter(new FileWriter(idGenerator+"_graph.txt"));
-            bw1.write("-> ");
+            bw1.write(calls[Integer.parseInt(tokens[0])][0]+" -> ");
             bw2 = new BufferedWriter(new FileWriter(idGenerator+"_refalt.txt"));
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
                 refLength=calls[callId][3].length();
                 altLength=calls[callId][4].length();
                 if (refLength==1 && altLength>1) {
-                    bw1.write("INS_"+(altLength-refLength)+" -> ");
+                    bw1.write("INS_"+calls[callId][1]+"_"+(altLength-1)+" -> ");
                     bw2.write(calls[callId][4]+"\n");
                 }
                 else if (refLength>1 && altLength==1) {
-                    bw1.write("DEL_"+(refLength-altLength)+" -> ");
+                    bw1.write("DEL_"+calls[callId][1]+"_"+(refLength-1)+" -> ");
                     bw2.write(calls[callId][3]+"\n");
                 }
                 else {
-                    bw1.write("REPL_"+refLength+" -> ");
+                    bw1.write("REPL_"+calls[callId][1]+"_"+(refLength-1)+" -> ");
                     bw2.write(calls[callId][3]+" -> "+calls[callId][4]+"\n");
                 }
             }

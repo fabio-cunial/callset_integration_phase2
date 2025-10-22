@@ -56,12 +56,9 @@ task HGSVC3Dipcall2BAMsImpl {
     }
     
     String docker_dir = "/callset_integration"
-    String work_dir = "/cromwell_root/callset_integration"
     
     command <<<
         set -euxo pipefail
-        mkdir -p ~{work_dir}
-        cd ~{work_dir}
         
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
