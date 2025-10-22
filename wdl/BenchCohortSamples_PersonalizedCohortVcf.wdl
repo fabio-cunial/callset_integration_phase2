@@ -13,8 +13,8 @@ workflow BenchCohortSamples_PersonalizedCohortVcf {
         String remote_input_dir
         Array[Int] min_n_samples = [2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         
-        File v1_07_cohort_vcf_gz
-        File v1_07_cohort_tbi
+        File? v1_07_cohort_vcf_gz
+        File? v1_07_cohort_tbi
         
         Int min_sv_length = 50
         Int max_sv_length = 10000
@@ -35,11 +35,13 @@ workflow BenchCohortSamples_PersonalizedCohortVcf {
             tandem_bed = tandem_bed,
             reference_fai = reference_fai
     }
-    call SubsetToSamples as v1 {
-        input:
-            cohort_vcf_gz = v1_07_cohort_vcf_gz,
-            cohort_tbi = v1_07_cohort_tbi,
-            sample_ids = sample_ids
+    if (defined(v1_07_cohort_vcf_gz)) {
+        call SubsetToSamples as v1 {
+            input:
+                cohort_vcf_gz = v1_07_cohort_vcf_gz,
+                cohort_tbi = v1_07_cohort_tbi,
+                sample_ids = sample_ids
+        }
     }
     scatter (i in range(length(sample_ids))) {
         call BenchSample {
@@ -76,8 +78,8 @@ workflow BenchCohortSamples_PersonalizedCohortVcf {
 #
 task SubsetToSamples {
     input {
-        File cohort_vcf_gz
-        File cohort_tbi
+        File? cohort_vcf_gz
+        File? cohort_tbi
         Array[String] sample_ids
         
         Int n_cpu = 8
@@ -177,8 +179,8 @@ task BenchSample {
         String remote_input_dir
         Array[Int] min_n_samples
         
-        File v1_07_cohort_vcf_gz
-        File v1_07_cohort_tbi
+        File? v1_07_cohort_vcf_gz
+        File? v1_07_cohort_tbi
         
         Int min_sv_length
         Int max_sv_length
@@ -282,12 +284,15 @@ task BenchSample {
         wait
         
         # Preprocessing the V1 cohort VCF
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{v1_07_cohort_vcf_gz} > tmp1_07.vcf.gz
-        ${TIME_COMMAND} tabix -f tmp1_07.vcf.gz
-        rm -f ~{v1_07_cohort_vcf_gz}
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_07.vcf.gz > v1_07.vcf.gz
-        ${TIME_COMMAND} tabix -f v1_07.vcf.gz
-        rm -f tmp1_*.vcf.gz
+        if ~{defined(v1_07_cohort_vcf_gz)}
+        then
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{v1_07_cohort_vcf_gz} > tmp1_07.vcf.gz
+            ${TIME_COMMAND} tabix -f tmp1_07.vcf.gz
+            rm -f ~{v1_07_cohort_vcf_gz}
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_07.vcf.gz > v1_07.vcf.gz
+            ${TIME_COMMAND} tabix -f v1_07.vcf.gz
+            rm -f tmp1_*.vcf.gz
+        fi
         
         # Localizing the personalized VCFs
         MIN_N_SAMPLES=$(echo ~{sep="," min_n_samples} | tr ',' ' ')
@@ -317,14 +322,20 @@ task BenchSample {
         # Benchmarking
         if [ ~{bench_method} -eq 0 ]; then
             # Parallel for truvari (which is single-core).
-            bench_thread v1_07.vcf.gz v1_07 &
+            if ~{defined(v1_07_cohort_vcf_gz)}
+            then
+                bench_thread v1_07.vcf.gz v1_07 &
+            fi
             for M in ${MIN_N_SAMPLES}; do
                 bench_thread ${M}.vcf.gz ${M} &
             done
             wait
         else
             # Sequential for vcfdist, since it takes too much RAM.
-            bench_thread v1_07.vcf.gz v1_07
+            if ~{defined(v1_07_cohort_vcf_gz)}
+            then
+                bench_thread v1_07.vcf.gz v1_07
+            fi
             for M in ${MIN_N_SAMPLES}; do
                 bench_thread ${M}.vcf.gz ${M}
             done
