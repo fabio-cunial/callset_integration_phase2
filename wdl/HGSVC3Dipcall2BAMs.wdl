@@ -75,10 +75,10 @@ task HGSVC3Dipcall2BAMsImpl {
     >>>
     
     output {
-        File hap1_bam = work_dir + "/" + sample_id + "_hap1.bam"
-        File hap1_bai = work_dir + "/" + sample_id + "_hap1.bam.bai"
-        File hap2_bam = work_dir + "/" + sample_id + "_hap2.bam"
-        File hap2_bai = work_dir + "/" + sample_id + "_hap2.bam.bai"
+        File hap1_bam = sample_id + "_hap1.bam"
+        File hap1_bai = sample_id + "_hap1.bam.bai"
+        File hap2_bam = sample_id + "_hap2.bam"
+        File hap2_bai = sample_id + "_hap2.bam.bai"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
