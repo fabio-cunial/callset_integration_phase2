@@ -5,7 +5,7 @@ import java.io.*;
 
 /**
  * Makes sure that REF and ALT are uppercase and contain only characters in
- * {A,C,G,T,N}, and overwrites QUAL with a given constant.
+ * {A,C,G,T,N}. Overwrites QUAL with a given constant.
  */
 public class CleanRefAltQual {
     

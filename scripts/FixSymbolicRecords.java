@@ -51,6 +51,13 @@ public class FixSymbolicRecords {
             nRecords++;
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records");
             tokens=str.split("\t");
+            chrom=tokens[0];
+            pos=Integer.parseInt(tokens[1]);  // 1-based, previous base in REF.
+            if (pos<1 || pos>fasta.get(chrom).length()) {
+                // Discarded: wrong POS.
+                str=br.readLine();
+                continue;
+            }
             alt=tokens[4];
             if (alt.charAt(0)!='<') {
                 bw.write(str); bw.newLine();
@@ -61,13 +68,6 @@ public class FixSymbolicRecords {
             if (alt.substring(0,4).equalsIgnoreCase("<INS") || alt.substring(0,4).equalsIgnoreCase("<CNV")) {
                 // Discarded: not enough information.
                 nDiscarded++;
-                str=br.readLine();
-                continue;
-            }
-            chrom=tokens[0];
-            pos=Integer.parseInt(tokens[1]);  // 1-based, previous base in REF.
-            if (pos<1 || pos>fasta.get(chrom).length()) {
-                // Discarded: wrong POS.
                 str=br.readLine();
                 continue;
             }

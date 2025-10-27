@@ -1,3 +1,4 @@
+import java.util.HashMap;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.io.*;
@@ -5,20 +6,26 @@ import java.io.*;
 
 /**
  * Removes all the REF sequences that can be reconstructed from INFO, and stores
- * their length in the symbolic ALT to prevent too much collapse by `bcftools 
- * merge` downstream. This is typically used to compress a VCF that contains 
- * only ultralong calls.
+ * their length in the symbolic ALT to prevent overcollapse by `bcftools merge` 
+ * downstream. Forces a QUAL value on every record.
  *
- * Remark: POS values are not checked to be consistent with the reference.
+ * This program is typically used to compress a VCF that contains only ultralong
+ * calls.
+ *
+ * Remark: POS values are not checked to be consistent with the reference. <---------------
  */
 public class RemoveRefAlt {
+    
+    private static HashMap<String,Integer> fai;
     
     /**
      * @param args
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
-        final String OUTPUT_VCF_GZ = args[1];
+        final String FORCE_QUAL = args[1];
+        final String INPUT_FAI = args[2];
+        final String OUTPUT_VCF_GZ = args[3];
         
         final int QUANTUM = 5000;  // Arbitrary
         
@@ -26,11 +33,13 @@ public class RemoveRefAlt {
         char c;
         int i;
         int nRecords, nEdited, nDiscarded, pos, svlen;
-        String str, ref, alt, info, svlenStr, endStr;
+        String str, ref, alt, info, svlenStr, endStr, chrom;
         BufferedReader br;
         BufferedWriter bw;
         String[] tokens;
         
+        
+        loadFai(INPUT_FAI);
         bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_VCF_GZ))));
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; nEdited=0; nDiscarded=0;
@@ -43,7 +52,14 @@ public class RemoveRefAlt {
             nRecords++;
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records");
             tokens=str.split("\t");
+            chrom=tokens[0];
             pos=Integer.parseInt(tokens[1]);  // 1-based, previous base in REF.
+            if (pos<1 || pos>fai.get(chrom).intValue()) {
+                // Discarded: wrong POS.
+                nDiscarded++;
+                str=br.readLine();
+                continue;
+            }
             ref=tokens[3]; alt=tokens[4]; info=tokens[7];
             c=ref.charAt(0);
             refIsDna = ref.length()>=1 && (c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n');
@@ -100,7 +116,7 @@ public class RemoveRefAlt {
                 ref="N";
                 nEdited++;
             }
-            tokens[3]=ref; tokens[4]=alt;
+            tokens[3]=ref; tokens[4]=alt; tokens[5]=FORCE_QUAL;
             
             // Outputting
             bw.write(tokens[0]);
@@ -131,5 +147,22 @@ public class RemoveRefAlt {
 		q=info.indexOf(";",p+FIELD_LENGTH);
 		return info.substring(p+FIELD_LENGTH,q<0?info.length():q);
 	}
+    
+    
+    private static final void loadFai(String path) throws IOException {
+        String str;
+        BufferedReader br;
+        String[] tokens;
+        
+        fai = new HashMap<String,Integer>();
+        br = new BufferedReader(new FileReader(path));
+        str=br.readLine();
+        while (str!=null) {
+            tokens=str.split("\t");
+            fai.put(tokens[0],Integer.valueOf(tokens[1]));
+            str=br.readLine();
+        }
+        br.close();
+    }
 
 }
