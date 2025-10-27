@@ -51,7 +51,7 @@ public class FixSymbolicRecords {
             nRecords++;
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records");
             tokens=str.split("\t");
-            ref=tokens[3]; alt=tokens[4];
+            alt=tokens[4];
             if (alt.charAt(0)!='<') {
                 bw.write(str); bw.newLine();
                 str=br.readLine();
@@ -64,9 +64,15 @@ public class FixSymbolicRecords {
                 str=br.readLine();
                 continue;
             }
+            chrom=tokens[0];
+            pos=Integer.parseInt(tokens[1]);  // 1-based, previous base in REF.
+            if (pos<1 || pos>fasta.get(chrom).length()) {
+                // Discarded: wrong POS.
+                str=br.readLine();
+                continue;
+            }
             
             // Computing SVLEN
-            pos=Integer.parseInt(tokens[1]);  // 1-based, previous base in REF.
             info=tokens[7];
             svlenStr=getInfoField(info,"SVLEN");
             if (svlenStr!=null) {
@@ -86,7 +92,7 @@ public class FixSymbolicRecords {
             }
             
             // Fixing the symbolic record
-            chrom=tokens[0];
+            ref=tokens[3];
             if (alt.substring(0,4).equalsIgnoreCase("<DEL")) {
                 ref=fasta.get(chrom).substring(pos-1,pos-1+svlen+1);
                 alt=ref.charAt(0)+"";
@@ -184,36 +190,6 @@ public class FixSymbolicRecords {
                 default: out.append('N'); break;
             }
         }
-	}
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    /**
-     * @param str assumed to be uppercase.
-     */
-	private static final void replaceNonstandardChars(String str, StringBuilder out) {
-        final int LENGTH = str.length();
-        
-        char c;
-        int i;
-        
-        out.delete(0,out.length());
-        for (i=0; i<LENGTH; i++) {
-            c=str.charAt(i);
-            if (c=='A' || c=='C' || c=='G' || c=='T') out.append(c);
-            else out.append('N');
-        }
-	}
-    
-    
-    
-
+	}    
 
 }

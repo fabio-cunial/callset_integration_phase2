@@ -195,10 +195,11 @@ task Workpackage1Impl {
         # creates sorted output files `${SAMPLE_ID}_${CALLER_ID}_X.vcf.gz`,
         # where X is:
         #
-        # sv: calls with length in [MIN_SV_LENGTH..MAX_SV_LENGTH] in canonical
-        #     form;
-        # sv_ultralong: calls with length `>MAX_SV_LENGTH`, in canonical form;
-        # bnd: only BND records, in their original form.
+        # sv: non-BND records with length in [MIN_SV_LENGTH..MAX_SV_LENGTH], in
+        #     canonical form;
+        # sv_ultralong: non-BND records with length `>MAX_SV_LENGTH`, devoid of
+        #               sequence where possible to save space;
+        # bnd: BND records, in their original form.
         #
         function CanonizeVcf() {
             local INPUT_VCF_GZ=$1
@@ -221,26 +222,8 @@ task Workpackage1Impl {
                 rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
             
-            # Making sure the VCF is sorted
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            
-            # Fixing REF
-            ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            
-            # Fixing symbolic calls
-            ---------->
-            
-            
-            
-            
-            # Removing duplicated records
-            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            
             # Making sure SVLEN and SVTYPE are consistently annotated
-            ${TIME_COMMAND} truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Isolating BNDs
@@ -249,17 +232,79 @@ task Workpackage1Impl {
             ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="BND"' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            # Isolating ultra-long calls and keeping only long calls
-            ${TIME_COMMAND} bcftools filter --include '(SVLEN<-'${MAX_SV_LENGTH}' || SVLEN>'${MAX_SV_LENGTH}')' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_sv_ultralong.vcf.gz
-            tabix -f ${SAMPLE_ID}_${CALLER_ID}_sv_ultralong.vcf.gz
-            ${TIME_COMMAND} bcftools filter --include '(SVLEN>='${MIN_SV_LENGTH}' && SVLEN<='${MAX_SV_LENGTH}') || (SVLEN>=-'${MAX_SV_LENGTH}' && SVLEN<=-'${MIN_SV_LENGTH}')' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            # Isolating ultra-long calls and discarding short calls
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>'${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
+            tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
+            # 1. Main VCF ------------------------------------------------------
+            
+            # 1.1 Sorting
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            # 1.2 Fixing symbolic records
+            java -cp ~{docker_dir} -Xmx5G FixSymbolicRecords ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{reference_fa} ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            # 1.3 Fixing REF
+            ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            # 1.4 Cleaning REF, ALT, QUAL. 
+            # - REF and ALT must be uppercase for XGBoost scoring downstream to
+            #   work.
+            # - QUAL is used by truvari collapse to select a representation. We
+            #   assign values based on which representations we observed to be
+            #   more accurate in a few examples. Symbolic records are NOT given
+            #   low quality (it was 1 in Phase 1) since e.g. all DEL calls made
+            #   by Sniffles are symbolic.
+            if [ ${CALLER_ID} = 'pav' ]; then
+                QUAL="4"
+            elif [ ${CALLER_ID} = 'pbsv' ]; then
+                QUAL="3"
+            elif [ ${CALLER_ID} = 'sniffles' ]; then
+                QUAL="2"
+            fi
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            # 1.5 Removing duplicated records
+            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz.tbi
+            
+            # 2. BND VCF -------------------------------------------------------
+            
+            # 2.1 Sorting 
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
+            
+            # 2.2 Fixing REF
+            ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
+            
+            # 2.3 Removing duplicated records
+            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
             
             
+            # 3. Ultralong VCF -------------------------------------------------
             
+            # 3.1 Sorting
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             
+            # 3.2 Removing sequence (lossless).
+            ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             
+            # 3.3 Removing duplicated records
+            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
         }
         
         
@@ -267,81 +312,75 @@ task Workpackage1Impl {
         
         
         
+        Symolic variants in ultralong VCF may be destroyed by bcftools merge!!!! Use our script.
         
+        Remember that now SUPP order is PAV, PBSV, SNIFFLES!!!!!!!!!!
         
+
         
-        
-        function Resolve() {
+        # The procedure creates merged output files ${SAMPLE_ID}_X.vcf.gz`,
+        # where X is:
+        #
+        # sv: non-BND records with length in [MIN_SV_LENGTH..MAX_SV_LENGTH],
+        #     collapsed with truvari;
+        # sv_ultralong: non-BND records with length `>MAX_SV_LENGTH`; collapsed
+        #               with truvari but without sequence similarity.
+        # bnd: BND records, not collapsed with truvari since `truvari collapse`
+        #      does not yet work on BNDs.
+        #
+        function IntrasampleMerge() {
             local SAMPLE_ID=$1
-            local CALLER_ID=$2
-            local INPUT_VCF_GZ=$3
             
-            # Removing multiallelic records from the input
-            bcftools norm --multiallelics - --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_tmp1.vcf.gz
-            tabix -f ${SAMPLE_ID}_tmp1.vcf.gz
-        
-            # Step 1 - clean up the VCF
-            # - Assigns quality scores to each SV caller's result
-            #  - pav 4
-            #  - pbsv 3
-            #  - sniffles 2
-            # - Resolves any symbolic alts (e.g. `<DEL>` with the sequence from
-            #   the reference)
-            #   - symbolic variants are given quality score of 1
-            # - Filters out `<CNV>` from pbsv and `<INS>` from sniffles
-            # - Filters out variants greater than 100Mbp
-            # - Fills in blank genotypes with `0`
-            # - Filters out BND variants
-            # - Turn some deletion/insertion pairs into inversions
-            # The quality scores are set based on which variant representations
-            # we believe are generally more accurate with higher being better.
-            python ~{docker_dir}/resolve.py ${SAMPLE_ID}_tmp1.vcf.gz ~{reference_fa} | bcftools norm --check-ref s --fasta-ref ~{reference_fa} -N -m-any | bcftools view -i "SVTYPE != 'BND'" -O z -o ${SAMPLE_ID}_${CALLER_ID}_resolved.vcf.gz
-            tabix -f ${SAMPLE_ID}_${CALLER_ID}_resolved.vcf.gz
-            rm -f ${SAMPLE_ID}_tmp1.vcf.gz*
-        
-            # $inversion_guesser.py$ creates a DEL with wrong ALT when an INS
-            # is followed by a DEL that cancels it out. I.e. this input:
-            #
-            # chr2    14066975        pbsv.INS.669    T       TATATATATGATATATATATCATATATATGATATATATGATATATATATCATATATATG
-            # chr2    14066975        pbsv.DEL.670    TATATATATGATATATATATCATATATATGATATATATGATATATATATCATATATATG
-            #
-            # gives the following output:
-            #
-            # chr2    14066975        pbsv.DEL.670    TATATATATGATATATATATCATATATATGATATATATGATATATATATCATATATATG     TATATATATGATATATATATCATATATATGATATATATGATATATATATCATATATATG
-            #python ~{docker_dir}/inversion_guesser.py -i $prename -o $outname
-        }
-        
-        
-        function TruvariIntrasample() {
-            local SAMPLE_ID=$1
-            local PBSV_VCF_GZ=$2
-            local SNIFFLES_VCF_GZ=$3
-            local PAV_VCF_GZ=$4
             
-            # Step 1 - Merging
-            # Pastes the samples together in the order of the preferred
-            # genotypes. That is to say, this creates a three sample VCF with
-            # sample columns from pbsv, sniffles, pav_sv
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples -O z -o ${SAMPLE_ID}_tmp1.vcf.gz ${PBSV_VCF_GZ} ${SNIFFLES_VCF_GZ} ${PAV_VCF_GZ}
+            # 1. Main VCF ------------------------------------------------------
+            
+            # Remark: the order of the callers in `bcftools merge` affects the
+            # value of the SAMPLE column emitted by `truvari collapse --intra`.
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples -output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz > ${SAMPLE_ID}_tmp1.vcf.gz
             tabix -f ${SAMPLE_ID}_tmp1.vcf.gz
-        
-            # Step 2 - Removing multiallelic records. We observed that they are
-            # created in Step 1 sometimes, e.g.:
-            #
-            # 2024-03-19 20:52:28,548 [ERROR] Cannot compare multi-allelic
-            # records. Please split
-            # 2024-03-19 20:52:28,548 [ERROR] line
-            # chr4	137168756	pbsv.INS.2751;chr4-137168757-DEL-52	A   ACGTATGTGTATACGTATACATATACGCGTATATACATACGTATACATATACG,A	4	PASS	SVTYPE=INS;SVLEN=52;SVANN=TANDEM;ID=chr4-137168757-DEL-52;TIG_REGION=h2tg007223l:91206-91206;QUERY_STRAND=+;HOM_REF=0,23;HOM_TIG=0,23;INVScore=0.981132;AC=2,1	GT:AD:DP:SAC	1/1:1,8,.:9:1,0,3,5	./.:.:.:.	0|2:.:.:.
-            #
             ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_tmp1.vcf.gz > ${SAMPLE_ID}_bcftools_merged.vcf.gz
             tabix -f ${SAMPLE_ID}_bcftools_merged.vcf.gz
             rm -f ${SAMPLE_ID}_tmp1.vcf.gz*
-
-            # Step 3 - Collapsing
-            ${TIME_COMMAND} truvari collapse -i ${SAMPLE_ID}_bcftools_merged.vcf.gz --sizemin 0 --sizemax 1000000 --keep maxqual --gt het --intra --pctseq 0.90 --pctsize 0.90 --refdist 500 --output ${SAMPLE_ID}_tmp2.vcf
-            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_tmp2.vcf > ${SAMPLE_ID}_truvari_collapsed.vcf.gz
-            tabix -f ${SAMPLE_ID}_truvari_collapsed.vcf.gz
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_bcftools_merged.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax -1 --output ${SAMPLE_ID}_tmp2.vcf
+            rm -f ${SAMPLE_ID}_bcftools_merged.vcf.gz*
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_tmp2.vcf > ${SAMPLE_ID}_sv.vcf.gz
+            tabix -f ${SAMPLE_ID}_sv.vcf.gz
             rm -f ${SAMPLE_ID}_tmp2.vcf
+            
+            # 2. BND VCF -------------------------------------------------------
+            
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples -output-type z ${SAMPLE_ID}_pav_bnd.vcf.gz ${SAMPLE_ID}_pbsv_bnd.vcf.gz ${SAMPLE_ID}_sniffles_bnd.vcf.gz > ${SAMPLE_ID}_tmp1.vcf.gz
+            tabix -f ${SAMPLE_ID}_tmp1.vcf.gz
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_tmp1.vcf.gz > ${SAMPLE_ID}_bnd.vcf.gz
+            tabix -f ${SAMPLE_ID}_bnd.vcf.gz
+            rm -f ${SAMPLE_ID}_tmp1.vcf.gz*
+            
+            # 3. Ultralong VCF -------------------------------------------------
+            
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples -output-type z ${SAMPLE_ID}_pav_ultralong.vcf.gz ${SAMPLE_ID}_pbsv_ultralong.vcf.gz ${SAMPLE_ID}_sniffles_ultralong.vcf.gz > ${SAMPLE_ID}_tmp1.vcf.gz
+            tabix -f ${SAMPLE_ID}_tmp1.vcf.gz
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_tmp1.vcf.gz > ${SAMPLE_ID}_bcftools_merged.vcf.gz
+            tabix -f ${SAMPLE_ID}_bcftools_merged.vcf.gz
+            rm -f ${SAMPLE_ID}_tmp1.vcf.gz*
+            
+            # Removing SVLEN from symbolic ALTs for `truvari collapse`.
+            bcftools view --header-only ${SAMPLE_ID}_bcftools_merged.vcf.gz > ${SAMPLE_ID}_tmp2.vcf
+            ${TIME_COMMAND} bcftools view --no-header ${SAMPLE_ID}_bcftools_merged.vcf.gz | awk '{ \
+                $5=substr($5,1,4) ">"; \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' >> ${SAMPLE_ID}_tmp2.vcf
+            rm -f ${SAMPLE_ID}_bcftools_merged.vcf.gz*
+            ${TIME_COMMAND} bgzip --threads ${N_THREADS} ${SAMPLE_ID}_tmp2.vcf
+            tabix -f ${SAMPLE_ID}_tmp2.vcf.gz
+            
+            # Collapsing
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_tmp2.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax -1 --output ${SAMPLE_ID}_tmp3.vcf
+            rm -f ${SAMPLE_ID}_tmp2.vcf.gz*
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_tmp3.vcf > ${SAMPLE_ID}_ultralong.vcf.gz
+            tabix -f ${SAMPLE_ID}_ultralong.vcf.gz
+            rm -f ${SAMPLE_ID}_tmp3.vcf
         }
         
         
