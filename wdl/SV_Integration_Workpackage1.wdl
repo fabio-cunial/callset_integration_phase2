@@ -4,14 +4,16 @@ version 1.0
 # Runs `PAV2SVs.wdl`, `Resolve.wdl`, `TruvariIntrasample.wdl`, `Kanpig.wdl` in
 # the same VM for multiple samples.
 #
-workflow Workpackage1 {
+workflow SV_Integration_Workpackage1 {
     input {
         File sv_integration_chunk_tsv
         Int min_sv_length
+        Int max_sv_length
         String remote_outdir
         
         File reference_fa
         File reference_fai
+        File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
         
@@ -22,16 +24,19 @@ workflow Workpackage1 {
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
+        max_sv_length: "Calls above this length are deemed 'ultralong' and are treated separately."
         remote_outdir: "Where the output of intra-sample truvari and kanpig is stored for each sample."
     }
     
-    call Workpackage1Impl {
+    call Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             min_sv_length = min_sv_length,
+            max_sv_length = max_sv_length,
             remote_outdir = remote_outdir,
             reference_fa = reference_fa,
             reference_fai = reference_fai,
+            reference_agp = reference_agp,
             ploidy_bed_female = ploidy_bed_female,
             ploidy_bed_male = ploidy_bed_male,
             n_cpu = n_cpu,
@@ -46,16 +51,18 @@ workflow Workpackage1 {
 
  
 #
-task Workpackage1Impl {
+task Impl {
     input {
         File sv_integration_chunk_tsv
         
         Int min_sv_length
+        Int max_sv_length
         String kanpig_params_singlesample
         String remote_outdir
         
         File reference_fa
         File reference_fai
+        File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
         
