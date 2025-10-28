@@ -15,7 +15,6 @@ public class CleanRefAltQual {
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String FORCE_QUAL = args[1];
-        final String OUTPUT_VCF_GZ = args[2];
         
         final int QUANTUM = 5000;  // Arbitrary
         
@@ -24,16 +23,14 @@ public class CleanRefAltQual {
         String str;
         StringBuilder buffer;
         BufferedReader br;
-        BufferedWriter bw;
         String[] tokens;
         
         buffer = new StringBuilder();
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_VCF_GZ))));
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                bw.write(str); bw.newLine();
+                System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -47,14 +44,14 @@ public class CleanRefAltQual {
             tokens[5]=FORCE_QUAL;
             
             // Outputting
-            bw.write(tokens[0]);
-            for (i=1; i<tokens.length; i++) { bw.write('\t'); bw.write(tokens[i]); }
-            bw.newLine();
+            System.out.print(tokens[0]);
+            for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+            System.out.println();
             
             // Next iteration
             str=br.readLine();
         }
-        br.close(); bw.close();
+        br.close();
         System.err.println("nRecords="+nRecords);
     }
     

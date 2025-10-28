@@ -12,7 +12,7 @@ import java.io.*;
  * This program is typically used to compress a VCF that contains only ultralong
  * calls.
  *
- * Remark: POS values are not checked to be consistent with the reference. <---------------
+ * Remark: POS values are not checked to be consistent with the reference.
  */
 public class RemoveRefAlt {
     
@@ -25,7 +25,6 @@ public class RemoveRefAlt {
         final String INPUT_VCF_GZ = args[0];
         final String FORCE_QUAL = args[1];
         final String INPUT_FAI = args[2];
-        final String OUTPUT_VCF_GZ = args[3];
         
         final int QUANTUM = 5000;  // Arbitrary
         
@@ -35,17 +34,15 @@ public class RemoveRefAlt {
         int nRecords, nEdited, nDiscarded, pos, svlen;
         String str, ref, alt, info, svlenStr, endStr, chrom;
         BufferedReader br;
-        BufferedWriter bw;
         String[] tokens;
         
         
         loadFai(INPUT_FAI);
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_VCF_GZ))));
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; nEdited=0; nDiscarded=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                bw.write(str); bw.newLine();
+                System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -119,14 +116,14 @@ public class RemoveRefAlt {
             tokens[3]=ref; tokens[4]=alt; tokens[5]=FORCE_QUAL;
             
             // Outputting
-            bw.write(tokens[0]);
-            for (i=1; i<tokens.length; i++) { bw.write('\t'); bw.write(tokens[i]); }
-            bw.newLine();
+            System.out.print(tokens[0]);
+            for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+            System.out.println();
             
             // Next iteration
             str=br.readLine();
         }
-        br.close(); bw.close();
+        br.close();
         System.err.println("nRecords="+nRecords);
         System.err.println("nEdited="+nEdited+" ("+((100.0*nEdited)/nRecords)+"% of nRecords)");
         System.err.println("nDiscarded="+nDiscarded+" ("+((100.0*nDiscarded)/nRecords)+"% of nRecords)");

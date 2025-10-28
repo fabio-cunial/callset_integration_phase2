@@ -55,7 +55,7 @@ RUN apt-get -qqy update --fix-missing \
         
 
 # GSUTIL
-ARG gcloud_version=517.0.0
+ARG gcloud_version=544.0.0
 RUN pip3 uninstall -y crcmod && pip3 install --no-cache-dir -U crcmod
 RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${gcloud_version}-linux-x86_64.tar.gz \
     && tar -xf google-cloud-cli-${gcloud_version}-linux-x86_64.tar.gz \
@@ -64,7 +64,7 @@ RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud
 ENV PATH=${work_dir}/google-cloud-sdk/bin:${PATH}
 
 # HTSLIB
-ARG htslib_version=1.21
+ARG htslib_version=1.22.1
 RUN wget https://github.com/samtools/htslib/releases/download/${htslib_version}/htslib-${htslib_version}.tar.bz2 \
     && tar xjf htslib-${htslib_version}.tar.bz2 \
     && rm htslib-${htslib_version}.tar.bz2 \
@@ -77,7 +77,7 @@ RUN wget https://github.com/samtools/htslib/releases/download/${htslib_version}/
     && bgzip --help
 
 # SAMTOOLS
-ARG samtools_version=1.21
+ARG samtools_version=1.22.1
 RUN wget https://github.com/samtools/samtools/releases/download/${samtools_version}/samtools-${samtools_version}.tar.bz2 \
     && tar xjf samtools-${samtools_version}.tar.bz2 \
     && rm samtools-${samtools_version}.tar.bz2 \
@@ -90,7 +90,7 @@ RUN wget https://github.com/samtools/samtools/releases/download/${samtools_versi
     && samtools --help
 
 # BCFTOOLS
-ARG bcftools_version=1.21
+ARG bcftools_version=1.22
 RUN wget https://github.com/samtools/bcftools/releases/download/${bcftools_version}/bcftools-${bcftools_version}.tar.bz2 \
     && tar xjf bcftools-${bcftools_version}.tar.bz2 \
     && rm bcftools-${bcftools_version}.tar.bz2 \
@@ -101,29 +101,6 @@ RUN wget https://github.com/samtools/bcftools/releases/download/${bcftools_versi
     && cd ${work_dir} \
     && bcftools --help
 
-# SEQKIT
-ARG seqkit_version=2.10.0
-RUN wget https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_amd64.tar.gz \
-    && tar -xzvf seqkit_linux_amd64.tar.gz \
-    && rm -f seqkit_linux_amd64.tar.gz \
-    && chmod +x seqkit \
-    && ./seqkit --help
-
-# Latest version of kanpig
-ARG kanpig_version=1.0.2
-RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && tar xzf kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && rm -f kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && mv ./kanpig-v${kanpig_version}-x86_64-unknown-linux-musl/kanpig . \
-    && chmod +x ./kanpig \
-    && ./kanpig --help
-
-# TRUVARI
-COPY ./truvari4_environment.yml .
-COPY ./truvari5_environment.yml .
-RUN conda env create -f ./truvari4_environment.yml
-RUN conda env create -f ./truvari5_environment.yml
-
 # BEDTOOLS
 ARG bedtools_version=2.31.0
 RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_version}/bedtools.static \
@@ -131,6 +108,20 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_versio
     && chmod +x bedtools \
     && mv bedtools /usr/local/bin \
     && bedtools --help
+
+# TRUVARI
+ARG truvari_version=5.4.0
+RUN pip install truvari==${truvari_version} \
+    && truvari --help
+
+# KANPIG
+ARG kanpig_version=1.1.0
+RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+    && tar xzf kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+    && rm -f kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+    && mv ./kanpig-v${kanpig_version}-x86_64-unknown-linux-musl/kanpig . \
+    && chmod +x ./kanpig \
+    && ./kanpig --help
 
 # AD HOC SCRIPTS
 COPY *.java .

@@ -19,7 +19,6 @@ public class CollapseSamples {
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
-        final String OUTPUT_VCF_GZ = args[1];
         
         final int QUANTUM = 5000;  // Arbitrary
         
@@ -27,23 +26,21 @@ public class CollapseSamples {
         int nRecords, nFields, gtIndex, gtCount, count, supp;
         String str, alt, info;
         BufferedReader br;
-        BufferedWriter bw;
         String[] tokens, tokensPrime, outputFields;
         
         outputFields = new String[100];  // Arbitrary
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_VCF_GZ))));
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 if (str.startsWith("#CHROM")) {
-                    bw.write("##FORMAT=<ID=SUPP,Number=1,Type=Integer,Description=\"Truvari-collapse-like support flag\">\n");
+                    System.out.println("##FORMAT=<ID=SUPP,Number=1,Type=Integer,Description=\"Truvari-collapse-like support flag\">");
                     tokens=str.split("\t");
-                    bw.write(tokens[0]);
-                    for (i=1; i<=9; i++) { bw.write('\t'); bw.write(tokens[i]); }
-                    bw.newLine();
+                    System.out.print(tokens[0]);
+                    for (i=1; i<=9; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+                    System.out.println();
                 }
-                else { bw.write(str); bw.newLine(); }
+                else System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -72,17 +69,17 @@ public class CollapseSamples {
             }
             
             // Outputting
-            bw.write(tokens[0]);
-            for (i=1; i<=8; i++) { bw.write('\t'); bw.write(tokens[i]); }
-            bw.write(":SUPP\t"); bw.write(outputFields[0]);
-            for (i=1; i<nFields; i++) { bw.write(':'); bw.write(outputFields[i]); }
-            bw.write(':'); bw.write(""+supp);
-            bw.newLine();
+            System.out.print(tokens[0]);
+            for (i=1; i<=8; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+            System.out.print(":SUPP\t"); System.out.print(outputFields[0]);
+            for (i=1; i<nFields; i++) { System.out.print(':'); System.out.print(outputFields[i]); }
+            System.out.print(':'); System.out.print(""+supp);
+            System.out.println();
             
             // Next iteration
             str=br.readLine();
         }
-        br.close(); bw.close();
+        br.close();
         System.err.println("nRecords="+nRecords);
     }
 

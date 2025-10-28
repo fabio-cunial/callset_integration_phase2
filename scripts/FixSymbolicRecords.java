@@ -20,7 +20,6 @@ public class FixSymbolicRecords {
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String INPUT_FASTA = args[1];
-        final String OUTPUT_VCF_GZ = args[2];
         
         final int QUANTUM = 5000;  // Arbitrary
         
@@ -30,7 +29,6 @@ public class FixSymbolicRecords {
         String chrom, ref, alt, info, str, svlenStr, endStr;
         StringBuilder buffer;
         BufferedReader br;
-        BufferedWriter bw;
         String[] tokens;
         
         System.err.print("Loading reference...");
@@ -39,12 +37,11 @@ public class FixSymbolicRecords {
         System.err.println(" done in "+((System.currentTimeMillis()-time)/1000)+"s");
         
         buffer = new StringBuilder();
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_VCF_GZ))));
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; nSymbolicRecords=0; nDiscarded=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                bw.write(str); bw.newLine();
+                System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -60,7 +57,7 @@ public class FixSymbolicRecords {
             }
             alt=tokens[4];
             if (alt.charAt(0)!='<') {
-                bw.write(str); bw.newLine();
+                System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -121,14 +118,14 @@ public class FixSymbolicRecords {
             tokens[3]=ref; tokens[4]=alt; tokens[7]=info;
             
             // Outputting
-            bw.write(tokens[0]);
-            for (i=1; i<tokens.length; i++) { bw.write('\t'); bw.write(tokens[i]); }
-            bw.newLine();
+            System.out.print(tokens[0]);
+            for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+            System.out.println();
             
             // Next iteration
             str=br.readLine();
         }
-        br.close(); bw.close();
+        br.close();
         System.err.println("nRecords="+nRecords);
         System.err.println("nSymbolicRecords="+nSymbolicRecords+" ("+((100.0*nSymbolicRecords)/nRecords)+"% of nRecords)");
         System.err.println("nDiscarded="+nDiscarded+" ("+((100.0*nDiscarded)/nSymbolicRecords)+"% of nSymbolicRecords)");
