@@ -7,9 +7,11 @@ version 1.0
 workflow SV_Integration_Workpackage1 {
     input {
         File sv_integration_chunk_tsv
-        Int min_sv_length
-        Int max_sv_length
         String remote_outdir
+        
+        Int min_sv_length = 20
+        Int max_sv_length = 10000
+        String kanpig_params_singlesample = "--neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
         
         File reference_fa
         File reference_fai
@@ -20,7 +22,6 @@ workflow SV_Integration_Workpackage1 {
         Int n_cpu = 6
         Int ram_size_gb = 8
         Int disk_size_gb = 100
-        String kanpig_params_singlesample = "--sizemin 20 --sizemax 10000 --neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
@@ -31,18 +32,21 @@ workflow SV_Integration_Workpackage1 {
     call Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
+            remote_outdir = remote_outdir,
+            
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length,
-            remote_outdir = remote_outdir,
+            kanpig_params_singlesample = kanpig_params_singlesample
+            
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             reference_agp = reference_agp,
             ploidy_bed_female = ploidy_bed_female,
             ploidy_bed_male = ploidy_bed_male,
+            
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb,
             disk_size_gb = disk_size_gb,
-            kanpig_params_singlesample = kanpig_params_singlesample
     }
     
     output {
@@ -54,11 +58,11 @@ workflow SV_Integration_Workpackage1 {
 task Impl {
     input {
         File sv_integration_chunk_tsv
+        String remote_outdir
         
         Int min_sv_length
         Int max_sv_length
         String kanpig_params_singlesample
-        String remote_outdir
         
         File reference_fa
         File reference_fai
@@ -496,7 +500,7 @@ task Impl {
             else
                 PLOIDY_BED=$(echo ~{ploidy_bed_female})
             fi            
-            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 0 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_out.vcf > ${SAMPLE_ID}_kanpig.vcf.gz
             tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
             rm -f ${SAMPLE_ID}_out.vcf* ${INPUT_VCF_GZ}*
@@ -531,7 +535,7 @@ task Impl {
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
             
             # Uploading
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ~{remote_outdir}
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_ultralong.vcf.'gz*' ${SAMPLE_ID}_bnd.vcf.'gz*' ~{remote_outdir}
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
