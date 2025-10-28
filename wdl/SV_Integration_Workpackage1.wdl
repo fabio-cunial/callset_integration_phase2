@@ -7,6 +7,7 @@ version 1.0
 workflow SV_Integration_Workpackage1 {
     input {
         File sv_integration_chunk_tsv
+        String region = "all"
         String remote_outdir
         
         Int min_sv_length = 20
@@ -25,6 +26,7 @@ workflow SV_Integration_Workpackage1 {
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
+        region: "Only consider VCF records in this genomic region. Set to 'all' to disable."
         max_sv_length: "Calls above this length are deemed 'ultralong' and are treated separately."
         remote_outdir: "Where the output of intra-sample truvari and kanpig is stored for each sample."
     }
@@ -32,6 +34,7 @@ workflow SV_Integration_Workpackage1 {
     call Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
+            region = region,
             remote_outdir = remote_outdir,
             
             min_sv_length = min_sv_length,
@@ -58,6 +61,7 @@ workflow SV_Integration_Workpackage1 {
 task Impl {
     input {
         File sv_integration_chunk_tsv
+        String region
         String remote_outdir
         
         Int min_sv_length
@@ -253,6 +257,12 @@ task Impl {
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             mv ${INPUT_TBI} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi
             
+            # Subsetting to region, if any.
+            if [ ~{region} != "all" ]; then
+                ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{region} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            fi
+            
             # Ensuring that SVLEN has the correct type for bcftools norm
             bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > header.txt
             ${TIME_COMMAND} bcftools reheader --header header.txt --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
@@ -295,7 +305,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.2 Fixing symbolic records
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx5G FixSymbolicRecords ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${reference_fa} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx5G FixSymbolicRecords ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{reference_fa} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.3 Fixing REF
@@ -328,7 +338,7 @@ task Impl {
             # destroy BNDs ALTs (example: N]chr5:181473415] ->
             # GNcNNNNNNNNNNNNNN ):
             #
-            # bcftools norm --check-ref s --fasta-ref ${reference_fa}
+            # bcftools norm --check-ref s --fasta-ref ~{reference_fa}
             # --do-not-normalize
             
             # 2.2 Removing duplicated records
@@ -346,7 +356,7 @@ task Impl {
             
             # 3.2 Removing sequence (lossless).
             # QUAL is used by truvari collapse to select a representation.
-            ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ${reference_fai} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ~{reference_fai} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 3.3 Removing duplicated records
@@ -519,7 +529,15 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
-#-----------> Make this robust to preemption, to reduce cost.      
+            # Skipping the sample if it has been already processed
+            TEST1=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
+            TEST2=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.vcf.gz || echo "0" )
+            TEST3=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_bnd.vcf.gz || echo "0" )
+            if [ ${TEST1} != "0" -a ${TEST2} != "0" -a ${TEST3} != "0" ]; then
+                continue
+            fi
+            
+#-----------> Make this preemptable in production, to reduce cost.
 #------> Handle duplicated samples in different centers?????      
             
             # Merging
