@@ -423,7 +423,7 @@ task Impl {
             ${TIME_COMMAND} bgzip --threads ${N_THREADS} ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax -1 --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
@@ -509,8 +509,9 @@ task Impl {
                 PLOIDY_BED=$(echo ~{ploidy_bed_male})
             else
                 PLOIDY_BED=$(echo ~{ploidy_bed_female})
-            fi            
-            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 0 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
+            fi
+            # Remark: Kanpig needs --sizemin >= --kmer
+            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_out.vcf > ${SAMPLE_ID}_kanpig.vcf.gz
             tabix -f ${SAMPLE_ID}_kanpig.vcf.gz
             rm -f ${SAMPLE_ID}_out.vcf* ${INPUT_VCF_GZ}*
@@ -529,7 +530,7 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
-            # Skipping the sample if it has been already processed
+            # Skipping the sample if it has already been processed
             TEST1=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
             TEST2=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.vcf.gz || echo "0" )
             TEST3=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_bnd.vcf.gz || echo "0" )
