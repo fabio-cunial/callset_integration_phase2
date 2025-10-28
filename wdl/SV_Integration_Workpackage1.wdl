@@ -23,7 +23,7 @@ workflow SV_Integration_Workpackage1 {
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
         region: "Only consider VCF records in this genomic region. Set to 'all' to disable."
-        max_sv_length: "Calls above this length are deemed 'ultralong' and are treated separately."
+        max_sv_length: "Calls above this length are deemed 'ultralong', are not given to kanpig re-genotyping, and are processed separately."
         remote_outdir: "Where the output of intra-sample truvari and kanpig is stored for each sample."
     }
     
@@ -529,8 +529,8 @@ task Impl {
             ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
         }
         
         
