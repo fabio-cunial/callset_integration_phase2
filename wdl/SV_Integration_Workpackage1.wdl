@@ -511,7 +511,6 @@ task Impl {
         
         # ---------------------------- Main program ----------------------------
         
-        source activate truvari5
         export RUST_BACKTRACE="full"
         INFINITY="1000000000"
         GetReferenceGaps ~{reference_agp} not_gaps.bed
@@ -519,9 +518,12 @@ task Impl {
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
-            LocalizeSample ${SAMPLE_ID} 1 ${LINE}
+            
+#-----------> Make this robust to preemption, to reduce cost.      
+#------> Handle duplicated samples in different centers?????      
             
             # Merging
+            LocalizeSample ${SAMPLE_ID} 1 ${LINE}
             CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} not_gaps.bed
             CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} not_gaps.bed
             CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} not_gaps.bed
