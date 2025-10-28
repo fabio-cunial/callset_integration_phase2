@@ -269,8 +269,8 @@ task Impl {
             fi
             
             # Ensuring that SVLEN has the correct type for bcftools norm
-            bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > header.txt
-            ${TIME_COMMAND} bcftools reheader --header header.txt --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > ${SAMPLE_ID}_${CALLER_ID}_header.txt
+            ${TIME_COMMAND} bcftools reheader --header ${SAMPLE_ID}_${CALLER_ID}_header.txt --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Splitting multiallelic records into biallelic records
@@ -472,7 +472,8 @@ task Impl {
         }
         
         
-        # Copies truvari's SUPP field from SAMPLE to three tags in INFO.
+        # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
+        # necessary since kanpig overwrites the SAMPLE field.
         #
         function CopySuppToInfo() {
             local SAMPLE_ID=$1
@@ -558,10 +559,9 @@ task Impl {
             
             # Merging
             LocalizeSample ${SAMPLE_ID} 1 ${LINE}
-            CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} not_gaps.bed > ${SAMPLE_ID}_pav.log &
-            CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} not_gaps.bed > ${SAMPLE_ID}_pbsv.log &
-            CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} not_gaps.bed > ${SAMPLE_ID}_sniffles.log &
-            wait
+            CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} not_gaps.bed
             IntrasampleMerge_sv ${SAMPLE_ID}
             IntrasampleMerge_ultralong ${SAMPLE_ID}
             IntrasampleMerge_bnd ${SAMPLE_ID}
@@ -572,7 +572,7 @@ task Impl {
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
             
             # Uploading
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_ultralong.vcf.'gz*' ${SAMPLE_ID}_bnd.vcf.'gz*' ${SAMPLE_ID}_'*.log' ~{remote_outdir}
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_ultralong.vcf.'gz*' ${SAMPLE_ID}_bnd.vcf.'gz*' ~{remote_outdir}
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
