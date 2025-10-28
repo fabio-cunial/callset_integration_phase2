@@ -425,3 +425,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BenchCohortSamples_PersonalizedCohortVcf.wdl
   testParameterFiles:
+- name: SV_Integration_Workpackage1
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_Workpackage1.wdl
+  testParameterFiles:

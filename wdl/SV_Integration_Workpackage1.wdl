@@ -36,7 +36,7 @@ workflow SV_Integration_Workpackage1 {
             
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length,
-            kanpig_params_singlesample = kanpig_params_singlesample
+            kanpig_params_singlesample = kanpig_params_singlesample,
             
             reference_fa = reference_fa,
             reference_fai = reference_fai,
