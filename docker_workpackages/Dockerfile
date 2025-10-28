@@ -126,4 +126,3 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
-COPY *.py .
