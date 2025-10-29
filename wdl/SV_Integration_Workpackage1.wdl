@@ -63,6 +63,11 @@ workflow SV_Integration_Workpackage1 {
 # bgzip                      500 %
 # kanpig                     900 %
 #
+# Kanpig runtimes:
+#
+# genome, 16 CPUs, 32GB       2 m
+# chr6, 6 CPUs, 8GB          20 s
+#
 task Impl {
     input {
         File sv_integration_chunk_tsv
@@ -283,7 +288,7 @@ task Impl {
                 rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
             
-            # Removing calls in reference gaps
+            # Removing records in reference gaps
             ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
@@ -297,7 +302,7 @@ task Impl {
             ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="BND"' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            # Isolating ultra-long calls and discarding short calls
+            # Isolating ultra-long records and discarding short records
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>'${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
@@ -322,7 +327,7 @@ task Impl {
             #   work.
             # - QUAL is used by truvari collapse to select a representation. 
             #   Symbolic records are NOT given low quality (it was 1 in Phase 1)
-            #   since e.g. all DEL calls made by Sniffles are symbolic.
+            #   since e.g. all DEL records made by Sniffles are symbolic.
             ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
@@ -517,7 +522,7 @@ task Impl {
                 PLOIDY_BED=$(echo ~{ploidy_bed_female})
             fi
             
-            # Remark: Kanpig needs --sizemin >= --kmer
+            # Remark: kanpig needs --sizemin >= --kmer
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF_GZ} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
             rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
