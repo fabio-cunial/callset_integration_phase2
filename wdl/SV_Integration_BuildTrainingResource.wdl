@@ -16,7 +16,7 @@ workflow SV_Integration_BuildTrainingResource {
         String remote_outdir
     }
     parameter_meta {
-        dipcall_tsv: "Format: ID  DIPCALL_BED  DIPCALL_VCF. We assume that all VCFs are sorted."
+        dipcall_tsv: "Format of each row: ID, DIPCALL_BED, DIPCALL_VCF. We assume that every VCF is sorted and sequence-resolved."
     }
     
     call Impl {
@@ -213,7 +213,7 @@ task Impl {
         # Downloading and canonizing the single-sample dipcall VCFs
         touch list.txt
         while read LINE; do
-            SAMPLE_ID==$(echo ${LINE} | cut -d , -f 1)
+            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
             echo ${SAMPLE_ID}.vcf.gz >> list.txt
@@ -225,7 +225,7 @@ task Impl {
         Merge list.txt
         
         # Uploading
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv training_resource.vcf.'gz*' ~{remote_outdir}
+        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv training_resource.vcf.'gz*' ~{remote_outdir}/
     >>>
 
     output {
