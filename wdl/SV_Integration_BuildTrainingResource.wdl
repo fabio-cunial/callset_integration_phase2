@@ -236,8 +236,8 @@ task Impl {
         # Downloading and canonizing the single-sample dipcall VCFs
         touch list.txt
         cat ~{dipcall_tsv} | tr '\t' ',' > samples.csv
+        N_ROWS=$(wc -l < samples.csv)
         if [ ${N_ROWS} -gt ${N_THREADS} ]; then
-            N_ROWS=$(wc -l < samples.csv)
             N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
             split -l ${N_ROWS_PER_THREAD} -d -a 4 samples.csv chunk_
         else
