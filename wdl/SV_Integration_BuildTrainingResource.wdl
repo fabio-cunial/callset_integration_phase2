@@ -212,6 +212,7 @@ task Impl {
         
         # Downloading and canonizing the single-sample dipcall VCFs
         touch list.txt
+        cat ~{dipcall_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ${LINE}
@@ -219,7 +220,7 @@ task Impl {
             echo ${SAMPLE_ID}.vcf.gz >> list.txt
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
-        done < ~{dipcall_tsv}
+        done < chunk.csv
         
         # Merging
         Merge list.txt
