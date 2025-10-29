@@ -166,8 +166,8 @@ task Impl {
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}.vcf.gz
-            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}.vcf.gz.tbi
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_canonized.vcf.gz.tbi
         }
         
         
@@ -217,7 +217,7 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-            echo ${SAMPLE_ID}.vcf.gz >> list.txt
+            echo ${SAMPLE_ID}_canonized.vcf.gz >> list.txt
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
