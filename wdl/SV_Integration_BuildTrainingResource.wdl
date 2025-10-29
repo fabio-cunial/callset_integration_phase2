@@ -139,7 +139,7 @@ task Impl {
             local INPUT_TBI=$3
             local MIN_SV_LENGTH=$4
             local MAX_SV_LENGTH=$5
-            local STANDARD_CHROMOSOMES=$6
+            local STANDARD_CHROMOSOMES_BED=$6
             local NOT_GAPS_BED=$7
             
             
@@ -156,7 +156,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the standard chromosomes
-            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Removing records in reference gaps
@@ -236,9 +236,13 @@ task Impl {
         # Downloading and canonizing the single-sample dipcall VCFs
         touch list.txt
         cat ~{dipcall_tsv} | tr '\t' ',' > samples.csv
-        N_ROWS=$(wc -l < samples.csv)
-        N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
-        split -l ${N_ROWS_PER_THREAD} -d -a 4 samples.csv chunk_
+        if [ ${N_ROWS} -gt ${N_THREADS} ]; then
+            N_ROWS=$(wc -l < samples.csv)
+            N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
+            split -l ${N_ROWS_PER_THREAD} -d -a 4 samples.csv chunk_
+        else
+            mv samples.csv chunk_0
+        fi
         for FILE in $(ls chunk_*); do
             CanonizeThread ${FILE#chunk_*} ${FILE} &
         done
