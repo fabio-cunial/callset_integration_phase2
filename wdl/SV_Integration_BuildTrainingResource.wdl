@@ -11,6 +11,7 @@ workflow SV_Integration_BuildTrainingResource {
         Int max_sv_length = 10000
         
         File reference_fai
+        File standard_chromosomes_bed
         File reference_agp
         
         String remote_outdir
@@ -25,6 +26,7 @@ workflow SV_Integration_BuildTrainingResource {
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length,
             reference_fai = reference_fai,
+            standard_chromosomes_bed = standard_chromosomes_bed,
             reference_agp = reference_agp,
             remote_outdir = remote_outdir
     }
@@ -43,6 +45,7 @@ task Impl {
         Int max_sv_length
         
         File reference_fai
+        File standard_chromosomes_bed
         File reference_agp
         
         String remote_outdir
@@ -136,7 +139,8 @@ task Impl {
             local INPUT_TBI=$3
             local MIN_SV_LENGTH=$4
             local MAX_SV_LENGTH=$5
-            local NOT_GAPS_BED=$6
+            local STANDARD_CHROMOSOMES=$6
+            local NOT_GAPS_BED=$7
             
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
@@ -151,12 +155,16 @@ task Impl {
             ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || COUNT(GT="alt")=0 || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the dipcall BED
-            ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            # Keeping only records in the standard chromosomes
+            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Removing records in reference gaps
             ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Keeping only records in the dipcall BED
+            ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Making sure SVLEN and SVTYPE are consistently annotated
@@ -217,7 +225,7 @@ task Impl {
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ${LINE}
-            CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
             echo ${SAMPLE_ID}_canonized.vcf.gz >> list.txt
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
