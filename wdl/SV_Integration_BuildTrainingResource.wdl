@@ -156,7 +156,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the standard chromosomes
-            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Removing records in reference gaps
@@ -177,6 +177,20 @@ task Impl {
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_canonized.vcf.gz.tbi
+        }
+        
+        
+        function CanonizeThread() {
+            local THREAD_ID=$1
+            local CHUNK_CSV=$2
+            
+            while read LINE; do
+                SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+                LocalizeSample ${SAMPLE_ID} ${LINE}
+                CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+                echo ${SAMPLE_ID}_canonized.vcf.gz >> ${THREAD_ID}_list.txt
+                DelocalizeSample ${SAMPLE_ID}
+            done < ${CHUNK_CSV}
         }
         
         
@@ -221,15 +235,15 @@ task Impl {
         
         # Downloading and canonizing the single-sample dipcall VCFs
         touch list.txt
-        cat ~{dipcall_tsv} | tr '\t' ',' > chunk.csv
-        while read LINE; do
-            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            LocalizeSample ${SAMPLE_ID} ${LINE}
-            CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
-            echo ${SAMPLE_ID}_canonized.vcf.gz >> list.txt
-            DelocalizeSample ${SAMPLE_ID}
-            ls -laht
-        done < chunk.csv
+        cat ~{dipcall_tsv} | tr '\t' ',' > samples.csv
+        N_ROWS=$(wc -l < samples.csv)
+        N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
+        split -l ${N_ROWS_PER_THREAD} -d -a 4 samples.csv chunk_
+        for FILE in $(ls chunk_*); do
+            CanonizeThread ${FILE#chunk_*} ${FILE} &
+        done
+        wait
+        cat *_list.txt > list.txt
         
         # Merging
         Merge list.txt
