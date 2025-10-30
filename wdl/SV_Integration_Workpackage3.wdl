@@ -141,12 +141,12 @@ task Impl {
         }
         
         
-        # Copies SCORE from INFO to FORMAT
+        # Copies SCORE from INFO to FORMAT, so that it is preserved by the
+        # inter-sample merge later.
         #
         function CopyInfoToFormat() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-            
 
             echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' > ${SAMPLE_ID}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SCORE\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
