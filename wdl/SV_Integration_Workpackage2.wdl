@@ -13,11 +13,11 @@ workflow SV_Integration_Workpackage2 {
         File training_resource_vcf_gz
         File training_resource_tbi
         File training_resource_bed
-        
-        String preprocess_final_view_extra_args = "-i 'GT[*]=\"alt\" && SVLEN>=50'"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "We assume that every intra-sample-merged VCF has already been subset to the correct length range upstream."
+        remote_indir: "Without final slash"
+        remote_outdir: "Without final slash"
         training_resource_vcf_gz: "We assume that the training resource VCF has already been subset to the correct length range upstream."
         training_resource_bed: "Training resource calls can belong only to these regions. Typically a high-confidence dipcall BED, or a BED derived from dipcall's."
     }
@@ -214,7 +214,7 @@ task Workpackage2Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             
-            PreprocessVCF ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
+            CopyFormatToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz
             
             rm -f ${SAMPLE_ID}_list.txt

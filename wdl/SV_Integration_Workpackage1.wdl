@@ -24,7 +24,7 @@ workflow SV_Integration_Workpackage1 {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
         region: "Only consider VCF records in this genomic region. Set to 'all' to disable."
         max_sv_length: "Calls above this length are deemed 'ultralong', are not given to kanpig re-genotyping, and are processed separately."
-        remote_outdir: "Where the output of intra-sample truvari and kanpig is stored for each sample."
+        remote_outdir: "Without final slash. Where the output of intra-sample truvari and kanpig is stored for each sample."
     }
     
     call Impl {

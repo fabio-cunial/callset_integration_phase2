@@ -19,6 +19,7 @@ workflow SV_Integration_BuildTrainingResource {
     }
     parameter_meta {
         dipcall_tsv: "Format of each row: ID, DIPCALL_BED, DIPCALL_VCF. We assume that every VCF is sorted and sequence-resolved."
+        remote_outdir: "Without final slash"
     }
     
     call Impl {
