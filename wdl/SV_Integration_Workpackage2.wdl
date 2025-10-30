@@ -212,11 +212,20 @@ task Workpackage2Impl {
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             
+            # Skipping the sample if it has already been processed
+            TEST1=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_preprocessed.vcf.gz || echo "0" )
+            TEST2=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_training.vcf.gz || echo "0" )
+            if [ ${TEST1} != "0" -a ${TEST2} != "0" ]; then
+                continue
+            fi
+            
+            # Annotating and marking training records
+            LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             CopyFormatToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz
             
+            # Uploading
             rm -f ${SAMPLE_ID}_list.txt
             echo "${SAMPLE_ID}_preprocessed.vcf.gz" >> ${SAMPLE_ID}_list.txt
             echo "${SAMPLE_ID}_preprocessed.vcf.gz.tbi" >> ${SAMPLE_ID}_list.txt 
