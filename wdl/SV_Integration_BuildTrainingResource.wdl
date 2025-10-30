@@ -1,7 +1,8 @@
 version 1.0
 
 
-# Builds a training resource for XGBoost.
+# Builds a resource of high-confidence true calls for XGBoost training, by
+# simply merging dipcall VCFs.
 #
 workflow SV_Integration_BuildTrainingResource {
     input {
@@ -207,13 +208,13 @@ task Impl {
             bcftools view --header-only in.vcf > header.txt
             N_ROWS=$(wc -l < header.txt)
             head -n $(( ${N_ROWS} - 1 )) header.txt > out.vcf
-            tail -n 1 header.txt | awk '{ \
+            tail -n 1 header.txt | awk '{ FS="\t"; OFS="\t"; \
                 printf("%s",$1); \
                 for (i=2; i<=9; i++) printf("\t%s",$i); \
                 printf("\tSAMPLE\n"); \
             }' >> out.vcf
             rm -f header.txt
-            bcftools view --no-header in.vcf | awk '{ \
+            bcftools view --no-header in.vcf | awk '{ FS="\t"; OFS="\t"; \
                 printf("%s",$1); \
                 for (i=2; i<=8; i++) printf("\t%s",$i); \
                 printf("\tGT\t0/1\n"); \
