@@ -116,7 +116,7 @@ task Impl {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local RESOURCE_VCF_GZ=$3
-            
+
             gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}
             ls -laht
             # Output:
@@ -170,6 +170,15 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             
+            # Removing END, since inconsistent END values make gatk crash.
+            bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_preprocessed.vcf.gz > ${SAMPLE_ID}_preprocessed_cleaned.vcf.gz
+            mv ${SAMPLE_ID}_preprocessed_cleaned.vcf.gz ${SAMPLE_ID}_preprocessed.vcf.gz
+            tabix -f ${SAMPLE_ID}_preprocessed.vcf.gz
+            bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_training.vcf.gz > ${SAMPLE_ID}_training_cleaned.vcf.gz
+            mv ${SAMPLE_ID}_training_cleaned.vcf.gz ${SAMPLE_ID}_training.vcf.gz
+            tabix -f ${SAMPLE_ID}_training.vcf.gz
+            
+            # Scoring
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
             
