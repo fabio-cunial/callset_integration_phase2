@@ -1,8 +1,9 @@
 version 1.0
 
 
-# Runs `FilterIntrasampleDevPhase2.wdl` up to task `IdentifyTrainingSites`
-# (included) in the same VM for multiple samples.
+# Annotates the INFO field of every intra-sample VCF with FORMAT fields
+# annotated by kanpig, and marks true-positive records using a training
+# resource.
 #
 workflow SV_Integration_Workpackage2 {
     input {
@@ -22,7 +23,7 @@ workflow SV_Integration_Workpackage2 {
         training_resource_bed: "Training resource calls can belong only to these regions. Typically a high-confidence dipcall BED, or a BED derived from dipcall's."
     }
     
-    call Workpackage2Impl {
+    call Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
@@ -38,7 +39,7 @@ workflow SV_Integration_Workpackage2 {
 
 
 #
-task Workpackage2Impl {
+task Impl {
     input {
         File sv_integration_chunk_tsv
         String remote_indir
@@ -50,7 +51,7 @@ task Workpackage2Impl {
         
         Int n_cpu = 4
         Int ram_size_gb = 8
-        Int disk_size_gb = 50
+        Int disk_size_gb = 20
     }
     parameter_meta {
     }
@@ -176,7 +177,7 @@ task Workpackage2Impl {
                 printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,$10,$11,$12); \
             }' | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
