@@ -33,13 +33,12 @@ workflow SV_Integration_Workpackage5 {
 }
 
 
-# Performance on 10'070 samples, 15x, GRCh38, 0-th chunk:
+# Performance on 12'680 samples, 15x, GRCh38, one 10 MB chunk of chr6,
+# CAL_SENS<=0.999:
 #
-# CAL_SENS  TOOL               CPU     RAM     TIME
-# <=0.7     bcftools merge     150%    26G     1h30m
-# <=0.9     bcftools merge     150%    32G     4h
-# <=0.7     bcftools norm      150%    5G      20m
-# <=0.9     bcftools norm      150%    8.7G    40m
+# TOOL               CPU     RAM     TIME
+# bcftools merge     120%    23G     30m
+# bcftools norm      150%    4G      5m
 #
 task Impl {
     input {
@@ -51,7 +50,7 @@ task Impl {
         String remote_outdir
         
         Int n_cpu = 4
-        Int ram_size_gb = 36
+        Int ram_size_gb = 128
         Int disk_size_gb = 50
     }
     parameter_meta {
@@ -108,14 +107,12 @@ task Impl {
         fi
         df -h
         
-        # Bcftools merge
+        # Merging
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type z > ~{chunk_id}_merged.vcf.gz
         tabix -f ~{chunk_id}_merged.vcf.gz
-        ls -laht
-        df -h
-        while read FILE; do
-            rm -f ${FILE}
-        done < list.txt
+        rm -f *_filtered.vcf.gz
+        
+        # Making sure no multiallelic record is passed downstream
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics - --output-type z ~{chunk_id}_merged.vcf.gz > ~{chunk_id}_normed.vcf.gz
         tabix -f ~{chunk_id}_normed.vcf.gz
         ls -laht

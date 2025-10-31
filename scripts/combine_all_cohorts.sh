@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# Total samples in output: 12680
+#
 REMOTE_OUTPUT_DIR="gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/scratch/cunial_intersample_vcf/v2/workpackage_4_all_centers"
 
 REMOTE_INPUT_DIR_BI="gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/scratch/cunial_intersample_vcf/v2/workpackage_4"

@@ -1,7 +1,7 @@
 version 1.0
 
 
-# 
+# A simple bcftools merge of all BND-only VCFs.
 #
 workflow SV_Integration_Workpackage5_Bnd {
     input {
@@ -28,6 +28,11 @@ workflow SV_Integration_Workpackage5_Bnd {
 }
 
 
+# Performance on 12'680 samples, 15x, GRCh38, all chr6:
+#
+# TOOL               CPU     RAM     TIME
+# bcftools merge     150%    2G      2m
+# bcftools norm      150%    2G      2m
 #
 task Impl {
     input {
@@ -84,12 +89,13 @@ task Impl {
         ls -laht
         df -h
         
-        # Splitting multiallelic records into biallelic records
+        # Splitting multiallelic records into biallelic records, if any were
+        # created by bcftools merge.
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z merged.vcf.gz > normed.vcf.gz
         tabix -f normed.vcf.gz
         rm -f merged.vcf.gz*
         
-        # Removing exact duplicates, if any remains after the split.
+        # Removing exact duplicates, if any remains after splitting.
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --rm-dup exact --output-type z normed.vcf.gz > distinct.vcf.gz
         tabix -f distinct.vcf.gz
         rm -f normed.vcf.gz*
