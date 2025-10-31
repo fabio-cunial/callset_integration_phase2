@@ -73,11 +73,11 @@ task Impl {
         
         # Localizing all the bcftools merge chunks of the chromosome
         for CHUNK in $(echo ~{bcftools_chunks} | tr ',' ' '); do
-            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz >> list.txt
-            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz.tbi >> list.txt
+            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz >> uri_list.txt
+            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz.tbi >> uri_list.txt
         done
         while : ; do
-            TEST=$(cat list.txt | gsutil -m cp -I . && echo 0 || echo 1)
+            TEST=$(cat uri_list.txt | gsutil -m cp -I . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading bcftools merge chunks. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -85,10 +85,10 @@ task Impl {
                 break
             fi
         done
-        rm -f list.txt
+        ls chunk_*.vcf.gz > file_list.txt
         
         # Concatenating all the bcftools merge chunks
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list list.txt --output-type z > ~{chromosome_id}.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z > ~{chromosome_id}.vcf.gz
         tabix -f ~{chromosome_id}.vcf.gz
         rm -f chunk_*.vcf.gz*
         
