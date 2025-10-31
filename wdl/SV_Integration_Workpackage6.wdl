@@ -38,6 +38,11 @@ workflow SV_Integration_Workpackage6 {
 }
 
 
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
+#
+# TOOL               CPU     RAM     TIME
+# bcftools concat    12%     20M     1h
+# truvari divide     
 # 
 task Impl {
     input {
@@ -51,7 +56,7 @@ task Impl {
         String remote_outdir
         
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 16
         Int disk_size_gb = 50
     }
     parameter_meta {

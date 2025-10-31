@@ -5,7 +5,7 @@ import java.io.*;
 
 /**
  * Makes sure that REF and ALT are uppercase and contain only characters in
- * {A,C,G,T,N}. Overwrites QUAL with a given constant.
+ * {A,C,G,T,N}. Overwrites QUAL with a given constant and FILTER with PASS.
  */
 public class CleanRefAltQual {
     
@@ -42,6 +42,7 @@ public class CleanRefAltQual {
             replaceNonstandardChars(tokens[4].toUpperCase(),buffer);
             tokens[4]=buffer.toString();
             tokens[5]=FORCE_QUAL;
+            tokens[6]="PASS";
             
             // Outputting
             System.out.print(tokens[0]);

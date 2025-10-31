@@ -16,6 +16,7 @@ workflow SV_Integration_Workpackage1 {
         
         File reference_fa
         File reference_fai
+        File standard_chromosomes_bed
         File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
@@ -39,6 +40,7 @@ workflow SV_Integration_Workpackage1 {
             
             reference_fa = reference_fa,
             reference_fai = reference_fai,
+            standard_chromosomes_bed = standard_chromosomes_bed,
             reference_agp = reference_agp,
             ploidy_bed_female = ploidy_bed_female,
             ploidy_bed_male = ploidy_bed_male
@@ -80,6 +82,7 @@ task Impl {
         
         File reference_fa
         File reference_fai
+        File standard_chromosomes_bed
         File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
@@ -251,7 +254,8 @@ task Impl {
             local CALLER_ID=$4
             local MIN_SV_LENGTH=$5
             local MAX_SV_LENGTH=$6
-            local NOT_GAPS_BED=$7
+            local STANDARD_CHROMOSOMES_BED=$7
+            local NOT_GAPS_BED=$8
             
             # QUAL is used by truvari collapse to select a representation. We
             # assign values based on which representations we observed to be
@@ -267,15 +271,14 @@ task Impl {
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             mv ${INPUT_TBI} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi
             
-            # Subsetting to region, if any.
+            # Subsetting to standard chromosomes, or to a given region if any.
             if [ ~{region} != "all" ]; then
                 ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{region} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            else
+                ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
-            
-# ---------> ENFORCE STANDARD CHROMOSOMES!!!!!!!!! IN THE ELSE
-            
-            
             
             # Ensuring that SVLEN has the correct type for bcftools norm
             bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > ${SAMPLE_ID}_${CALLER_ID}_header.txt
@@ -326,12 +329,14 @@ task Impl {
             ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            # 1.4 Cleaning REF, ALT, QUAL. 
+            # 1.4 Cleaning REF, ALT, QUAL, FILTER. 
             # - REF and ALT must be uppercase for XGBoost scoring downstream to
             #   work.
             # - QUAL is used by truvari collapse to select a representation. 
             #   Symbolic records are NOT given low quality (it was 1 in Phase 1)
             #   since e.g. all DEL records made by Sniffles are symbolic.
+            # - We force every record to PASS, to rule out any filter-dependent
+            #   effect of tools downstream.
             ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
@@ -473,7 +478,6 @@ task Impl {
             ${TIME_COMMAND} java -cp ~{docker_dir} CollapseSamples ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-# -------------> NON NECESSARY? SINCE BCFTOOLS MERGE ALREADY REMOVES DUPLICATES?            
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --rm-dup exact --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
@@ -569,9 +573,9 @@ task Impl {
             
             # Merging
             LocalizeSample ${SAMPLE_ID} 1 ${LINE}
-            CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-            CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-            CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+            CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
             IntrasampleMerge_sv ${SAMPLE_ID}
             IntrasampleMerge_ultralong ${SAMPLE_ID}
             IntrasampleMerge_bnd ${SAMPLE_ID}
