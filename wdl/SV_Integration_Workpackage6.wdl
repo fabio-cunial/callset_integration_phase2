@@ -75,6 +75,7 @@ task Impl {
         for CHUNK in $(echo ~{bcftools_chunks} | tr ',' ' '); do
             echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz >> uri_list.txt
             echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz.tbi >> uri_list.txt
+            echo chunk_${CHUNK}.vcf.gz >> file_list.txt
         done
         while : ; do
             TEST=$(cat uri_list.txt | gsutil -m cp -I . && echo 0 || echo 1)
@@ -85,7 +86,6 @@ task Impl {
                 break
             fi
         done
-        ls chunk_*.vcf.gz > file_list.txt
         
         # Concatenating all the bcftools merge chunks
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z > ~{chromosome_id}.vcf.gz
