@@ -141,17 +141,24 @@ task Impl {
         }
         
         
-        # Copies SCORE from INFO to FORMAT, so that it is preserved by the
-        # inter-sample merge later.
+        # Copies crucial fields from INFO to FORMAT, so that they are preserved
+        # by the inter-sample merge downstream.
+        #
+        # @param 2 A VCF where all IDs are distinct. This is guaranteed by
+        # workpackages upstream.
         #
         function CopyInfoToFormat() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-
+            
+            echo '##FORMAT=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
+            echo '##FORMAT=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by sniffles">' >> ${SAMPLE_ID}_header.txt
+            echo '##FORMAT=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' >> ${SAMPLE_ID}_header.txt
             echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' > ${SAMPLE_ID}_header.txt
-            bcftools query --format '%CHROM\t%POS\t%ID\t%SCORE\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
+            echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' > ${SAMPLE_ID}_header.txt
+            bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SCORE --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.vcf.gz
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.vcf.gz
             bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_scored.vcf.gz
             bcftools view --no-header ${SAMPLE_ID}_scored.vcf.gz | head -n 5 || echo "0"
             

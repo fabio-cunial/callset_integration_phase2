@@ -95,6 +95,9 @@ task Impl {
         #
         # Remark: SCORE has already been transfered to FORMAT by
         # `Workpackage3.wdl`
+        
+# ----------> THIS IS NOT NEEDED ANY MORE, KEPT ONLY FOR BACKWARD COMPATIBILITY.
+# ----------> SAFE TO DELETE AFTER PRESENTATION
         #
         function CopyInfoToFormat() {
             local SAMPLE_ID=$1
