@@ -15,6 +15,8 @@ workflow SV_Integration_Workpackage5 {
     }
     parameter_meta {
         sample_ids: "Speficies the order of the samples used by bcftools merge."
+        remote_indir: "Without final slash"
+        remote_outdir: "Without final slash"
     }
     
     call Impl {
@@ -87,6 +89,9 @@ task Impl {
         fi
         
         # Filtering
+        
+# -----------> FILTERING SHOULD HAVE BEEN DONE BY THE PREVIOUS WORKPACKAGE!!!!!        
+
         FILTER_STRING="~{filter_string}"
         if [ ${FILTER_STRING} != none ]; then
             INCLUDE_STR="--include ${FILTER_STRING}"
@@ -106,14 +111,14 @@ task Impl {
         # Bcftools merge
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type z > ~{chunk_id}_merged.vcf.gz
         tabix -f ~{chunk_id}_merged.vcf.gz
-        ls -laht ~{chunk_id}_merged.vcf.gz
+        ls -laht
         df -h
         while read FILE; do
             rm -f ${FILE}
         done < list.txt
         ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics - --output-type z ~{chunk_id}_merged.vcf.gz > ~{chunk_id}_normed.vcf.gz
         tabix -f ~{chunk_id}_normed.vcf.gz
-        ls -laht ~{chunk_id}_merged.vcf.gz
+        ls -laht
         
         # Uploading
         gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ~{chunk_id}_normed.vcf.gz ~{remote_outdir}/chunk_~{chunk_id}.vcf.gz
