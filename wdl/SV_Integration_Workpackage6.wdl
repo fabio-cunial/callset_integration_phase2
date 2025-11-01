@@ -44,7 +44,7 @@ workflow SV_Integration_Workpackage6 {
 # bcftools concat               12%     20M     1h
 # truvari divide --min 1769     100%    12G     6h         // Outputs 562 chunks
 #
-# Output of truvari divide:
+# Output of truvari divide (each chunk is ~5 MB):
 # count      562.000000
 # mean      3148.354093
 # std       2623.478656

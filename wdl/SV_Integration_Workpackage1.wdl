@@ -499,7 +499,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             local OUTPUT_VCF_GZ=$3
             
-            bcftools query -f '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=NF-1; i++) printf("\t%s",$i); \
                 if ($6=="0") printf("\t0\t0\t0");
