@@ -37,8 +37,8 @@ workflow SV_Integration_Workpackage7 {
 # CAL_SENS<=0.999:
 #
 # TOOL               CPU     RAM     TIME   OUTPUT VCF
-# truvari collapse
-# bcftools sort
+# truvari collapse   100%    2G      3m     500M
+# bcftools sort      100%    300M    10s     
 #
 task Impl {
     input {
@@ -50,7 +50,7 @@ task Impl {
         String remote_outdir
         
         Int n_cpu = 2
-        Int ram_size_gb = 16
+        Int ram_size_gb = 8
         Int disk_size_gb = 50
     }
     parameter_meta {
