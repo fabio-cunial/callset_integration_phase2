@@ -158,8 +158,8 @@ task Impl {
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z chunk_${CHUNK_ID}_in.vcf > chunk_${CHUNK_ID}_out.vcf.gz
             rm -f chunk_${CHUNK_ID}_in.vcf ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
         
-            mv chunk_${CHUNK_ID}_out.vcf.gz ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz
-            mv chunk_${CHUNK_ID}_out.vcf.gz.tbi ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz.tbi
+            mv chunk_${CHUNK_ID}_in.vcf.gz ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz
+            mv chunk_${CHUNK_ID}_in.vcf.gz.tbi ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz.tbi
         }
         
         
