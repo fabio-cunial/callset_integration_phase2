@@ -99,8 +99,8 @@ task Impl {
         
         # Creating truvari collapse chunks
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
-        N_RECORDS_PER_CHUNK=$(( ${N_RECORDS} / ~{n_truvari_chunks} ))
-        ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ${N_RECORDS_PER_CHUNK} --buffer ~{truvari_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
+        MIN_RECORDS_PER_CHUNK=$(( ( ${N_RECORDS} / ~{n_truvari_chunks} ) / 10 ))
+        ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ${MIN_RECORDS_PER_CHUNK} --buffer ~{truvari_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
         i="0"
         N_RECORDS_CHUNKED="0"
         for FILE in $(ls ./truvari_chunks/*.vcf.gz | sort -V); do
