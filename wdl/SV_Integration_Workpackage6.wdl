@@ -9,16 +9,16 @@ workflow SV_Integration_Workpackage6 {
         String chromosome_id
         String bcftools_chunks
         
-        Int n_truvari_chunks
-        Int truvari_refdist
+        Int truvari_chunk_min_records = 2000
+        Int truvari_collapse_refdist = 500
         
         String remote_indir
         String remote_outdir
     }
     parameter_meta {
         bcftools_chunks: "Comma-separated and sorted integers. Chunks are assumed to be sorted by POS."
-        n_truvari_chunks: "Desired number of chunks. The number of chunks in output might be different from this."
-        truvari_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is this value."
+        truvari_chunk_min_records: "Min number of records per output chunk. It has to be set to a small number (e.g. 2000) for truvari divide not to use too much RAM."
+        truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is this value."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
     }
@@ -27,8 +27,8 @@ workflow SV_Integration_Workpackage6 {
         input:
             chromosome_id = chromosome_id,
             bcftools_chunks = bcftools_chunks,
-            n_truvari_chunks = n_truvari_chunks,
-            truvari_refdist = truvari_refdist,
+            truvari_chunk_min_records = truvari_chunk_min_records,
+            truvari_collapse_refdist = truvari_collapse_refdist,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir
     }
@@ -40,17 +40,29 @@ workflow SV_Integration_Workpackage6 {
 
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
-# TOOL               CPU     RAM     TIME
-# bcftools concat    12%     20M     1h
-# truvari divide     
+# TOOL                          CPU     RAM     TIME
+# bcftools concat               12%     20M     1h
+# truvari divide --min 1769     100%    12G     6h         // Outputs 562 chunks
+#
+# Output of truvari divide:
+# count      562.000000
+# mean      3148.354093
+# std       2623.478656
+# min         68.000000
+# 25%       1849.000000
+# 50%       2070.500000
+# 75%       3062.250000
+# max      19218.000000
+#
+# Remark: truvari divide --min 88468 goes out of RAM with 256GB.
 # 
 task Impl {
     input {
         String chromosome_id
         String bcftools_chunks
         
-        Int n_truvari_chunks
-        Int truvari_refdist
+        Int truvari_chunk_min_records
+        Int truvari_collapse_refdist
         
         String remote_indir
         String remote_outdir
@@ -99,8 +111,7 @@ task Impl {
         
         # Creating truvari collapse chunks
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
-        MIN_RECORDS_PER_CHUNK=$(( ( ${N_RECORDS} / ~{n_truvari_chunks} ) / 10 ))
-        ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ${MIN_RECORDS_PER_CHUNK} --buffer ~{truvari_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
+        ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ~{truvari_chunk_min_records} --buffer ~{truvari_collapse_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
         i="0"
         N_RECORDS_CHUNKED="0"
         for FILE in $(ls ./truvari_chunks/*.vcf.gz | sort -V); do
