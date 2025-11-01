@@ -116,13 +116,13 @@ task Impl {
         
             # Ensuring that all records have a consistent AC annotation
             ${TIME_COMMAND} bcftools +fill-tags chunk_${CHUNK_ID}_in.vcf.gz -Oz -o chunk_${CHUNK_ID}_out.vcf.gz -- --tags AC
-            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz.tbi
+            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
         
             # Copying AC to QUAL
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%AC\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
-            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz.tbi
+            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
             rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
             
             mv chunk_${CHUNK_ID}_in.vcf.gz chunk_${CHUNK_ID}_annotated.vcf.gz
@@ -156,7 +156,7 @@ task Impl {
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf chunk_${CHUNK_ID}_in.vcf
         
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z chunk_${CHUNK_ID}_in.vcf > chunk_${CHUNK_ID}_out.vcf.gz
-            rm -f chunk_${CHUNK_ID}_in.vcf ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz.tbi
+            rm -f chunk_${CHUNK_ID}_in.vcf ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
         
             mv chunk_${CHUNK_ID}_out.vcf.gz ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz
             mv chunk_${CHUNK_ID}_out.vcf.gz.tbi ~{chromosome_id}_chunk_${CHUNK_ID}_truvari.vcf.gz.tbi
