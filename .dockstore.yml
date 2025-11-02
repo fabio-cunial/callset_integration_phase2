@@ -470,3 +470,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_Workpackage7.wdl
   testParameterFiles:
+- name: SV_Integration_Workpackage8
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_Workpackage8.wdl
+  testParameterFiles:

@@ -518,7 +518,7 @@ task Impl {
             echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
-            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV ${INPUT_VCF_GZ} --output-type z > ${OUTPUT_VCF_GZ}
+            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_VCF_GZ}
             tabix -f ${OUTPUT_VCF_GZ}
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF_GZ}*
         }
