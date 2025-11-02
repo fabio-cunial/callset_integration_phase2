@@ -118,10 +118,12 @@ task Impl {
             ${TIME_COMMAND} bcftools +fill-tags chunk_${CHUNK_ID}_in.vcf.gz -Oz -o chunk_${CHUNK_ID}_out.vcf.gz -- --tags AC
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
         
-            # Copying AC to QUAL
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%AC\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+            # Copying AC to QUAL.
+            # Remark: joining annotations on REF and ALT is important, since
+            # IDs are not necessarily all distinct at this stage.
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AC\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
             rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
             

@@ -38,6 +38,12 @@ workflow Workpackage8 {
 # <=0.7     tabix                               100%    90M     20m
 # <=0.7     bgzip                               360%    10M     4m
 #
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                CPU     RAM     TIME
+# bcftools concat     70%     90M     10s
+# tabix               100%    10M     3m
+#
 task Impl {
     input {
         Array[String] chromosomes
