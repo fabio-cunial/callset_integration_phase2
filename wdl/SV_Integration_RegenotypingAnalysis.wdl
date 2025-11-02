@@ -10,7 +10,16 @@ workflow RegenotypingAnalysis {
         Array[Int] min_n_samples = [2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
         
-        Array[File] precision_recall_samples_scored_vcf_gz
+        
+        String infrequent_remote_dir
+        
+        Array[String] precision_recall_samples
+        Array[String] precision_recall_sex
+        Array[File] precision_recall_bam
+        Array[File] precision_recall_bai
+        String precision_recall_remote_dir
+        
+        
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
         Int precision_recall_bench_method
@@ -18,9 +27,12 @@ workflow RegenotypingAnalysis {
         File mendelian_error_ped_tsv
         Int mendelian_error_n_trios
 
-        File tandem_bed
+        
         File reference_fa
         File reference_fai
+        File tandem_bed
+        File ploidy_bed_male
+        File ploidy_bed_female
     }
     parameter_meta {
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
@@ -34,24 +46,53 @@ workflow RegenotypingAnalysis {
             tandem_bed = tandem_bed,
             reference_fai = reference_fai
     }
-    call CleanCohortVcf {
+    call PrepareCohortBcf {
         input:
             cohort_truvari_vcf_gz = cohort_truvari_vcf_gz,
             cohort_truvari_tbi = cohort_truvari_tbi
     }
-    call FilterCohortVcf_ByLength {
+    call FilterCohortBcf_ByLength {
         input:
-            cohort_truvari_vcf_gz = CleanCohortVcf.out_vcf_gz,
-            cohort_truvari_tbi = CleanCohortVcf.out_tbi
+            cohort_truvari_bcf = PrepareCohortBcf.out_bcf,
+            cohort_truvari_csi = PrepareCohortBcf.out_csi
     }
     scatter (i in range(length(min_n_samples))) {
-        call FilterCohortVcf_ByNSamples {
+        call PartitionCohortBcf {
             input:
-                cohort_truvari_vcf_gz = FilterCohortVcf_ByLength.out_vcf_gz,
-                cohort_truvari_tbi = FilterCohortVcf_ByLength.out_tbi,
+                cohort_truvari_bcf = FilterCohortBcf_ByLength.out_bcf,
+                cohort_truvari_csi = FilterCohortBcf_ByLength.out_csi,
                 min_n_samples = min_n_samples[i]
         }
+        call SplitInfrequentBcf {
+            input:
+                infrequent_cohort_bcf = PartitionCohortBcf.infrequent_bcf,
+                infrequent_cohort_csi = PartitionCohortBcf.infrequent_csi,
+                samples = precision_recall_samples,
+                remote_outdir = infrequent_remote_dir
+        }
         scatter (i in range(length(precision_recall_samples))) {
+            call BuildPersonalizedVcf {
+                input:
+                    sample_id = precision_recall_samples[i],
+                    frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
+                    frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
+                    infrequent_remote_dir = infrequent_remote_dir,
+                    in_flag = SplitInfrequentBcf.out_flag
+            }
+            call Kanpig {
+                input:
+                    sample_id = precision_recall_samples[i],
+                    sex = precision_recall_sex[i],
+                    personalized_vcf_gz = BuildPersonalizedVcf.out_vcf_gz,
+                    personalized_tbi = BuildPersonalizedVcf.out_tbi,
+                    alignments_bam = precision_recall_bam[i],
+                    alignments_bai = precision_recall_bai[i],
+                    remote_dir = precision_recall_remote_dir,
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai,
+                    ploidy_bed_male = ploidy_bed_male,
+                    ploidy_bed_female = ploidy_bed_female
+            }
             call PrecisionRecallAnalysis {
                 input:
                 --------->
@@ -74,31 +115,8 @@ workflow RegenotypingAnalysis {
                     not_tandem_bed = ComplementBed.complement_bed,
                     reference_fa = reference_fa,
                     reference_fai = reference_fai
-            }
-        }
-        scatter (i in range(mendelian_error_n_trios)) {
-            call MendelianErrorAnalysis {
-                input:
-                --------->
-                
-                    sample_id = precision_recall_samples[i],
-                    dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
-                    dipcall_bed = precision_recall_samples_dipcall_bed[i],
-                
-                
-                    min_n_samples = min_n_samples,
-                
-                    v1_07_cohort_truvari_vcf_gz = v1.out_vcf_gz,
-                    v1_07_cohort_truvari_tbi = v1.out_tbi,
-                
-                    min_sv_length = min_sv_length,
-                    max_sv_length = max_sv_length,
-                    bench_method = bench_method,
-                
-                    tandem_bed = ComplementBed.sorted_bed,
-                    not_tandem_bed = ComplementBed.complement_bed,
-                    reference_fa = reference_fa,
-                    reference_fai = reference_fai
+                    
+                    in_flag = Kanpig.out_flag
             }
         }
     }
@@ -115,7 +133,7 @@ workflow RegenotypingAnalysis {
 
 
 
-
+#----------------------- Personalized VCF construction -------------------------
 
 #
 task ComplementBed {
@@ -158,12 +176,16 @@ task ComplementBed {
 }
 
 
+# Keeps all sample columns in the output, but adds an INFO field that counts the
+# number of samples each record occurs in, and enforces a distinct ID in every
+# record.
+#
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
 # TOOL                CPU     RAM     TIME
 #
 #
-task CleanCohortVcf {
+task PrepareCohortBcf {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
@@ -175,7 +197,7 @@ task CleanCohortVcf {
         cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -188,35 +210,38 @@ task CleanCohortVcf {
         mv ~{cohort_truvari_vcf_gz} in.vcf.gz
         mv ~{cohort_truvari_tbi} in.vcf.gz.tbi
         
-        # Computing the number of samples each record occurs in
-        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
+        # Converting to BCF, to speed up all steps downstream.
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
+        rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index out.bcf
+        
+        # Annotating every record with the number of samples it occurs in.
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | bgzip -c > annotations.tsv.gz
         tabix -s1 -b2 -e2 annotations.tsv.gz
-        
-        # Dropping genotypes
-        ${TIME_COMMAND} bcftools view --drop-genotypes in.vcf.gz --output-type z out.vcf.gz
-        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
-        
-        # Annotating the number of samples
         echo '##INFO=<ID=N_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,N_SAMPLES --output-type z in.vcf.gz > out.vcf.gz
-        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,N_SAMPLES --output-type z in.bcf > out.bcf
+        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index out.bcf
+        rm -f annotations.tsv.gz
         
-        # Enforcing a distinct ID for every record
-        bcftools view --header-only in.vcf.gz > header.txt
+        # Enforcing a distinct ID in every record
+        bcftools view --header-only in.bcf > header.txt
         N_ROWS=$(wc -l < header.txt)
         date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
            echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
-           bcftools view --no-header in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' \
-        ) | bgzip --compress-level 1 > out.vcf.gz
+           bcftools view --no-header in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { \
+               $8=printf("%s;ORIGINAL_ID=%s,$8,gsub(/;/,"_",$3)); \
+               $3=printf("%d",++i); \
+               print $0 \
+           }' \
+        ) | bcftools view --output-type b > out.bcf
         date
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index out.bcf
     >>>
     
     output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
+        File out_bcf = "out.bcf"
+        File out_csi = "out.bcf.csi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
@@ -233,10 +258,10 @@ task CleanCohortVcf {
 # TOOL                CPU     RAM     TIME
 #
 #
-task FilterCohortVcf_ByLength {
+task FilterCohortBcf_ByLength {
     input {
-        File cohort_truvari_vcf_gz
-        File cohort_truvari_tbi
+        File cohort_truvari_bcf
+        File cohort_truvari_csi
         
         Int min_sv_length
         
@@ -244,10 +269,10 @@ task FilterCohortVcf_ByLength {
         Int ram_size_gb = 16
     }
     parameter_meta {
-        cohort_truvari_vcf_gz: "Every record is assumed be already annotated with the correct SVLEN."
+        cohort_truvari_bcf: "Every record is assumed be already annotated with the correct SVLEN."
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -257,13 +282,13 @@ task FilterCohortVcf_ByLength {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type z ~{cohort_truvari_vcf_gz} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type b ~{cohort_truvari_bcf} > out.bcf
+        ${TIME_COMMAND} bcftools index out.bcf
     >>>
     
     output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
+        File out_bcf = "out.bcf"
+        File out_csi = "out.bcf.csi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
@@ -275,18 +300,21 @@ task FilterCohortVcf_ByLength {
 }
 
 
-# Partitions `cohort_truvari_vcf_gz` into the subset of all records that occur
-# in `>= min_n_samples`, and its complement.
+# Partitions `cohort_truvari_bcf` into the following BCFs:
+# - The subset of all records that occur in `>= min_n_samples`. This file has
+#   just one artificial sample column set to 0/1.
+# - The subset of all records that occur in `< min_n_samples`. This file has
+#   all the original sample columns kept intact.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
 # TOOL                CPU     RAM     TIME
 # 
 #
-task FilterCohortVcf_ByNSamples {
+task PartitionCohortBcf {
     input {
-        File cohort_truvari_vcf_gz
-        File cohort_truvari_tbi
+        File cohort_truvari_bcf
+        File cohort_truvari_csi
         
         Int min_n_samples
         
@@ -296,7 +324,7 @@ task FilterCohortVcf_ByNSamples {
     parameter_meta {
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -306,20 +334,30 @@ task FilterCohortVcf_ByNSamples {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
+        # Splitting
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > infrequent_~{min_n_samples}.bcf &
+        wait
+        ${TIME_COMMAND} bcftools index tmp.bcf &
+        ${TIME_COMMAND} bcftools index infrequent_~{min_n_samples}.bcf &
+        wait
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type z ~{cohort_truvari_vcf_gz} > frequent_~{min_n_samples}.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type z ~{cohort_truvari_vcf_gz} > infrequent_~{min_n_samples}.vcf.gz &
-        wait
-        ${TIME_COMMAND} tabix frequent_~{min_n_samples}.vcf.gz &
-        ${TIME_COMMAND} tabix infrequent_~{min_n_samples}.vcf.gz &
-        wait
+        # Enforcing a single sample in the frequent BCF
+        bcftools view --header-only tmp.vcf.gz > header.txt
+        N_ROWS=$(wc -l < header.txt)
+        date
+        (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
+           echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
+           bcftools view --no-header tmp.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\tGT\t0/1\n",$1,$2,$3,$4,$5,$6,$7,$8); }' \
+        ) | bcftools view --output-type b > frequent_~{min_n_samples}.bcf
+        bcftools index frequent_~{min_n_samples}.bcf
     >>>
     
     output {
-        File frequent_vcf_gz = "frequent_"+min_n_samples+".vcf.gz"
-        File frequent_tbi = "frequent_"+min_n_samples+".vcf.gz.tbi"
-        File infrequent_vcf_gz = "infrequent_"+min_n_samples+".vcf.gz"
-        File infrequent_tbi = "infrequent_"+min_n_samples+".vcf.gz.tbi"
+        File frequent_bcf = "frequent_"+min_n_samples+".bcf"
+        File frequent_csi = "frequent_"+min_n_samples+".bcf.csi"
+        File infrequent_bcf = "infrequent_"+min_n_samples+".bcf"
+        File infrequent_csi = "infrequent_"+min_n_samples+".bcf.csi"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
@@ -331,6 +369,79 @@ task FilterCohortVcf_ByNSamples {
 }
 
 
+# Writes to separate files the records that are present in each sample column of
+# the infrequent cohort BCF.
+#
+task SplitInfrequentBcf {
+    input {
+        File infrequent_cohort_bcf
+        File infrequent_cohort_csi
+        
+        Array[String] samples
+        String remote_outdir
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+        infrequent_cohort_bcf: "Assumed to have all the sample columns in the original truvari collapse VCF."
+        remote_outdir: "The result of the split is stored in this bucket location."
+    }
+    
+    Int disk_size_gb = 4*ceil(size(infrequent_cohort_bcf,"GB"))
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        # Splitting
+        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . ~{infrequent_cohort_bcf}
+        rm -f ~{infrequent_cohort_bcf}
+        
+        # Keeping only present records
+        for FILE in $(ls *.bcf); do
+            SAMPLE_ID=$(basename ${FILE} .bcf)
+            ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > ${SAMPLE_ID}_infrequent.bcf
+            bcftools index ${SAMPLE_ID}_infrequent.bcf
+        done
+        
+        # Uploading
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*_infrequent.bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading infrequent VCFs. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Merges all the frequent cohort records with the infrequent cohort records
+# that occur in a given sample.
+#
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                CPU     RAM     TIME
@@ -338,24 +449,23 @@ task FilterCohortVcf_ByNSamples {
 #
 task BuildPersonalizedVcf {
     input {
-        File sample_vcf_gz
-        Int min_sv_length
+        String sample_id
+        File frequent_cohort_bcf
+        File frequent_cohort_csi
+        String infrequent_remote_dir
         
-        File frequent_cohort_vcf_gz
-        File frequent_cohort_tbi
-        File infrequent_cohort_vcf_gz
-        File infrequent_cohort_tbi
+        File in_flag
         
         Int n_cpu = 8
         Int ram_size_gb = 16
     }
     parameter_meta {
-        sample_vcf_gz: "The filename is assumed to be `SAMPLEID_kanpig.vcf.gz`. Every record is assumed be already annotated with the correct SVLEN, and to have been marked as present by kanpig."
-        frequent_cohort_vcf_gz: "Assumed to already contain records >= min_sv_length"
-        infrequent_cohort_vcf_gz: "Assumed to already contain records >= min_sv_length"
+        frequent_cohort_bcf: "Assumed to have a single sample column."
+        infrequent_remote_indir: "Remote directory containing the infrequent cohort records that occur in each sample (with names `SAMPLEID_infrequent.bcf`)."
+        flag: "Just to flag to the sheduler that this task can start."
     }
     
-    Int disk_size_gb = 4*ceil( size(frequent_cohort_vcf_gz,"GB") + size(infrequent_cohort_vcf_gz,"GB") )
+    Int disk_size_gb = 4*ceil(size(frequent_cohort_bcf,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -371,24 +481,118 @@ task BuildPersonalizedVcf {
         
         mv ~{sample_vcf_gz} in.vcf.gz
         
-        # Ensuring the required min length
-        bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type z in.vcf.gz > out.vcf.gz
-        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        # Localizing infrequent cohort records that occur in this sample
+        while : ; do
+            TEST=$(gsutil -m cp ~{infrequent_remote_dir}/~{sample_id}_infrequent.'bcf*' . && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error downloading ~{sample_id}_infrequent.bcf. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
         
-        # Selecting infrequent cohort records that occur in this sample
-        ${TIME_COMMAND} truvari bench --sizemin 0 --sizemax ${INFINITY} --sizefilt 0 --pick multi --comp in.vcf.gz --base ~{infrequent_cohort_vcf_gz} --output ./truvari/ 
-        mv ./truvari/tp-base.vcf.gz infrequent.vcf.gz
-        tabix -f infrequent.vcf.gz
-        rm -rf ./truvari/
+        # Changing the header of the frequent BCF
+        echo ~{sample_id} > samples.txt
+        ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples samples.txt ~{frequent_cohort_bcf} > frequent.bcf
+        bcftools index frequent.bcf
+        rm -f ~{frequent_cohort_bcf}
         
-        # Merging infrequent cohort records and frequent cohort records
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z infrequent.vcf.gz ~{frequent_cohort_vcf_gz} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        # Merging infrequent and frequent BCFs
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{sample_id}_infrequent.bcf frequent.bcf > ~{sample_id}_personalized.vcf.gz
+        ${TIME_COMMAND} tabix -f ~{sample_id}_personalized.vcf.gz
     >>>
     
     output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
+        File out_vcf_gz = sample_id+"_personalized.vcf.gz"
+        File out_tbi = sample_id+"_personalized.vcf.gz.tbi"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: 2
+    }
+}
+
+
+#
+task Kanpig {
+    input {
+        String sample_id
+        String sex
+        File personalized_vcf_gz
+        File personalized_tbi
+        File alignments_bam
+        File alignments_bai
+        
+        String remote_dir
+        
+        String kanpig_params_singlesample = "--neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
+        File reference_fa
+        File reference_fai
+        File ploidy_bed_male
+        File ploidy_bed_female
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+    }
+    
+    Int disk_size_gb = 4*ceil( size(alignments_bam,"GB") )
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export RUST_BACKTRACE="full"
+        INFINITY="1000000000"
+        
+        if [ ~{sex} == "M" ]; then
+            PLOIDY_BED=$(echo ~{ploidy_bed_male})
+        else
+            PLOIDY_BED=$(echo ~{ploidy_bed_female})
+        fi
+        
+        mv ~{personalized_vcf_gz} in.vcf.gz
+        mv ~{personalized_tbi} in.vcf.gz.tbi
+        
+        # Remark: kanpig needs --sizemin >= --kmer
+        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf
+        rm -f in.vcf.gz* ; mv out.vcf in.vcf
+        
+        # Sorting
+        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z in.vcf > out.vcf.gz
+        rm -f in.vcf ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        # Discarding records that are not marked as present by kanpig
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z in.vcf.gz > out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
+        mv in.vcf.gz.tbi ~{sample_id}_kanpig.vcf.gz.tbi
+        
+        # Uploading
+        while : ; do
+            TEST=$(gsutil -m cp ~{sample_id}_kanpig.'vcf*' ~{remote_dir}/personalized/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading ~{sample_id}_kanpig.vcf.gz. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
     }
     runtime {
         docker: "fcunial/callset_integration_phase2_workpackages"
@@ -415,10 +619,7 @@ task BuildPersonalizedVcf {
 
 
 
-
-
-
-#-------------------------------------------------------------------------------
+#----------------------- Benchmarking -------------------------
 
 
 # Restricts the cohort VCF to records that occur in a PED file, to speed up the
