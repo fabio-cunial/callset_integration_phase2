@@ -8,8 +8,7 @@ workflow RegenotypingAnalysis {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
         Array[Int] min_n_samples = [2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
-        Int min_sv_length = 50
-        Int max_sv_length = 10000
+        Int min_sv_length = 20
         
         Array[File] precision_recall_samples_scored_vcf_gz
         Array[File] precision_recall_samples_dipcall_vcf_gz
@@ -35,10 +34,15 @@ workflow RegenotypingAnalysis {
             tandem_bed = tandem_bed,
             reference_fai = reference_fai
     }
-    call FilterCohortVcf_ByLength {
+    call CleanCohortVcf {
         input:
             cohort_truvari_vcf_gz = cohort_truvari_vcf_gz,
             cohort_truvari_tbi = cohort_truvari_tbi
+    }
+    call FilterCohortVcf_ByLength {
+        input:
+            cohort_truvari_vcf_gz = CleanCohortVcf.out_vcf_gz,
+            cohort_truvari_tbi = CleanCohortVcf.out_tbi
     }
     scatter (i in range(length(min_n_samples))) {
         call FilterCohortVcf_ByNSamples {
@@ -47,50 +51,65 @@ workflow RegenotypingAnalysis {
                 cohort_truvari_tbi = FilterCohortVcf_ByLength.out_tbi,
                 min_n_samples = min_n_samples[i]
         }
-    }
-    scatter (i in range(length(precision_recall_samples))) {
-        scatter (j in range(length(FilterCohortVcf_ByNSamples.out_vcf_gz))) {
-            ------>
-            
-            
-            
-            
+        scatter (i in range(length(precision_recall_samples))) {
+            call PrecisionRecallAnalysis {
+                input:
+                --------->
+                
+                    sample_id = precision_recall_samples[i],
+                    dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
+                    dipcall_bed = precision_recall_samples_dipcall_bed[i],
+                
+                
+                    min_n_samples = min_n_samples,
+                
+                    v1_07_cohort_truvari_vcf_gz = v1.out_vcf_gz,
+                    v1_07_cohort_truvari_tbi = v1.out_tbi,
+                
+                    min_sv_length = min_sv_length,
+                    max_sv_length = max_sv_length,
+                    bench_method = bench_method,
+                
+                    tandem_bed = ComplementBed.sorted_bed,
+                    not_tandem_bed = ComplementBed.complement_bed,
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai
+            }
         }
-    }
-    
-    
-    
-    # Precision-recall analysis
-    scatter (i in range(length(precision_recall_samples))) {
-        call PrecisionRecallAnalysis {
-            input:
-            --------->
+        scatter (i in range(mendelian_error_n_trios)) {
+            call MendelianErrorAnalysis {
+                input:
+                --------->
                 
-                sample_id = precision_recall_samples[i],
-                dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
-                dipcall_bed = precision_recall_samples_dipcall_bed[i],
+                    sample_id = precision_recall_samples[i],
+                    dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
+                    dipcall_bed = precision_recall_samples_dipcall_bed[i],
                 
                 
-                min_n_samples = min_n_samples,
+                    min_n_samples = min_n_samples,
                 
-                v1_07_cohort_truvari_vcf_gz = v1.out_vcf_gz,
-                v1_07_cohort_truvari_tbi = v1.out_tbi,
+                    v1_07_cohort_truvari_vcf_gz = v1.out_vcf_gz,
+                    v1_07_cohort_truvari_tbi = v1.out_tbi,
                 
-                min_sv_length = min_sv_length,
-                max_sv_length = max_sv_length,
-                bench_method = bench_method,
+                    min_sv_length = min_sv_length,
+                    max_sv_length = max_sv_length,
+                    bench_method = bench_method,
                 
-                tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed,
-                reference_fa = reference_fa,
-                reference_fai = reference_fai
+                    tandem_bed = ComplementBed.sorted_bed,
+                    not_tandem_bed = ComplementBed.complement_bed,
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai
+            }
         }
     }
     
     output {
-        Array[Array[File]] out_jsons = PrecisionRecallAnalysis.out_jsons
     }
 }
+
+
+
+
 
 
 
@@ -105,7 +124,7 @@ task ComplementBed {
         File reference_fai
         
         Int n_cpu = 1
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -130,7 +149,7 @@ task ComplementBed {
         File complement_bed = "complement.bed"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
@@ -139,13 +158,137 @@ task ComplementBed {
 }
 
 
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                CPU     RAM     TIME
+#
+#
+task CleanCohortVcf {
+    input {
+        File cohort_truvari_vcf_gz
+        File cohort_truvari_tbi
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+        cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
+    }
+    
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        mv ~{cohort_truvari_vcf_gz} in.vcf.gz
+        mv ~{cohort_truvari_tbi} in.vcf.gz.tbi
+        
+        # Computing the number of samples each record occurs in
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
+        tabix -s1 -b2 -e2 annotations.tsv.gz
+        
+        # Dropping genotypes
+        ${TIME_COMMAND} bcftools view --drop-genotypes in.vcf.gz --output-type z out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        # Annotating the number of samples
+        echo '##INFO=<ID=N_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,N_SAMPLES --output-type z in.vcf.gz > out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        # Enforcing a distinct ID for every record
+        bcftools view --header-only in.vcf.gz > header.txt
+        N_ROWS=$(wc -l < header.txt)
+        date
+        (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
+           echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
+           echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
+           bcftools view --no-header in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' \
+        ) | bgzip --compress-level 1 > out.vcf.gz
+        date
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+    
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                CPU     RAM     TIME
+#
+#
 task FilterCohortVcf_ByLength {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
         
         Int min_sv_length
-        Int max_sv_length
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+        cohort_truvari_vcf_gz: "Every record is assumed be already annotated with the correct SVLEN."
+    }
+    
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type z ~{cohort_truvari_vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+    
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Partitions `cohort_truvari_vcf_gz` into the subset of all records that occur
+# in `>= min_n_samples`, and its complement.
+#
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                CPU     RAM     TIME
+# 
+#
+task FilterCohortVcf_ByNSamples {
+    input {
+        File cohort_truvari_vcf_gz
+        File cohort_truvari_tbi
+        
+        Int min_n_samples
         
         Int n_cpu = 8
         Int ram_size_gb = 16
@@ -161,22 +304,25 @@ task FilterCohortVcf_ByLength {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-
-
-        ${TIME_COMMAND} truvari anno svinfo --minsize 1 ~{cohort_truvari_vcf_gz} | bgzip > tmp.vcf.gz
-        tabix -f tmp.vcf.gz
-        rm -f ~{cohort_truvari_vcf_gz}
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include '(SVLEN>='~{min_sv_length}' && SVLEN<='~{max_sv_length}') || (SVLEN>=-'~{max_sv_length}' && SVLEN<=-'~{min_sv_length}')' --output-type z tmp.vcf.gz > out.vcf.gz
-        tabix -f out.vcf.gz
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type z ~{cohort_truvari_vcf_gz} > frequent_~{min_n_samples}.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type z ~{cohort_truvari_vcf_gz} > infrequent_~{min_n_samples}.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix frequent_~{min_n_samples}.vcf.gz &
+        ${TIME_COMMAND} tabix infrequent_~{min_n_samples}.vcf.gz &
+        wait
     >>>
     
     output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
+        File frequent_vcf_gz = "frequent_"+min_n_samples+".vcf.gz"
+        File frequent_tbi = "frequent_"+min_n_samples+".vcf.gz.tbi"
+        File infrequent_vcf_gz = "infrequent_"+min_n_samples+".vcf.gz"
+        File infrequent_tbi = "infrequent_"+min_n_samples+".vcf.gz.tbi"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -185,88 +331,31 @@ task FilterCohortVcf_ByLength {
 }
 
 
-# Keeps only records of `cohort_truvari_vcf_gz` that occur in a given number of
-# samples and that have a given length.
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
-task FilterCohortVcf_ByNSamples {
-    input {
-        File cohort_truvari_vcf_gz
-        File cohort_truvari_tbi
-        
-        Int min_n_samples
-        
-        Int n_cpu = 8
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-    }
-    
-    Int disk_size_gb = 10*ceil(size(cohort_truvari_vcf_gz,"GB"))
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-
-
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>='~{min_n_samples} --output-type z ~{cohort_truvari_vcf_gz} > tmp1.vcf.gz
-        tabix -f tmp1.vcf.gz
-        rm -f ~{cohort_truvari_vcf_gz}
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z tmp1.vcf.gz > tmp2.vcf.gz
-        tabix -f tmp2.vcf.gz
-        rm -f tmp1.vcf.gz*
-        
-        bcftools view --header-only tmp2.vcf.gz > header.txt
-        N_ROWS=$(wc -l < header.txt)
-        head -n $(( ${N_ROWS} - 1 )) header.txt > filtered.vcf
-        echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> filtered.vcf
-        echo '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">' >> filtered.vcf
-        echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" >> filtered.vcf
-        bcftools view --threads ${N_THREADS} --no-header tmp2.vcf.gz | awk 'BEGIN { i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' >> filtered.vcf
-        rm -f tmp2.vcf.gz*
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} filtered.vcf
-        mv filtered.vcf.gz ~{min_n_samples}.vcf.gz
-        ${TIME_COMMAND} tabix -f ~{min_n_samples}.vcf.gz
-    >>>
-    
-    output {
-        File out_vcf_gz = min_n_samples+".vcf.gz"
-        File out_tbi = min_n_samples+".vcf.gz.tbi"
-    }
-    runtime {
-        docker: "fcunial/callset_integration_phase2"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
-    }
-}
-
-
-
-
+# TOOL                CPU     RAM     TIME
+# 
 #
 task BuildPersonalizedVcf {
     input {
         File sample_vcf_gz
         Int min_sv_length
-        Int max_sv_length
-        String? filter_string
         
-        File cohort_vcf_gz
-        File cohort_tbi
+        File frequent_cohort_vcf_gz
+        File frequent_cohort_tbi
+        File infrequent_cohort_vcf_gz
+        File infrequent_cohort_tbi
         
         Int n_cpu = 8
         Int ram_size_gb = 16
     }
     parameter_meta {
-        sample_vcf_gz: "The filename is assumed to be `SAMPLEID_scored.vcf.gz`."
+        sample_vcf_gz: "The filename is assumed to be `SAMPLEID_kanpig.vcf.gz`. Every record is assumed be already annotated with the correct SVLEN, and to have been marked as present by kanpig."
+        frequent_cohort_vcf_gz: "Assumed to already contain records >= min_sv_length"
+        infrequent_cohort_vcf_gz: "Assumed to already contain records >= min_sv_length"
     }
     
-    Int disk_size_gb = 10*ceil(size(tandem_bed,"GB"))
+    Int disk_size_gb = 4*ceil( size(frequent_cohort_vcf_gz,"GB") + size(infrequent_cohort_vcf_gz,"GB") )
     
     command <<<
         set -euxo pipefail
@@ -275,40 +364,26 @@ task BuildPersonalizedVcf {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        INFINITY="1000000000"
 
         SAMPLE_ID=$(basename ~{sample_vcf_gz} .vcf.gz)
         SAMPLE_ID=${SAMPLE_ID%_*}
         
-        # Single-sample VCF: Making sure that the SVLEN field is consistently
-        # annotated.
-        ${TIME_COMMAND} truvari anno svinfo --minsize 1 ~{sample_vcf_gz} | bgzip > annotated.vcf.gz
-        tabix -f annotated.vcf.gz
-        rm -f ~{sample_vcf_gz}*
+        mv ~{sample_vcf_gz} in.vcf.gz
         
-        # Single-sample VCF: Keeping only calls that are marked as present by
-        # kanpig, and that are within the given SVLEN bounds.
-        if ~{defined(filter_string)}
-        then
-            bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>=1 && ( (SVLEN>='~{min_sv_length}' && SVLEN<='~{max_sv_length}') || (SVLEN>=-'~{max_sv_length}' && SVLEN<=-'~{min_sv_length}') ) && '~{filter_string} --output-type z annotated.vcf.gz > filtered.vcf.gz
-        else
-            bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>=1 && ( (SVLEN>='~{min_sv_length}' && SVLEN<='~{max_sv_length}') || (SVLEN>=-'~{max_sv_length}' && SVLEN<=-'~{min_sv_length}') )' --output-type z annotated.vcf.gz > filtered.vcf.gz
-        fi
-        tabix -f filtered.vcf.gz
-        rm -f annotated.vcf.gz*
+        # Ensuring the required min length
+        bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type z in.vcf.gz > out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
-        # Single-sample VCF: Forcing a 0/1 GT on every call.
-        bcftools view --header-only filtered.vcf.gz > header.txt
-        N_ROWS=$(wc -l < header.txt)
-        head -n $(( ${N_ROWS} - 1 )) header.txt > cleaned.vcf
-        echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" >> cleaned.vcf
-        bcftools view --threads ${N_THREADS} --no-header filtered.vcf.gz | awk 'BEGIN { i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\tGT\t0/1\n",$1,$2,$3,$4,$5,$6,$7,$8); }' >> cleaned.vcf
-        rm -f filtered.vcf.gz*
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} cleaned.vcf
-        tabix -f cleaned.vcf.gz
+        # Selecting infrequent cohort records that occur in this sample
+        ${TIME_COMMAND} truvari bench --sizemin 0 --sizemax ${INFINITY} --sizefilt 0 --pick multi --comp in.vcf.gz --base ~{infrequent_cohort_vcf_gz} --output ./truvari/ 
+        mv ./truvari/tp-base.vcf.gz infrequent.vcf.gz
+        tabix -f infrequent.vcf.gz
+        rm -rf ./truvari/
         
-        # Merging single-sample and cohort VCF
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{cohort_vcf_gz} cleaned.vcf.gz > out.vcf.gz
-        tabix -f out.vcf.gz
+        # Merging infrequent cohort records and frequent cohort records
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z infrequent.vcf.gz ~{frequent_cohort_vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
     
     output {
@@ -316,7 +391,7 @@ task BuildPersonalizedVcf {
         File out_tbi = "out.vcf.gz.tbi"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
+        docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"

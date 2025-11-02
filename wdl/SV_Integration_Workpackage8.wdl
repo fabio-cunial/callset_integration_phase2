@@ -43,6 +43,7 @@ workflow Workpackage8 {
 # TOOL                CPU     RAM     TIME
 # bcftools concat     70%     90M     10s
 # tabix               100%    10M     3m
+# bcftools view | awk                 ~30m
 #
 task Impl {
     input {
@@ -100,11 +101,13 @@ task Impl {
         # Preparing the inter-sample VCF for kanpig
         bcftools view --header-only truvari_collapsed.vcf.gz > header.txt
         N_ROWS=$(wc -l < header.txt)
+        date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
            echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
            bcftools view --no-header truvari_collapsed.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' \
         ) | bgzip --compress-level 1 > truvari_collapsed_for_kanpig.vcf.gz
+        date
         ${TIME_COMMAND} tabix -f truvari_collapsed_for_kanpig.vcf.gz
         df -h
         
