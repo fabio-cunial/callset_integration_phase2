@@ -80,6 +80,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                 ped_tsv_row = i+1,
                 remote_indir = remote_dir+"/truvari",
                 remote_outdir = remote_dir+"/truvari/mendelian",
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split_truvari.out_flag]
         }
     }
@@ -176,6 +178,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                     ped_tsv_row = i+1,
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    tandem_bed = ComplementBed.sorted_bed,
+                    not_tandem_bed = ComplementBed.complement_bed,
                     in_flag = me_kanpig.out_flag
             }
         }
