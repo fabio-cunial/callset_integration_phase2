@@ -297,7 +297,7 @@ task PrepareCohortBcf {
            }' \
         ) | bcftools view --output-type b > out.bcf
         date
-        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index in.bcf
+        bcftools index out.bcf
     >>>
     
     output {
