@@ -214,7 +214,7 @@ task PrepareCohortBcf {
         
         # Converting to BCF, to speed up all steps downstream.
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
-        rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index out.bcf
+        rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
         # Annotating every record with the number of samples it occurs in.
         ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | bgzip -c > annotations.tsv.gz
@@ -609,7 +609,7 @@ task Kanpig {
 
 # Remark: `truvari bench` is used with default parameters.
 #
-# Performance with 16 cores and 32GB of RAM:
+# Performance with 4 cores and 32GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
 # truvari bench             
@@ -854,39 +854,18 @@ task BenchTrio {
     input {
         File ped_tsv
         Int ped_tsv_row
-        Int only_50_bp
-        
-        File single_sample_kanpig_proband_vcf_gz
-        File single_sample_kanpig_father_vcf_gz
-        File single_sample_kanpig_mother_vcf_gz
-        
-        File single_sample_kanpig_annotated_proband_vcf_gz
-        File single_sample_kanpig_annotated_father_vcf_gz
-        File single_sample_kanpig_annotated_mother_vcf_gz
-        
-        File cohort_merged_07_vcf_gz
-        File cohort_merged_07_tbi
-        File cohort_merged_09_vcf_gz
-        File cohort_merged_09_tbi
-        
-        File cohort_regenotyped_07_vcf_gz
-        File cohort_regenotyped_07_tbi
-        File cohort_regenotyped_09_vcf_gz
-        File cohort_regenotyped_09_tbi
-        
-        Int truvari_collapse
-        
+        Int min_n_samples
+
         File tandem_bed
         File not_tandem_bed
         
         Int n_cpu = 8
         Int ram_size_gb = 16
+        Int disk_size_gb = 50
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
     }
-    
-    Int disk_size_gb = 10*( ceil(size(single_sample_kanpig_proband_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_father_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_mother_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_proband_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_father_vcf_gz,"GB")) + ceil(size(single_sample_kanpig_annotated_mother_vcf_gz,"GB")) + ceil(size(cohort_merged_07_vcf_gz,"GB")) + ceil(size(cohort_merged_09_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_07_vcf_gz,"GB")) + ceil(size(cohort_regenotyped_09_vcf_gz,"GB")) )
     
     command <<<
         set -euxo pipefail
@@ -903,74 +882,42 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
-            if [ ~{only_50_bp} -ne 0 ]; then
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT,]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
-                # Inside TRs
-                ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-                tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
-                rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
-                # Outside TRs
-                ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-                tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv --include 'SVLEN>=50 || SVLEN<=-50' > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-                ${TIME_COMMAND} bcftools query --include 'SVLEN>=50 || SVLEN<=-50' -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
-                rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
-            else
-                ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
-                ${TIME_COMMAND} bcftools query -f '[%GT,]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
-                # Inside TRs
-                ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-                tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
-                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
-                ${TIME_COMMAND} bcftools query -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
-                rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
-                # Outside TRs
-                ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-                tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
-                ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
-                ${TIME_COMMAND} bcftools query -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
-                rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
-            fi
+            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_all.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT,]\n' ${INPUT_VCF_GZ} > ${PROBAND_ID}_${OUTPUT_PREFIX}_all_gtmatrix.txt
+            # Inside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_tr.vcf.gz*
+            # Outside TRs
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            tabix -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools +mendelian2 tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz -P ped.tsv > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr.txt
+            ${TIME_COMMAND} bcftools query -f '[%GT,]\n' tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz > ${PROBAND_ID}_${OUTPUT_PREFIX}_not_tr_gtmatrix.txt
+            rm -f tmp_${OUTPUT_PREFIX}_not_tr.vcf.gz*
         }
         
-        # Remark: this function overwrites the input file with its collapse.
-        #
-        function truvari_collapse() {
-            local INPUT_VCF_GZ=$1
-            local ID=$2
-            
-            truvari collapse --input ${INPUT_VCF_GZ} --sizemin 0 --sizemax 1000000 --keep common --gt all | bcftools sort --max-mem $(( ~{ram_size_gb} - 4 ))G --output-type z > collapse_${ID}.vcf.gz
-            tabix -f collapse_${ID}.vcf.gz
-            mv collapse_${ID}.vcf.gz ${INPUT_VCF_GZ}
-            mv collapse_${ID}.vcf.gz.tbi ${INPUT_VCF_GZ}.tbi
-        }
+        
         
 
-        # Main program
+        # --------------------------- Main program -----------------------------
+        
         head -n ~{ped_tsv_row} ~{ped_tsv} | tail -n 1 > ped.tsv
         PROBAND_ID=$(cut -f 2 ped.tsv)
         FATHER_ID=$(cut -f 3 ped.tsv)
         MOTHER_ID=$(cut -f 4 ped.tsv)
         
-        # Evaluating the VCFs after:
-        # 1. intra-sample truvari -> kanpig
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{single_sample_kanpig_proband_vcf_gz} > proband_kanpig.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{single_sample_kanpig_father_vcf_gz} > father_kanpig.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z ~{single_sample_kanpig_mother_vcf_gz} > mother_kanpig.vcf.gz &
-        wait
-        ${TIME_COMMAND} tabix -f proband_kanpig.vcf.gz &
-        ${TIME_COMMAND} tabix -f father_kanpig.vcf.gz &
-        ${TIME_COMMAND} tabix -f mother_kanpig.vcf.gz &
-        wait
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --output-type z proband_kanpig.vcf.gz father_kanpig.vcf.gz mother_kanpig.vcf.gz > trio_kanpig.vcf.gz
+        # Localizing and merging
+        gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/${PROBAND_ID}_kanpig.vcf.'gz*' ~{remote_dir}/~{min_n_samples}_samples/kanpig/${FATHER_ID}_kanpig.vcf.'gz*' ~{remote_dir}/~{min_n_samples}_samples/kanpig/${MOTHER_ID}_kanpig.vcf.'gz*' .
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z ${PROBAND_ID}_kanpig.vcf.gz ${FATHER_ID}_kanpig.vcf.gz ${MOTHER_ID}_kanpig.vcf.gz > trio_kanpig.vcf.gz
         ${TIME_COMMAND} tabix -f trio_kanpig.vcf.gz
-        rm -f proband_kanpig.vcf.gz* father_kanpig.vcf.gz* mother_kanpig.vcf.gz*
-        if [ ~{truvari_collapse} -ne 0 ]; then
-            truvari_collapse trio_kanpig.vcf.gz trio_kanpig
-        fi
+        rm -f ${PROBAND_ID}_kanpig.vcf.gz* ${FATHER_ID}_kanpig.vcf.gz* ${MOTHER_ID}_kanpig.vcf.gz*
+        
+        
+        
+        
+        
         
         # Evaluating the VCF after:
         # 1. intra-sample truvari -> kanpig
