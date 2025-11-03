@@ -4,11 +4,13 @@ version 1.0
 # Structure of `remote_output_dir`:
 #
 # ├── truvari/         for each sample, its records in the truvari collapse VCF;
-# │   └── precision_recall/             for each sample, precision/recall stats;
+# │   ├── precision_recall/             for each sample, precision/recall stats;
+# │   └── mendelian/                     for each sample, mendelian error stats;
 # ├── X_samples
 # │   ├── infrequent/             for each sample, the infrequent records in it;
 # │   ├── kanpig/             for each sample, its personalized and re-GT'd VCF;
-# │   └── precision_recall              for each sample, precision/recall stats;
+# │   ├── precision_recall/             for each sample, precision/recall stats;
+# │   └── mendelian/                     for each sample, mendelian error stats;
 #
 workflow SV_Integration_RegenotypingAnalysis {
     input {
@@ -184,8 +186,11 @@ task ComplementBed {
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
-# TOOL                CPU     RAM     TIME
-#
+# TOOL                  CPU     RAM     TIME
+# bcftools view b       200%    600M    15m
+# bcftools query        100%    600M    3m
+# bcftools annotate     100%    1G      15m
+# bcftools view + awk   
 #
 task PrepareCohortBcf {
     input {
@@ -232,8 +237,8 @@ task PrepareCohortBcf {
            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
            echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
            bcftools view --no-header in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { \
-               $8=printf("%s;ORIGINAL_ID=%s,$8,gsub(/;/,"_",$3)); \
-               $3=printf("%d",++i); \
+               $8=sprintf("%s;ORIGINAL_ID=%s,$8,gsub(/;/,"_",$3)); \
+               $3=sprintf("%d",++i); \
                print $0 \
            }' \
         ) | bcftools view --output-type b > out.bcf
