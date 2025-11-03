@@ -235,7 +235,7 @@ task PrepareCohortBcf {
         date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
-           echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
+           tail -n 1 header.txt \
            bcftools view --no-header in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { \
                $8=sprintf("%s;ORIGINAL_ID=%s,$8,gsub(/;/,"_",$3)); \
                $3=sprintf("%d",++i); \
