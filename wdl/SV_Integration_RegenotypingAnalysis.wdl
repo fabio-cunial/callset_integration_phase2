@@ -6,11 +6,11 @@ version 1.0
 # ├── truvari/         for each sample, its records in the truvari collapse VCF;
 # │   ├── precision_recall/             for each sample, precision/recall stats;
 # │   └── mendelian/                     for each sample, mendelian error stats;
-# ├── X_samples
-# │   ├── infrequent/             for each sample, the infrequent records in it;
-# │   ├── kanpig/             for each sample, its personalized and re-GT'd VCF;
-# │   ├── precision_recall/             for each sample, precision/recall stats;
-# │   └── mendelian/                     for each sample, mendelian error stats;
+# └── X_samples
+#     ├── infrequent/             for each sample, the infrequent records in it;
+#     ├── kanpig/             for each sample, its personalized and re-GT'd VCF;
+#     ├── precision_recall/             for each sample, precision/recall stats;
+#     └── mendelian/                     for each sample, mendelian error stats;
 #
 workflow SV_Integration_RegenotypingAnalysis {
     input {
@@ -29,6 +29,13 @@ workflow SV_Integration_RegenotypingAnalysis {
         Array[File] precision_recall_bai
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
+        
+        Array[String] mendelian_error_samples
+        Array[String] mendelian_error_sex
+        Array[File] mendelian_error_bam
+        Array[File] mendelian_error_bai
+        File mendelian_error_ped
+        Int mendelian_error_n_trios
         
         File reference_fa
         File reference_fai
@@ -62,9 +69,19 @@ workflow SV_Integration_RegenotypingAnalysis {
         input:
             cohort_bcf = FilterCohortBcf_ByLength.out_bcf,
             cohort_csi = FilterCohortBcf_ByLength.out_csi,
-            samples = precision_recall_samples,
+            samples = flatten([precision_recall_samples, mendelian_error_samples]),
             remote_dir = remote_dir+"/truvari",
             suffix = "truvari"
+    }
+    scatter (i in range(mendelian_error_n_trios)) {
+        call BenchTrio as me_bench_truvari {
+            input:
+                ped_tsv = mendelian_error_ped,
+                ped_tsv_row = i+1,
+                remote_indir = remote_dir+"/truvari",
+                remote_outdir = remote_dir+"/truvari/mendelian",
+                in_flag = [split_truvari.out_flag]
+        }
     }
     scatter (i in range(length(min_n_samples))) {
         call PartitionCohortBcf {
@@ -77,12 +94,12 @@ workflow SV_Integration_RegenotypingAnalysis {
             input:
                 cohort_bcf = PartitionCohortBcf.infrequent_bcf,
                 cohort_csi = PartitionCohortBcf.infrequent_csi,
-                samples = precision_recall_samples,
+                samples = flatten([precision_recall_samples, mendelian_error_samples]),
                 remote_dir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
                 suffix = "infrequent"
         }
         scatter (i in range(length(precision_recall_samples))) {
-            call BuildPersonalizedVcf {
+            call BuildPersonalizedVcf as pr_personalized {
                 input:
                     sample_id = precision_recall_samples[i],
                     frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
@@ -90,12 +107,12 @@ workflow SV_Integration_RegenotypingAnalysis {
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
                     in_flag = split_infrequent.out_flag
             }
-            call Kanpig {
+            call Kanpig as pr_kanpig {
                 input:
                     sample_id = precision_recall_samples[i],
                     sex = precision_recall_sex[i],
-                    personalized_vcf_gz = BuildPersonalizedVcf.out_vcf_gz,
-                    personalized_tbi = BuildPersonalizedVcf.out_tbi,
+                    personalized_vcf_gz = pr_personalized.out_vcf_gz,
+                    personalized_tbi = pr_personalized.out_tbi,
                     alignments_bam = precision_recall_bam[i],
                     alignments_bai = precision_recall_bai[i],
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
@@ -125,7 +142,41 @@ workflow SV_Integration_RegenotypingAnalysis {
                     not_tandem_bed = ComplementBed.complement_bed,
                     
                     in_flag_truvari = split_truvari.out_flag,
-                    in_flag_kanpig = Kanpig.out_flag
+                    in_flag_kanpig = pr_kanpig.out_flag
+            }
+        }
+        scatter (i in range(length(mendelian_error_samples))) {
+            call BuildPersonalizedVcf as me_personalized {
+                input:
+                    sample_id = mendelian_error_samples[i],
+                    frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
+                    frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
+                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
+                    in_flag = split_infrequent.out_flag
+            }
+            call Kanpig as me_kanpig {
+                input:
+                    sample_id = mendelian_error_samples[i],
+                    sex = mendelian_error_sex[i],
+                    personalized_vcf_gz = me_personalized.out_vcf_gz,
+                    personalized_tbi = me_personalized.out_tbi,
+                    alignments_bam = mendelian_error_bam[i],
+                    alignments_bai = mendelian_error_bai[i],
+                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai,
+                    ploidy_bed_male = ploidy_bed_male,
+                    ploidy_bed_female = ploidy_bed_female
+            }
+        }
+        scatter (i in range(mendelian_error_n_trios)) {
+            call BenchTrio as me_bench_kanpig {
+                input:
+                    ped_tsv = mendelian_error_ped,
+                    ped_tsv_row = i+1,
+                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    in_flag = me_kanpig.out_flag
             }
         }
     }
@@ -866,6 +917,8 @@ task BenchTrio {
         
         File tandem_bed
         File not_tandem_bed
+        
+        Array[File] in_flag
         
         Int n_cpu = 8
         Int ram_size_gb = 16
