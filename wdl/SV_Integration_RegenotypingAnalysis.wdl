@@ -152,6 +152,7 @@ task ComplementBed {
     }
     
     Int disk_size_gb = 10*ceil(size(tandem_bed,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -190,7 +191,7 @@ task ComplementBed {
 # bcftools view b       200%    600M    15m
 # bcftools query        100%    600M    3m
 # bcftools annotate     100%    1G      15m
-# bcftools view + awk   
+# bcftools view + awk   ???     ???     
 #
 task PrepareCohortBcf {
     input {
@@ -205,6 +206,7 @@ task PrepareCohortBcf {
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -235,9 +237,10 @@ task PrepareCohortBcf {
         date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
-           tail -n 1 header.txt \
+           tail -n 1 header.txt ; \
            bcftools view --no-header in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { \
-               $8=sprintf("%s;ORIGINAL_ID=%s,$8,gsub(/;/,"_",$3)); \
+               gsub(/;/,"_",$3); \
+               $8=sprintf("%s;ORIGINAL_ID=%s",$8,$3); \
                $3=sprintf("%d",++i); \
                print $0 \
            }' \
@@ -280,6 +283,7 @@ task FilterCohortBcf_ByLength {
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -332,6 +336,7 @@ task PartitionCohortBcf {
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -474,6 +479,7 @@ task BuildPersonalizedVcf {
     }
     
     Int disk_size_gb = 4*ceil(size(frequent_cohort_bcf,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -649,6 +655,8 @@ task PrecisionRecallAnalysis {
     }
     parameter_meta {
     }
+    
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -837,6 +845,125 @@ task PrecisionRecallAnalysis {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Performance with 8 cores and 16GB of RAM:
+#
+# TASK                      % CPU       RAM     TIME
+# bcftools merge            
+# bcftools +mendelian2      
+#
+task BenchTrio {
+    input {
+        File ped_tsv
+        Int ped_tsv_row
+        
+        String remote_indir
+        String remote_outdir
+        
+        File tandem_bed
+        File not_tandem_bed
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+        Int disk_size_gb = 50
+    }
+    parameter_meta {
+        ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        
+        # @param 1: a VCF that contains only 3 samples (child, parents).
+        # 
+        function Benchmark() {
+            local INPUT_VCF_GZ=$1
+            local SAMPLE_ID=$2
+            local SUFFIX=$3
+            
+            # Mendelian error
+            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
+            
+            # De novo rate
+            ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
+            N_ONES=$( bcftools filter --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | grep -v ^# | wc -l )
+            N_ZEROS=$( bcftools filter --include 'FORMAT/DNM[0]=0' ${SAMPLE_ID}_annotated.vcf.gz | grep -v ^# | wc -l )
+            echo -e "n_ones,${N_ONES}" >> ${SAMPLE_ID}_dnm_${SUFFIX}.txt
+            echo -e "n_zeros,${N_ZEROS}" >> ${SAMPLE_ID}_dnm_${SUFFIX}.txt
+            rm -f ${SAMPLE_ID}_annotated.vcf.gz*
+        }
+        
+
+        # --------------------------- Main program -----------------------------
+        
+        head -n ~{ped_tsv_row} ~{ped_tsv} | tail -n 1 > ped.tsv
+        PROBAND_ID=$(cut -f 2 ped.tsv)
+        FATHER_ID=$(cut -f 3 ped.tsv)
+        MOTHER_ID=$(cut -f 4 ped.tsv)
+        
+        # Localizing        
+        while : ; do
+            TEST=$(gsutil -m cp  ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error downloading VCF files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+        ls *.vcf.gz | sort -V > list.txt
+        ls -laht
+        
+        # Merging records by ID, since the records in every VCF originate from
+        # the same cohort VCF, which had distinct IDs.
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio_kanpig.vcf.gz
+        ${TIME_COMMAND} tabix -f trio_kanpig.vcf.gz
+        rm -f ${PROBAND_ID}_*.vcf.gz* ${FATHER_ID}_*.vcf.gz* ${MOTHER_ID}_*.vcf.gz*
+        ls -laht
+        
+        # Benchmarking
+        Benchmark trio_kanpig.vcf.gz ${PROBAND_ID} all
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio_kanpig.vcf.gz > tr.vcf.gz
+        ${TIME_COMMAND} tabix -f tr.vcf.gz
+        Benchmark tr.vcf.gz ${PROBAND_ID} tr
+        rm -f tr.vcf.gz*
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio_kanpig.vcf.gz > not_tr.vcf.gz
+        ${TIME_COMMAND} tabix -f not_tr.vcf.gz
+        Benchmark not_tr.vcf.gz ${PROBAND_ID} not_tr
+        rm -f not_tr.vcf.gz*
+        
+        # Uploading
+        while : ; do
+            TEST=$(gsutil -m cp '*.txt' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading stats. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
+    >>>
+    
+    output {
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
 }
