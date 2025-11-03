@@ -14,7 +14,7 @@ workflow SV_Integration_RegenotypingAnalysis {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
-        Array[Int] min_n_samples = [2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+        Array[Int] min_n_samples = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
         Int max_sv_length = 10000
         
@@ -53,7 +53,8 @@ workflow SV_Integration_RegenotypingAnalysis {
     call FilterCohortBcf_ByLength {
         input:
             cohort_truvari_bcf = PrepareCohortBcf.out_bcf,
-            cohort_truvari_csi = PrepareCohortBcf.out_csi
+            cohort_truvari_csi = PrepareCohortBcf.out_csi,
+            min_sv_length = min_sv_length
     }
     call SplitBcf as split_truvari {
         input:
@@ -618,7 +619,6 @@ task PrecisionRecallAnalysis {
     input {
         String sample_id
         File sample_dipcall_vcf_gz
-        File sample_dipcall_tbi
         File sample_dipcall_bed
         
         String remote_dir
@@ -786,7 +786,8 @@ task PrecisionRecallAnalysis {
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         
         # Canonizing the dipcall VCF
-        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_tbi} ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+        tabix -f ~{sample_dipcall_vcf_gz}
+        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
         rm -f ~{sample_dipcall_vcf_gz}
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_tr.vcf.gz &
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_not_tr.vcf.gz &
