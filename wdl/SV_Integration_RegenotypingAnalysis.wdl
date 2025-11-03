@@ -10,46 +10,35 @@ version 1.0
 # │   ├── kanpig/             for each sample, its personalized and re-GT'd VCF;
 # │   └── precision_recall              for each sample, precision/recall stats;
 #
-workflow RegenotypingAnalysis {
+workflow SV_Integration_RegenotypingAnalysis {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
         Array[Int] min_n_samples = [2, 3, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
-        
+        Int max_sv_length = 10000
         
         String remote_dir
         
+        Int precision_recall_bench_method
         Array[String] precision_recall_samples
         Array[String] precision_recall_sex
         Array[File] precision_recall_bam
         Array[File] precision_recall_bai
-        String precision_recall_remote_dir
-        
-        
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
-        Int precision_recall_bench_method
-        
-        File mendelian_error_ped_tsv
-        Int mendelian_error_n_trios
-
         
         File reference_fa
         File reference_fai
+        File reference_agp
+        File standard_chromosomes_bed
         File tandem_bed
         File ploidy_bed_male
         File ploidy_bed_female
     }
     parameter_meta {
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
-        precision_recall_samples_dipcall_vcf_gz: "In the same order as `precision_recall_samples`."
-        precision_recall_samples_dipcall_bed: "In the same order as `sample_ids`."
     }
-    
-    
-    
-    
     
     call ComplementBed {
         input:
@@ -66,12 +55,13 @@ workflow RegenotypingAnalysis {
             cohort_truvari_bcf = PrepareCohortBcf.out_bcf,
             cohort_truvari_csi = PrepareCohortBcf.out_csi
     }
-    call SplitBcf {
+    call SplitBcf as split_truvari {
         input:
             cohort_bcf = FilterCohortBcf_ByLength.out_bcf,
             cohort_csi = FilterCohortBcf_ByLength.out_csi,
             samples = precision_recall_samples,
-            remote_dir = remote_dir+"/truvari"
+            remote_dir = remote_dir+"/truvari",
+            suffix = "truvari"
     }
     scatter (i in range(length(min_n_samples))) {
         call PartitionCohortBcf {
@@ -80,12 +70,13 @@ workflow RegenotypingAnalysis {
                 cohort_truvari_csi = FilterCohortBcf_ByLength.out_csi,
                 min_n_samples = min_n_samples[i]
         }
-        call SplitBcf {
+        call SplitBcf as split_infrequent {
             input:
                 cohort_bcf = PartitionCohortBcf.infrequent_bcf,
                 cohort_csi = PartitionCohortBcf.infrequent_csi,
                 samples = precision_recall_samples,
-                remote_dir = remote_dir+"/"+min_n_samples+"_samples/infrequent"
+                remote_dir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
+                suffix = "infrequent"
         }
         scatter (i in range(length(precision_recall_samples))) {
             call BuildPersonalizedVcf {
@@ -93,8 +84,8 @@ workflow RegenotypingAnalysis {
                     sample_id = precision_recall_samples[i],
                     frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
                     frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
-                    remote_indir = remote_dir+"/"+min_n_samples+"_samples/infrequent",
-                    in_flag = SplitInfrequentBcf.out_flag
+                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
+                    in_flag = split_infrequent.out_flag
             }
             call Kanpig {
                 input:
@@ -104,7 +95,7 @@ workflow RegenotypingAnalysis {
                     personalized_tbi = BuildPersonalizedVcf.out_tbi,
                     alignments_bam = precision_recall_bam[i],
                     alignments_bai = precision_recall_bai[i],
-                    remote_outdir = remote_dir+"/"+min_n_samples+"_samples/kanpig",
+                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
                     ploidy_bed_male = ploidy_bed_male,
@@ -112,28 +103,26 @@ workflow RegenotypingAnalysis {
             }
             call PrecisionRecallAnalysis {
                 input:
-                --------->
-                
                     sample_id = precision_recall_samples[i],
-                    dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
-                    dipcall_bed = precision_recall_samples_dipcall_bed[i],
+                    sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
+                    sample_dipcall_bed = precision_recall_samples_dipcall_bed[i],
+                    
+                    remote_dir = remote_dir,
+                    min_n_samples = min_n_samples[i],
                 
-                
-                    min_n_samples = min_n_samples,
-                
-                    v1_07_cohort_truvari_vcf_gz = v1.out_vcf_gz,
-                    v1_07_cohort_truvari_tbi = v1.out_tbi,
-                
+                    bench_method = precision_recall_bench_method,
                     min_sv_length = min_sv_length,
-                    max_sv_length = max_sv_length,
-                    bench_method = bench_method,
+                    max_sv_length = max_sv_length,    
                 
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai,
+                    reference_agp = reference_agp,
+                    standard_chromosomes_bed = standard_chromosomes_bed,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
-                    reference_fa = reference_fa,
-                    reference_fai = reference_fai
                     
-                    in_flag = Kanpig.out_flag
+                    in_flag_truvari = split_truvari.out_flag,
+                    in_flag_kanpig = Kanpig.out_flag
             }
         }
     }
@@ -141,11 +130,6 @@ workflow RegenotypingAnalysis {
     output {
     }
 }
-
-
-
-
-
 
 
 
@@ -214,7 +198,7 @@ task PrepareCohortBcf {
         cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -407,6 +391,7 @@ task SplitBcf {
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_bcf,"GB"))
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -479,7 +464,7 @@ task BuildPersonalizedVcf {
     }
     parameter_meta {
         frequent_cohort_bcf: "Assumed to have a single sample column."
-        flag: "Just to flag to the sheduler that this task can start."
+        in_flag: "Just to flag to the sheduler that this task can start safely."
     }
     
     Int disk_size_gb = 4*ceil(size(frequent_cohort_bcf,"GB"))
@@ -492,11 +477,6 @@ task BuildPersonalizedVcf {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         INFINITY="1000000000"
-
-        SAMPLE_ID=$(basename ~{sample_vcf_gz} .vcf.gz)
-        SAMPLE_ID=${SAMPLE_ID%_*}
-        
-        mv ~{sample_vcf_gz} in.vcf.gz
         
         # Localizing infrequent cohort records that occur in this sample
         while : ; do
@@ -559,6 +539,7 @@ task Kanpig {
     }
     
     Int disk_size_gb = 4*ceil( size(alignments_bam,"GB") )
+    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -623,14 +604,9 @@ task Kanpig {
 
 
 
-
-
-
-
 #------------------------------- Benchmarking ----------------------------------
 
-
-# Remark: this uses `truvari bench` with default parameters.
+# Remark: `truvari bench` is used with default parameters.
 #
 # Performance with 16 cores and 32GB of RAM:
 #
@@ -642,20 +618,29 @@ task PrecisionRecallAnalysis {
     input {
         String sample_id
         File sample_dipcall_vcf_gz
+        File sample_dipcall_tbi
         File sample_dipcall_bed
         
-        String remote_input_dir
-        Int max_sv_length = 10000
+        String remote_dir
+        String min_n_samples
         
         Int bench_method
+        Int min_sv_length = 20
+        Int max_sv_length = 10000
         
-        File tandem_bed
-        File not_tandem_bed
         File reference_fa
         File reference_fai
+        File reference_agp
+        File standard_chromosomes_bed
+        File tandem_bed
+        File not_tandem_bed
         
+        File in_flag_truvari
+        File in_flag_kanpig
+        
+        Int n_cpu = 4
         Int ram_size_gb = 32
-        Int disk_size_gb = 512
+        Int disk_size_gb = 50
     }
     parameter_meta {
     }
@@ -669,7 +654,81 @@ task PrecisionRecallAnalysis {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        function bench_thread() {
+        
+        
+        # ----------------------- Steps of the pipeline ------------------------
+        
+        # Returns a BED file that excludes every gap from the AGP file of the
+        # reference.
+        #
+        function GetReferenceGaps() {
+            local INPUT_AGP=$1
+            local OUTPUT_BED=$2
+            
+            awk 'BEGIN { FS="\t"; OFS="\t"; } { if ($1=="chr1" || $1=="chr2" || $1=="chr3" || $1=="chr4" || $1=="chr5" || $1=="chr6" || $1=="chr7" || $1=="chr8" || $1=="chr9" || $1=="chr10" || $1=="chr11" || $1=="chr12" || $1=="chr13" || $1=="chr14" || $1=="chr15" || $1=="chr16" || $1=="chr17" || $1=="chr18" || $1=="chr19" || $1=="chr20" || $1=="chr21" || $1=="chr22" || $1=="chrX" || $1=="chrY" || $1=="chrM") print $0 }' ${INPUT_AGP} > in.bed
+            awk 'BEGIN { FS="\t"; OFS="\t"; } { if ($5=="N") print $0 }' in.bed > out.bed
+            mv out.bed in.bed
+            bedtools sort -i in.bed -faidx ~{reference_fai} > out.bed
+            mv out.bed in.bed
+            bedtools complement -i in.bed -g ~{reference_fai} > out.bed
+            mv out.bed in.bed
+            
+            mv in.bed ${OUTPUT_BED}
+        }
+        
+        
+        # Puts in canonical form a raw VCF from dipcall. This is identical to
+        # `SV_Integration_BuildTrainingResource.wdl`.
+        #
+        function CanonizeDipcallVcf() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local INPUT_TBI=$3
+            local MIN_SV_LENGTH=$4
+            local MAX_SV_LENGTH=$5
+            local STANDARD_CHROMOSOMES_BED=$6
+            local NOT_GAPS_BED=$7
+            
+            
+            mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
+            mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
+            
+            # Splitting multiallelic records into biallelic records
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Removing SNVs, records that are not marked as present, records
+            # with a FILTER, and records with unresolved REF/ALT.
+            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || COUNT(GT="alt")=0 || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Keeping only records in the standard chromosomes
+            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Removing records in reference gaps
+            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Keeping only records in the dipcall BED
+            ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Making sure SVLEN and SVTYPE are consistently annotated
+            truvari anno svinfo --minsize 1 ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Keeping only records in the given length range
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
+        }
+
+        
+        #
+        function Benchmark() {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
@@ -677,8 +736,9 @@ task PrecisionRecallAnalysis {
             cp ${INPUT_VCF_GZ}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
             
             # Extracting calls with POS inside and outside TRs
-            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_tr.vcf.gz
-            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_not_tr.vcf.gz &
+            wait
             ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_tr.vcf.gz
             ${TIME_COMMAND} tabix -f ${OUTPUT_PREFIX}_not_tr.vcf.gz
         
@@ -712,8 +772,8 @@ task PrecisionRecallAnalysis {
 
         # --------------------------- Main program -----------------------------
         
-        FILTER_STRING_TRUVARI="--sizemin 0 --sizefilt 0 --sizemax ~{max_sv_length}"
-        FILTER_STRING_VCFDIST="--sv-threshold 0 --largest-variant ~{max_sv_length}"
+        FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length}"
+        FILTER_STRING_VCFDIST="--sv-threshold ~{min_sv_length} --largest-variant ~{max_sv_length}"
         # See https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
         # Remark: `--max-supercluster-size` has to be >= `--largest-variant + 2`
         #         and we set it to 10002 to mimic kanpig's `--sizemax`.
@@ -722,82 +782,53 @@ task PrecisionRecallAnalysis {
         #         sample value would be 1000, which might be too big).
         SV_STRING_VCFDIST="--cluster gap 500 --max-supercluster-size $((~{max_sv_length}+2)) --realign-query --realign-truth"
         
-        # Preprocessing the dipcall VCF. Should be done exactly as in the training resource construction.....................
-        ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ~{sample_dipcall_vcf_gz} > truth.vcf.gz
-        ${TIME_COMMAND} tabix -f truth.vcf.gz
+        
+        GetReferenceGaps ~{reference_agp} not_gaps.bed
+        
+        # Canonizing the dipcall VCF
+        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_tbi} ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
         rm -f ~{sample_dipcall_vcf_gz}
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z truth.vcf.gz > truth_tr.vcf.gz &
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z truth.vcf.gz > truth_not_tr.vcf.gz &
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_tr.vcf.gz &
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_not_tr.vcf.gz &
         wait
-        ${TIME_COMMAND} tabix -f truth_tr.vcf.gz &
-        ${TIME_COMMAND} tabix -f truth_not_tr.vcf.gz &
+        ${TIME_COMMAND} tabix -f ~{sample_id}_truth_tr.vcf.gz &
+        ${TIME_COMMAND} tabix -f ~{sample_id}_truth_not_tr.vcf.gz &
         wait
         
-        # Preprocessing the V1 cohort VCF
-        if ~{defined(v1_07_cohort_truvari_vcf_gz)}
-        then
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples ~{sample_id} --output-type z ~{v1_07_cohort_truvari_vcf_gz} > tmp1_07.vcf.gz
-            ${TIME_COMMAND} tabix -f tmp1_07.vcf.gz
-            rm -f ~{v1_07_cohort_truvari_vcf_gz}
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type z tmp1_07.vcf.gz > v1_07.vcf.gz
-            ${TIME_COMMAND} tabix -f v1_07.vcf.gz
-            rm -f tmp1_*.vcf.gz
-        fi
-        
-        # Localizing the personalized VCFs
-        MIN_N_SAMPLES=$(echo ~{sep="," min_n_samples} | tr ',' ' ')
-        for M in ${MIN_N_SAMPLES}; do
-            if [[ ${M} -eq 1 ]]; then
-                SUFFIX=""
-            else
-                SUFFIX="s"
-            fi
-            gsutil -m cp ~{remote_input_dir}/${M}_sample${SUFFIX}/~{sample_id}_kanpig.vcf.gz ./${M}_tmp1.vcf.gz &
-        done
-        wait
-        for M in ${MIN_N_SAMPLES}; do
-            tabix -f ${M}_tmp1.vcf.gz &
-        done
-        wait
-        for M in ${MIN_N_SAMPLES}; do
-            ${TIME_COMMAND} bcftools filter --threads 1 --include 'COUNT(GT="alt")>0' --output-type z ${M}_tmp1.vcf.gz > ${M}.vcf.gz &
-        done
-        wait
-        for M in ${MIN_N_SAMPLES}; do
-            tabix -f ${M}.vcf.gz &
-        done
-        wait
-        rm -f *_tmp1.vcf.gz*
+        # Localizing the VCFs to benchmark
+        gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.vcf.'gz*' .
+        gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
         
         # Benchmarking
-        if [ ~{bench_method} -eq 0 ]; then
-            # Parallel for truvari (which is single-core).
-            if ~{defined(v1_07_cohort_truvari_vcf_gz)}
-            then
-                bench_thread v1_07.vcf.gz v1_07 &
+        Benchmark ~{sample_id}_truvari.vcf.gz ~{sample_id}_truvari
+        Benchmark ~{sample_id}_kanpig.vcf.gz ~{sample_id}_kanpig
+        
+        # Uploading
+        while : ; do
+            TEST=$(gsutil -m cp '*_truvari_*.txt' ~{remote_dir}/truvari/precision_recall/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading truvari benchmarks. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
             fi
-            for M in ${MIN_N_SAMPLES}; do
-                bench_thread ${M}.vcf.gz ${M} &
-            done
-            wait
-        else
-            # Sequential for vcfdist, since it takes too much RAM.
-            if ~{defined(v1_07_cohort_truvari_vcf_gz)}
-            then
-                bench_thread v1_07.vcf.gz v1_07
+        done
+        while : ; do
+            TEST=$(gsutil -m cp '*_kanpig_*.txt' ~{remote_dir}/~{min_n_samples}_samples/precision_recall/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading kanpig benchmarks. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
             fi
-            for M in ${MIN_N_SAMPLES}; do
-                bench_thread ${M}.vcf.gz ${M}
-            done
-        fi
+        done
     >>>
     
     output {
-        Array[File] out_jsons = glob("*.txt")
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2"
-        cpu: n_personalized_vcfs + 1
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0

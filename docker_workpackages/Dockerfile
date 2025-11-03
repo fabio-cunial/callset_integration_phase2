@@ -123,6 +123,17 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
     && chmod +x ./kanpig \
     && ./kanpig --help
 
+# VCFDIST
+ARG vcfdist_version=2.6.4
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+RUN wget https://github.com/TimD1/vcfdist/archive/refs/tags/v${vcfdist_version}.tar.gz \
+    && tar xzf v${vcfdist_version}.tar.gz \
+    && rm -f v${vcfdist_version}.tar.gz \
+    && cd vcfdist-${vcfdist_version}/src \
+    && make -j 16 \
+    && make install \
+    && vcfdist --help
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java

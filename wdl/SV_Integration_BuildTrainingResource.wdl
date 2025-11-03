@@ -135,7 +135,7 @@ task Impl {
         
         # Puts in canonical form a raw VCF from dipcall.
         #
-        function CanonizeVcf() {
+        function CanonizeDipcallVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local INPUT_TBI=$3
@@ -189,7 +189,7 @@ task Impl {
             while read LINE; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 LocalizeSample ${SAMPLE_ID} ${LINE}
-                CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+                CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
                 echo ${SAMPLE_ID}_canonized.vcf.gz >> ${THREAD_ID}_list.txt
                 DelocalizeSample ${SAMPLE_ID}
             done < ${CHUNK_CSV}
