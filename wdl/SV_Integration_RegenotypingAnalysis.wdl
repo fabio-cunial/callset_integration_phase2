@@ -216,6 +216,8 @@ task ComplementBed {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
 
         
         ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
@@ -246,7 +248,6 @@ task ComplementBed {
 # bcftools view b       200%    600M    15m
 # bcftools query        100%    600M    3m
 # bcftools annotate     100%    1G      15m
-# bcftools view + awk   ???     ???     1h
 #
 task PrepareCohortBcf {
     input {
@@ -270,6 +271,8 @@ task PrepareCohortBcf {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         mv ~{cohort_truvari_vcf_gz} in.vcf.gz
         mv ~{cohort_truvari_tbi} in.vcf.gz.tbi
@@ -332,6 +335,8 @@ task FilterCohortBcf_ByLength {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type b ~{cohort_truvari_bcf} > out.bcf
         ${TIME_COMMAND} bcftools index out.bcf
@@ -359,9 +364,9 @@ task FilterCohortBcf_ByLength {
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
-# TOOL                CPU     RAM     TIME
-# bcftools filter     100%    500M    3m
-# 
+# TOOL                              CPU     RAM     TIME
+# bcftools filter                   100%    500M    3m
+# bcftools view --drop-genotypes
 #
 task PartitionCohortBcf {
     input {
@@ -386,22 +391,27 @@ task PartitionCohortBcf {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         # Splitting
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp1.bcf &
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > infrequent_~{min_n_samples}.bcf &
         wait
-        ${TIME_COMMAND} bcftools index tmp.bcf &
+        ${TIME_COMMAND} bcftools index tmp1.bcf &
         ${TIME_COMMAND} bcftools index infrequent_~{min_n_samples}.bcf &
         wait
         
         # Enforcing a single sample in the frequent BCF
-        bcftools view --header-only tmp.bcf > header.txt
+        ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp1.bcf > tmp2.bcf
+        ${TIME_COMMAND} bcftools index tmp2.bcf
+        rm -f tmp1.*
+        bcftools view --header-only tmp2.bcf > header.txt
         N_ROWS=$(wc -l < header.txt)
         date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
            echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
-           bcftools view --no-header tmp.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\tGT\t0/1\n",$1,$2,$3,$4,$5,$6,$7,$8); }' \
+           bcftools view --no-header tmp2.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\tGT\t0/1\n",$1,$2,$3,$4,$5,$6,$7,$8); }' \
         ) | bcftools view --output-type b > frequent_~{min_n_samples}.bcf
         bcftools index frequent_~{min_n_samples}.bcf
     >>>
@@ -425,6 +435,12 @@ task PartitionCohortBcf {
 # Writes to separate files all and only the records that are present in each
 # sample column of a cohort BCF.
 #
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                CPU     RAM     TIME
+# bcftools +split     100%    500M    3m
+# bcftools filter     100%    200M    10s
+#
 task SplitBcf {
     input {
         File cohort_bcf
@@ -434,8 +450,8 @@ task SplitBcf {
         String remote_dir
         String suffix
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 4
+        Int ram_size_gb = 8
     }
     parameter_meta {
         cohort_bcf: "Assumed to have all the sample columns in the original truvari collapse VCF."
@@ -453,6 +469,8 @@ task SplitBcf {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         # Splitting
         echo ~{sep="," samples} | tr ',' '\n' > samples.txt
@@ -529,6 +547,8 @@ task BuildPersonalizedVcf {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         INFINITY="1000000000"
         
         # Localizing infrequent cohort records that occur in this sample
@@ -601,6 +621,8 @@ task Kanpig {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         export RUST_BACKTRACE="full"
         INFINITY="1000000000"
         
@@ -630,7 +652,7 @@ task Kanpig {
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m cp ~{sample_id}_kanpig.'vcf*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{sample_id}_kanpig.'vcf*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading ~{sample_id}_kanpig.vcf.gz. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -706,8 +728,8 @@ task PrecisionRecallAnalysis {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        
-        
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         
         # ----------------------- Steps of the pipeline ------------------------
@@ -822,8 +844,6 @@ task PrecisionRecallAnalysis {
         }
 
 
-
-
         # --------------------------- Main program -----------------------------
         
         FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length}"
@@ -860,7 +880,7 @@ task PrecisionRecallAnalysis {
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m cp '*_truvari_*.txt' ~{remote_dir}/truvari/precision_recall/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*_truvari_*.txt' ~{remote_dir}/truvari/precision_recall/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading truvari benchmarks. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -869,7 +889,7 @@ task PrecisionRecallAnalysis {
             fi
         done
         while : ; do
-            TEST=$(gsutil -m cp '*_kanpig_*.txt' ~{remote_dir}/~{min_n_samples}_samples/precision_recall/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*_kanpig_*.txt' ~{remote_dir}/~{min_n_samples}_samples/precision_recall/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading kanpig benchmarks. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -928,6 +948,8 @@ task BenchTrio {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
         
         
         # @param 1: a VCF that contains only 3 samples (child, parents).
@@ -959,7 +981,7 @@ task BenchTrio {
         
         # Localizing        
         while : ; do
-            TEST=$(gsutil -m cp  ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
+            TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading VCF files. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -990,7 +1012,7 @@ task BenchTrio {
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m cp '*.txt' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*.txt' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading stats. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
