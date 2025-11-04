@@ -515,7 +515,7 @@ task SplitBcf {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                CPU     RAM     TIME
-# 
+# bcftools concat     700%    200M     5s
 #
 task BuildPersonalizedVcf {
     input {
@@ -578,6 +578,10 @@ task BuildPersonalizedVcf {
 }
 
 
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
+#
+# TOOL                CPU     RAM     TIME
+# 
 #
 task Kanpig {
     input {
@@ -627,7 +631,7 @@ task Kanpig {
         mv ~{personalized_tbi} in.vcf.gz.tbi
         
         # Remark: kanpig needs --sizemin >= --kmer
-        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf
+        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
         rm -f in.vcf.gz* ; mv out.vcf in.vcf
         
         # Sorting
@@ -636,10 +640,6 @@ task Kanpig {
         
         # Discarding records that are not marked as present by kanpig
         ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z in.vcf.gz > out.vcf.gz
-        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
-        
-        # Ensuring the correct sample name
-        ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples-list ~{sample_id} --output out.vcf.gz in.vcf.gz
         rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
         mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
