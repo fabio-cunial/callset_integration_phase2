@@ -246,15 +246,15 @@ task ComplementBed {
 # bcftools view b       200%    600M    15m
 # bcftools query        100%    600M    3m
 # bcftools annotate     100%    1G      15m
-# bcftools view + awk   ???     ???     
+# bcftools view + awk   ???     ???     1h
 #
 task PrepareCohortBcf {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 4
+        Int ram_size_gb = 8
     }
     parameter_meta {
         cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
@@ -321,7 +321,8 @@ task PrepareCohortBcf {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
 # TOOL                CPU     RAM     TIME
-#
+# bcftools filter     500%    500M    3m
+# bcftools index      100%    15M     1m
 #
 task FilterCohortBcf_ByLength {
     input {
@@ -330,8 +331,8 @@ task FilterCohortBcf_ByLength {
         
         Int min_sv_length
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 6
+        Int ram_size_gb = 8
     }
     parameter_meta {
         cohort_truvari_bcf: "Every record is assumed be already annotated with the correct SVLEN."
@@ -375,6 +376,7 @@ task FilterCohortBcf_ByLength {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
 # TOOL                CPU     RAM     TIME
+# bcftools filter     100%    500M    3m
 # 
 #
 task PartitionCohortBcf {
@@ -410,7 +412,7 @@ task PartitionCohortBcf {
         wait
         
         # Enforcing a single sample in the frequent BCF
-        bcftools view --header-only tmp.vcf.gz > header.txt
+        bcftools view --header-only tmp.bcf > header.txt
         N_ROWS=$(wc -l < header.txt)
         date
         (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
