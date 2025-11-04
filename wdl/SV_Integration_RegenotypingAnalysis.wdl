@@ -809,11 +809,16 @@ task PrecisionRecallAnalysis {
         
         #
         function Benchmark() {
-            local INPUT_VCF_GZ=$1
+            local INPUT_VCF=$1
             local OUTPUT_PREFIX=$2
-            
-            cp ${INPUT_VCF_GZ} ${OUTPUT_PREFIX}_input.vcf.gz
-            cp ${INPUT_VCF_GZ}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
+                
+            if [ ${INPUT_VCF#*.} -eq vcf.gz ]; then
+                cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
+                cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
+            else
+                bcftools view --output-type z ${INPUT_VCF} > ${OUTPUT_PREFIX}_input.vcf.gz
+                tabix ${OUTPUT_PREFIX}_input.vcf.gz
+            fi
             
             # Extracting calls with POS inside and outside TRs
             ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_tr.vcf.gz &
