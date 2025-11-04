@@ -102,10 +102,10 @@ workflow SV_Integration_RegenotypingAnalysis {
                 suffix = "infrequent",
                 remove_sample = 1
         }
-        scatter (i in range(length(precision_recall_samples))) {
+        scatter (j in range(length(precision_recall_samples))) {
             call BuildPersonalizedVcf as pr_personalized {
                 input:
-                    sample_id = precision_recall_samples[i],
+                    sample_id = precision_recall_samples[j],
                     frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
                     frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
@@ -113,12 +113,12 @@ workflow SV_Integration_RegenotypingAnalysis {
             }
             call Kanpig as pr_kanpig {
                 input:
-                    sample_id = precision_recall_samples[i],
-                    sex = precision_recall_sex[i],
+                    sample_id = precision_recall_samples[j],
+                    sex = precision_recall_sex[j],
                     personalized_vcf_gz = pr_personalized.out_vcf_gz,
                     personalized_tbi = pr_personalized.out_tbi,
-                    alignments_bam = precision_recall_bam[i],
-                    alignments_bai = precision_recall_bai[i],
+                    alignments_bam = precision_recall_bam[j],
+                    alignments_bai = precision_recall_bai[j],
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
@@ -127,9 +127,9 @@ workflow SV_Integration_RegenotypingAnalysis {
             }
             call PrecisionRecallAnalysis {
                 input:
-                    sample_id = precision_recall_samples[i],
-                    sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[i],
-                    sample_dipcall_bed = precision_recall_samples_dipcall_bed[i],
+                    sample_id = precision_recall_samples[j],
+                    sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
+                    sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
                     
                     remote_dir = remote_dir,
                     min_n_samples = min_n_samples[i],
@@ -149,10 +149,10 @@ workflow SV_Integration_RegenotypingAnalysis {
                     in_flag_kanpig = pr_kanpig.out_flag
             }
         }
-        scatter (i in range(length(mendelian_error_samples))) {
+        scatter (j in range(length(mendelian_error_samples))) {
             call BuildPersonalizedVcf as me_personalized {
                 input:
-                    sample_id = mendelian_error_samples[i],
+                    sample_id = mendelian_error_samples[j],
                     frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
                     frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
@@ -160,12 +160,12 @@ workflow SV_Integration_RegenotypingAnalysis {
             }
             call Kanpig as me_kanpig {
                 input:
-                    sample_id = mendelian_error_samples[i],
-                    sex = mendelian_error_sex[i],
+                    sample_id = mendelian_error_samples[j],
+                    sex = mendelian_error_sex[j],
                     personalized_vcf_gz = me_personalized.out_vcf_gz,
                     personalized_tbi = me_personalized.out_tbi,
-                    alignments_bam = mendelian_error_bam[i],
-                    alignments_bai = mendelian_error_bai[i],
+                    alignments_bam = mendelian_error_bam[j],
+                    alignments_bai = mendelian_error_bai[j],
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
@@ -173,11 +173,11 @@ workflow SV_Integration_RegenotypingAnalysis {
                     ploidy_bed_female = ploidy_bed_female
             }
         }
-        scatter (i in range(mendelian_error_n_trios)) {
+        scatter (j in range(mendelian_error_n_trios)) {
             call BenchTrio as me_bench_kanpig {
                 input:
                     ped_tsv = mendelian_error_ped,
-                    ped_tsv_row = i+1,
+                    ped_tsv_row = j+1,
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
                     tandem_bed = ComplementBed.sorted_bed,
