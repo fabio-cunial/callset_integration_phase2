@@ -875,11 +875,11 @@ task PrecisionRecallAnalysis {
         wait
         
         # Localizing the VCFs to benchmark
-        gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.vcf.'gz*' .
+        gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.'bcf*' .
         gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
         
         # Benchmarking
-        Benchmark ~{sample_id}_truvari.vcf.gz ~{sample_id}_truvari
+        Benchmark ~{sample_id}_truvari.bcf ~{sample_id}_truvari
         Benchmark ~{sample_id}_kanpig.vcf.gz ~{sample_id}_kanpig
         
         # Uploading
