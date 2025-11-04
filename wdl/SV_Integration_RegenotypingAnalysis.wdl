@@ -1005,9 +1005,15 @@ task BenchTrio {
                 break
             fi
         done
-        TEST=$(ls *.vcf.gz | sort -V > list.txt && echo 0 || echo 1)
+        TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ls *.bcf | sort -V > list.txt
+            ls ${PROBAND_ID}_*.bcf > list.txt
+            ls ${FATHER_ID}_*.bcf >> list.txt
+            ls ${MOTHER_ID}_*.bcf >> list.txt
+        else
+            ls ${PROBAND_ID}_*.vcf.gz > list.txt
+            ls ${FATHER_ID}_*.vcf.gz >> list.txt
+            ls ${MOTHER_ID}_*.vcf.gz >> list.txt
         fi
         ls -laht
         
