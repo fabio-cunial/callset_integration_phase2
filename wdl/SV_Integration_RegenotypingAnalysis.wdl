@@ -996,10 +996,9 @@ task BenchTrio {
             
             # De novo rate
             ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
-            N_ONES=$( bcftools filter --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | grep -v ^# | wc -l || echo 0 )
-            N_ZEROS=$( bcftools filter --include 'FORMAT/DNM[0]=0' ${SAMPLE_ID}_annotated.vcf.gz | grep -v ^# | wc -l || echo 0 )
-            echo -e "n_ones,${N_ONES}" >> ${SAMPLE_ID}_dnm_${SUFFIX}.txt
-            echo -e "n_zeros,${N_ZEROS}" >> ${SAMPLE_ID}_dnm_${SUFFIX}.txt
+            NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
         }
         
