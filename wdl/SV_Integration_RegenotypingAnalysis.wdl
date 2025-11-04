@@ -278,29 +278,13 @@ task PrepareCohortBcf {
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
-        # Annotating every record with the number of samples it occurs in.
-        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | bgzip -c > annotations.tsv.gz
+        # Enforcing a distinct ID in every record, and annotating every record
+        # with the number of samples it occurs in.
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=++i; gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
         tabix -s1 -b2 -e2 annotations.tsv.gz
         echo '##INFO=<ID=N_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,N_SAMPLES --output-type z in.bcf > out.bcf
-        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index in.bcf
-        rm -f annotations.tsv.gz
-        
-        # Enforcing a distinct ID in every record
-        bcftools view --header-only in.bcf > header.txt
-        N_ROWS=$(wc -l < header.txt)
-        date
-        (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
-           echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
-           tail -n 1 header.txt ; \
-           bcftools view --no-header in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { \
-               gsub(/;/,"_",$3); \
-               $8=sprintf("%s;ORIGINAL_ID=%s",$8,$3); \
-               $3=sprintf("%d",++i); \
-               print $0 \
-           }' \
-        ) | bcftools view --output-type b > out.bcf
-        date
+        echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> header.txt
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_SAMPLES --output-type z in.bcf > out.bcf
         bcftools index out.bcf
     >>>
     
