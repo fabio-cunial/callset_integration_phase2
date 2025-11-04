@@ -357,8 +357,8 @@ task FilterCohortBcf_ByLength {
 
 
 # Partitions `cohort_truvari_bcf` into the following BCFs:
-# - The subset of all records that occur in `>= min_n_samples`. This file has
-#   just one artificial sample column set to 0/1.
+# - The subset of all records that occur in `>= min_n_samples`. This file does
+#   not have FORMAT and SAMPLE columns.
 # - The subset of all records that occur in `< min_n_samples`. This file has
 #   all the original sample columns kept intact.
 #
@@ -395,25 +395,16 @@ task PartitionCohortBcf {
         GSUTIL_DELAY_S="600"
         
         # Splitting
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp1.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp.bcf &
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > infrequent_~{min_n_samples}.bcf &
         wait
-        ${TIME_COMMAND} bcftools index tmp1.bcf &
+        ${TIME_COMMAND} bcftools index tmp.bcf &
         ${TIME_COMMAND} bcftools index infrequent_~{min_n_samples}.bcf &
         wait
         
-        # Enforcing a single sample in the frequent BCF
-        ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp1.bcf > tmp2.bcf
-        ${TIME_COMMAND} bcftools index tmp2.bcf
-        rm -f tmp1.*
-        bcftools view --header-only tmp2.bcf > header.txt
-        N_ROWS=$(wc -l < header.txt)
-        date
-        (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
-           echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
-           bcftools view --no-header tmp2.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\tGT\t0/1\n",$1,$2,$3,$4,$5,$6,$7,$8); }' \
-        ) | bcftools view --output-type b > frequent_~{min_n_samples}.bcf
-        bcftools index frequent_~{min_n_samples}.bcf
+        # Dropping samples from the frequent BCF
+        ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > frequent_~{min_n_samples}.bcf
+        ${TIME_COMMAND} bcftools index frequent_~{min_n_samples}.bcf
     >>>
     
     output {
@@ -433,13 +424,15 @@ task PartitionCohortBcf {
 
 
 # Writes to separate files all and only the records that are present in each
-# sample column of a cohort BCF.
+# sample column of a cohort BCF. The output files do not have FORMAT and SAMPLE
+# columns.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
-# TOOL                CPU     RAM     TIME
-# bcftools +split     100%    500M    3m
-# bcftools filter     100%    200M    10s
+# TOOL                              CPU     RAM     TIME
+# bcftools +split                   100%    500M    3m
+# bcftools filter                   100%    200M    10s
+# bcftools view --drop-genotypes    
 #
 task SplitBcf {
     input {
@@ -477,10 +470,12 @@ task SplitBcf {
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . ~{cohort_bcf}
         rm -f ~{cohort_bcf}
         
-        # Keeping only present records
+        # Keeping only present records, then removing FORMAT and SAMPLE.
         for FILE in $(ls *.bcf); do
             SAMPLE_ID=$(basename ${FILE} .bcf)
-            ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > ${SAMPLE_ID}_~{suffix}.bcf
+            ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > tmp.bcf
+            bcftools index tmp.bcf
+            ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
             bcftools index ${SAMPLE_ID}_~{suffix}.bcf
         done
         
@@ -513,7 +508,8 @@ task SplitBcf {
 
 
 # Merges all the frequent cohort records with the infrequent cohort records
-# that occur in a given sample.
+# that occur in a given sample. The output VCF does not have the FORMAT and 
+# SAMPLE columns.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
@@ -562,14 +558,8 @@ task BuildPersonalizedVcf {
             fi
         done
         
-        # Changing the header of the frequent BCF
-        echo ~{sample_id} > samples.txt
-        ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples samples.txt ~{frequent_cohort_bcf} > frequent.bcf
-        bcftools index frequent.bcf
-        rm -f ~{frequent_cohort_bcf}
-        
         # Merging infrequent and frequent BCFs
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{sample_id}_infrequent.bcf frequent.bcf > ~{sample_id}_personalized.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{sample_id}_infrequent.bcf ~{frequent_cohort_bcf} > ~{sample_id}_personalized.vcf.gz
         ${TIME_COMMAND} tabix -f ~{sample_id}_personalized.vcf.gz
     >>>
     
@@ -645,6 +635,10 @@ task Kanpig {
         
         # Discarding records that are not marked as present by kanpig
         ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z in.vcf.gz > out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        # Ensuring the correct sample name
+        ${TIME_COMMAND} bcftools reheader --threads ${N_THREADS} --samples-list ~{sample_id} --output out.vcf.gz in.vcf.gz
         rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
         mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
