@@ -362,7 +362,7 @@ task FilterCohortBcf_ByLength {
 # - The subset of all records that occur in `>= min_n_samples`. This file does
 #   not have FORMAT and SAMPLE columns.
 # - The subset of all records that occur in `< min_n_samples`. This file has
-#   all the original sample columns kept intact.
+#   all the original sample columns.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
@@ -377,8 +377,8 @@ task PartitionCohortBcf {
         
         Int min_n_samples
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 4
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -405,7 +405,7 @@ task PartitionCohortBcf {
         wait
         
         # Dropping samples from the frequent BCF
-        ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > frequent_~{min_n_samples}.bcf
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --output-type b tmp.bcf > frequent_~{min_n_samples}.bcf
         ${TIME_COMMAND} bcftools index frequent_~{min_n_samples}.bcf
     >>>
     
@@ -516,7 +516,7 @@ task SplitBcf {
 }
 
 
-# Merges all the frequent cohort records with the infrequent cohort records
+# Merges all the frequent-cohort records with the infrequent-cohort records
 # that occur in a given sample. The output VCF does not have the FORMAT and 
 # SAMPLE columns.
 #
@@ -535,7 +535,7 @@ task BuildPersonalizedVcf {
         File in_flag
         
         Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int ram_size_gb = 8
     }
     parameter_meta {
         frequent_cohort_bcf: "Assumed to have a single sample column."
@@ -589,7 +589,7 @@ task BuildPersonalizedVcf {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                CPU     RAM     TIME
-# kanpig              400%    2.5G    6m
+# kanpig              700%    2.5G    6m
 #
 task Kanpig {
     input {
@@ -609,7 +609,7 @@ task Kanpig {
         File ploidy_bed_female
         
         Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -716,9 +716,9 @@ task PrecisionRecallAnalysis {
         File in_flag_truvari
         File in_flag_kanpig
         
-        Int n_cpu = 4
-        Int ram_size_gb = 32
-        Int disk_size_gb = 50
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+        Int disk_size_gb = 20
     }
     parameter_meta {
     }
@@ -915,7 +915,7 @@ task PrecisionRecallAnalysis {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
 }
@@ -942,8 +942,8 @@ task BenchTrio {
         Array[File] in_flag
         
         Int n_cpu = 8
-        Int ram_size_gb = 16
-        Int disk_size_gb = 50
+        Int ram_size_gb = 8
+        Int disk_size_gb = 20
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
