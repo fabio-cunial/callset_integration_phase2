@@ -22,6 +22,7 @@ workflow SV_Integration_RegenotypingAnalysis {
         
         String remote_dir
         
+        String precision_recall_chromosome = "chr6"
         Int precision_recall_bench_method
         Array[String] precision_recall_samples
         Array[String] precision_recall_sex
@@ -130,6 +131,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                     sample_id = precision_recall_samples[j],
                     sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
                     sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
+                    chromosome = precision_recall_chromosome,
                     
                     remote_dir = remote_dir,
                     min_n_samples = min_n_samples[i],
@@ -698,6 +700,7 @@ task PrecisionRecallAnalysis {
         String sample_id
         File sample_dipcall_vcf_gz
         File sample_dipcall_bed
+        String chromosome
         
         String remote_dir
         String min_n_samples
@@ -721,6 +724,7 @@ task PrecisionRecallAnalysis {
         Int disk_size_gb = 20
     }
     parameter_meta {
+        chromosome: "all=do not restrict to a chromosome."
     }
     
     String docker_dir = "/callset_integration"
@@ -884,9 +888,26 @@ task PrecisionRecallAnalysis {
         gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.'bcf*' .
         gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
         
+        # Subsetting to the given chromosome, if specified.
+        if [ ~{chromosome} != "all" ]; then
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_prime.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_tr.vcf.gz > ~{sample_id}_truth_tr_prime.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_not_tr.vcf.gz > ~{sample_id}_truth_not_tr_prime.vcf.gz
+            
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truvari.bcf > ~{sample_id}_truvari_prime.bcf
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_kanpig.vcf.gz > ~{sample_id}_kanpig_prime.vcf.gz
+            
+            rm ~{sample_id}_truth.vcf.gz* ; mv ~{sample_id}_truth_prime.vcf.gz ~{sample_id}_truth.vcf.gz ; bcftools index ~{sample_id}_truth.vcf.gz
+            rm ~{sample_id}_truth_tr.vcf.gz* ; mv ~{sample_id}_truth_tr_prime.vcf.gz ~{sample_id}_truth_tr.vcf.gz ; bcftools index ~{sample_id}_truth_tr.vcf.gz
+            rm ~{sample_id}_truth_not_tr.vcf.gz* ; mv ~{sample_id}_truth_not_tr_prime.vcf.gz ~{sample_id}_truth_not_tr.vcf.gz ; bcftools index ~{sample_id}_truth_not_tr.vcf.gz
+            
+            rm ~{sample_id}_truvari.bcf* ; mv ~{sample_id}_truvari_prime.bcf ~{sample_id}_truvari.bcf ; bcftools index ~{sample_id}_truvari.bcf
+            rm ~{sample_id}_kanpig.bcf* ; mv ~{sample_id}_kanpig_prime.bcf ~{sample_id}_kanpig.bcf ; bcftools index ~{sample_id}_kanpig.bcf
+        fi
+        
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}_truvari.bcf ~{sample_id}_truvari
-        Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz ~{sample_id}_kanpig
+        Benchmark ~{sample_id} ~{sample_id}_truvari.bcf truvari
+        Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig
         
         # Uploading
         while : ; do
