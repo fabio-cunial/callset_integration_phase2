@@ -1001,6 +1001,8 @@ task BenchTrio {
                 else
                     break
                 fi
+            else 
+                break
             fi
         done
         TEST=$(ls *.vcf.gz | sort -V > list.txt && echo 0 || echo 1)
