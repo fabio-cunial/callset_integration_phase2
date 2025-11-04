@@ -366,7 +366,7 @@ task FilterCohortBcf_ByLength {
 #
 # TOOL                              CPU     RAM     TIME
 # bcftools filter                   100%    500M    3m
-# bcftools view --drop-genotypes
+# bcftools view --drop-genotypes    100%    500M    2m
 #
 task PartitionCohortBcf {
     input {
@@ -432,7 +432,7 @@ task PartitionCohortBcf {
 # TOOL                              CPU     RAM     TIME
 # bcftools +split                   100%    500M    3m
 # bcftools filter                   100%    200M    10s
-# bcftools view --drop-genotypes    
+# bcftools view --drop-genotypes    100%    15M     10s
 #
 task SplitBcf {
     input {
@@ -477,6 +477,7 @@ task SplitBcf {
             bcftools index tmp.bcf
             ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
             bcftools index ${SAMPLE_ID}_~{suffix}.bcf
+            rm -f tmp.bcf*
         done
         
         # Uploading
@@ -977,20 +978,23 @@ task BenchTrio {
         while : ; do
             TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                echo "Error downloading VCF files. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
+                TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.bcf*' ~{remote_indir}/${FATHER_ID}_'*.bcf*' ~{remote_indir}/${MOTHER_ID}_'*.bcf*' . && echo 0 || echo 1)
+                if [ ${TEST} -eq 1 ]; then
+                    echo "Error downloading VCF files. Trying again..."
+                    sleep ${GSUTIL_DELAY_S}
+                else
+                    break
+                fi
             fi
         done
-        ls *.vcf.gz | sort -V > list.txt
+        ls *.vcf.gz *.bcf | sort -V > list.txt
         ls -laht
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio_kanpig.vcf.gz
         ${TIME_COMMAND} tabix -f trio_kanpig.vcf.gz
-        rm -f ${PROBAND_ID}_*.vcf.gz* ${FATHER_ID}_*.vcf.gz* ${MOTHER_ID}_*.vcf.gz*
+        rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
         ls -laht
         
         # Benchmarking
