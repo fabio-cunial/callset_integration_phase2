@@ -987,7 +987,10 @@ task BenchTrio {
                 fi
             fi
         done
-        ls *.vcf.gz *.bcf | sort -V > list.txt
+        TEST=$(ls *.vcf.gz | sort -V > list.txt && echo 0 || echo 1)
+        if [ ${TEST} -eq 1 ]; then
+            ls *.bcf | sort -V > list.txt
+        fi
         ls -laht
         
         # Merging records by ID, since the records in every VCF originate from
