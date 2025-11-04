@@ -71,7 +71,8 @@ workflow SV_Integration_RegenotypingAnalysis {
             cohort_csi = FilterCohortBcf_ByLength.out_csi,
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
             remote_dir = remote_dir+"/truvari",
-            suffix = "truvari"
+            suffix = "truvari",
+            remove_sample = 0
     }
     scatter (i in range(mendelian_error_n_trios)) {
         call BenchTrio as me_bench_truvari {
@@ -98,7 +99,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                 cohort_csi = PartitionCohortBcf.infrequent_csi,
                 samples = flatten([precision_recall_samples, mendelian_error_samples]),
                 remote_dir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
-                suffix = "infrequent"
+                suffix = "infrequent",
+                remove_sample = 1
         }
         scatter (i in range(length(precision_recall_samples))) {
             call BuildPersonalizedVcf as pr_personalized {
@@ -424,8 +426,7 @@ task PartitionCohortBcf {
 
 
 # Writes to separate files all and only the records that are present in each
-# sample column of a cohort BCF. The output files do not have FORMAT and SAMPLE
-# columns.
+# sample column of a cohort BCF.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
@@ -442,6 +443,7 @@ task SplitBcf {
         Array[String] samples
         String remote_dir
         String suffix
+        Int remove_sample
         
         Int n_cpu = 4
         Int ram_size_gb = 8
@@ -449,6 +451,7 @@ task SplitBcf {
     parameter_meta {
         cohort_bcf: "Assumed to have all the sample columns in the original truvari collapse VCF."
         remote_dir: "The result of the split is stored in this bucket location."
+        remove_sample: "1=The output files do not have FORMAT and SAMPLE columns. 0=The output files have the original FORMAT and SAMPLE columns."
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_bcf,"GB"))
@@ -475,9 +478,14 @@ task SplitBcf {
             SAMPLE_ID=$(basename ${FILE} .bcf)
             ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > tmp.bcf
             bcftools index tmp.bcf
-            ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
-            bcftools index ${SAMPLE_ID}_~{suffix}.bcf
-            rm -f tmp.bcf*
+            if [ ~{remove_sample} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
+                bcftools index ${SAMPLE_ID}_~{suffix}.bcf
+                rm -f tmp.bcf*
+            else
+                mv tmp.bcf ${SAMPLE_ID}_~{suffix}.bcf
+                mv tmp.bcf.csi ${SAMPLE_ID}_~{suffix}.bcf.csi
+            fi
         done
         
         # Uploading
@@ -909,7 +917,7 @@ task PrecisionRecallAnalysis {
 # Performance with 8 cores and 16GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
-# bcftools merge            
+# bcftools merge            700%        50M     3s
 # bcftools +mendelian2      
 #
 task BenchTrio {
@@ -995,18 +1003,18 @@ task BenchTrio {
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio_kanpig.vcf.gz
-        ${TIME_COMMAND} tabix -f trio_kanpig.vcf.gz
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio.vcf.gz
+        ${TIME_COMMAND} tabix -f trio.vcf.gz
         rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
         ls -laht
         
         # Benchmarking
-        Benchmark trio_kanpig.vcf.gz ${PROBAND_ID} all
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio_kanpig.vcf.gz > tr.vcf.gz
+        Benchmark trio.vcf.gz ${PROBAND_ID} all
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > tr.vcf.gz
         ${TIME_COMMAND} tabix -f tr.vcf.gz
         Benchmark tr.vcf.gz ${PROBAND_ID} tr
         rm -f tr.vcf.gz*
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio_kanpig.vcf.gz > not_tr.vcf.gz
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > not_tr.vcf.gz
         ${TIME_COMMAND} tabix -f not_tr.vcf.gz
         Benchmark not_tr.vcf.gz ${PROBAND_ID} not_tr
         rm -f not_tr.vcf.gz*
