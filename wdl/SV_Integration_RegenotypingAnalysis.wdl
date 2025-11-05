@@ -456,7 +456,7 @@ task SplitBcf {
         remove_sample: "1=The output files do not have FORMAT and SAMPLE columns. 0=The output files have the original FORMAT and SAMPLE columns."
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_bcf,"GB"))
+    Int disk_size_gb = 10*ceil(size(cohort_bcf,"GB"))
     String docker_dir = "/callset_integration"
     
     command <<<
