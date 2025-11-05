@@ -19,10 +19,10 @@ workflow SV_Integration_RegenotypingAnalysis {
         Array[Int] min_n_samples = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
         Int max_sv_length = 10000
+        String limit_to_chromosome = "chr6"
         
         String remote_dir
         
-        String precision_recall_chromosome = "chr6"
         Int precision_recall_bench_method
         Array[String] precision_recall_samples
         Array[String] precision_recall_sex
@@ -58,7 +58,8 @@ workflow SV_Integration_RegenotypingAnalysis {
     call PrepareCohortBcf {
         input:
             cohort_truvari_vcf_gz = cohort_truvari_vcf_gz,
-            cohort_truvari_tbi = cohort_truvari_tbi
+            cohort_truvari_tbi = cohort_truvari_tbi,
+            limit_to_chromosome = limit_to_chromosome
     }
     call FilterCohortBcf_ByLength {
         input:
@@ -131,7 +132,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                     sample_id = precision_recall_samples[j],
                     sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
                     sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
-                    chromosome = precision_recall_chromosome,
+                    chromosome = limit_to_chromosome,
                     
                     remote_dir = remote_dir,
                     min_n_samples = min_n_samples[i],
@@ -257,12 +258,14 @@ task PrepareCohortBcf {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
+        String limit_to_chromosome
         
         Int n_cpu = 4
         Int ram_size_gb = 8
     }
     parameter_meta {
         cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
+        limit_to_chromosome: "all=do not limit to any chromosome."
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
@@ -282,7 +285,11 @@ task PrepareCohortBcf {
         mv ~{cohort_truvari_tbi} in.vcf.gz.tbi
         
         # Converting to BCF, to speed up all steps downstream.
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
+        if [ ~{limit_to_chromosome} = "all" ]; then
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
+        else
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions ~{limit_to_chromosome} --output-type b in.vcf.gz > out.bcf
+        fi
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
         # Enforcing a distinct ID in every record, and annotating every record
