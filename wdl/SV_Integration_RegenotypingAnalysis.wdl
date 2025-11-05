@@ -289,9 +289,9 @@ task PrepareCohortBcf {
         # with the number of samples it occurs in.
         ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=++i; gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
         tabix -s1 -b2 -e2 annotations.tsv.gz
-        echo '##INFO=<ID=N_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+        echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
         echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> header.txt
-        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_SAMPLES --output-type z in.bcf > out.bcf
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type z in.bcf > out.bcf
         bcftools index out.bcf
     >>>
     
@@ -399,8 +399,8 @@ task PartitionCohortBcf {
         GSUTIL_DELAY_S="600"
         
         # Splitting
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp.bcf &
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_SAMPLES<'~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > infrequent_~{min_n_samples}.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES>='~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > tmp.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES<'~{min_n_samples} --output-type b ~{cohort_truvari_bcf} > infrequent_~{min_n_samples}.bcf &
         wait
         ${TIME_COMMAND} bcftools index tmp.bcf &
         ${TIME_COMMAND} bcftools index infrequent_~{min_n_samples}.bcf &
