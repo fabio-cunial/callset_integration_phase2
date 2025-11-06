@@ -74,6 +74,7 @@ workflow SV_Integration_RegenotypingAnalysis {
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
             remote_dir = remote_dir+"/truvari",
             suffix = "truvari",
+            keep_only_present = 0,
             remove_sample = 0
     }
     scatter (i in range(mendelian_error_n_trios)) {
@@ -102,6 +103,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                 samples = flatten([precision_recall_samples, mendelian_error_samples]),
                 remote_dir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
                 suffix = "infrequent",
+                keep_only_present = 1,
                 remove_sample = 1
         }
         scatter (j in range(length(precision_recall_samples))) {
@@ -434,8 +436,7 @@ task PartitionCohortBcf {
 }
 
 
-# Writes to separate files all and only the records that are present in each
-# sample column of a cohort BCF.
+# Writes to a separate file every sample column of a cohort BCF.
 #
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
 #
@@ -452,6 +453,8 @@ task SplitBcf {
         Array[String] samples
         String remote_dir
         String suffix
+        
+        Int keep_only_present
         Int remove_sample
         
         Int n_cpu = 4
@@ -485,8 +488,13 @@ task SplitBcf {
         # Keeping only present records, then removing FORMAT and SAMPLE.
         for FILE in $(ls *.bcf); do
             SAMPLE_ID=$(basename ${FILE} .bcf)
-            ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > tmp.bcf
-            bcftools index tmp.bcf
+            if [ ~{keep_only_present} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > tmp.bcf
+                bcftools index tmp.bcf
+            else
+                mv ${FILE} tmp.bcf
+                mv ${FILE}.csi tmp.bcf.csi
+            fi
             if [ ~{remove_sample} -eq 1 ]; then
                 ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
                 bcftools index ${SAMPLE_ID}_~{suffix}.bcf
@@ -655,10 +663,6 @@ task Kanpig {
         # Sorting
         ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z in.vcf > out.vcf.gz
         rm -f in.vcf ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
-        
-        # Discarding records that are not marked as present by kanpig
-        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z in.vcf.gz > out.vcf.gz
-        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
         mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
         mv in.vcf.gz.tbi ~{sample_id}_kanpig.vcf.gz.tbi
@@ -912,8 +916,15 @@ task PrecisionRecallAnalysis {
             rm -f ~{sample_id}_kanpig.vcf.gz* ; mv ~{sample_id}_kanpig_prime.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index ~{sample_id}_kanpig.vcf.gz
         fi
         
+        # Keeping only records that are genotyped as present. This is important,
+        # since truvari bench does not consider GTs when matching.
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_truvari.bcf > out.vcf.gz
+        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; tabix -f ~{sample_id}_truvari.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
+        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; tabix -f ~{sample_id}_kanpig.vcf.gz
+        
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}_truvari.bcf truvari
+        Benchmark ~{sample_id} ~{sample_id}_truvari.vcf.gz truvari
         Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig
         
         # Uploading
@@ -1017,7 +1028,7 @@ task BenchTrio {
         FATHER_ID=$(cut -f 3 ped.tsv)
         MOTHER_ID=$(cut -f 4 ped.tsv)
         
-        # Localizing        
+        # Localizing. These files may contain 0/0 records.
         while : ; do
             TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
@@ -1043,6 +1054,10 @@ task BenchTrio {
             ls ${MOTHER_ID}_*.vcf.gz >> list.txt
         fi
         ls -laht
+        
+        # Remark: we keep all records from the three files, since otherwise
+        # bcftools merge might transform a 0/0 into a ./., affecting the number
+        # of records over which Mendelian error is computed.
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
