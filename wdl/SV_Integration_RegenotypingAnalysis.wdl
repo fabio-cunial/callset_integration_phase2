@@ -484,17 +484,17 @@ task SplitBcf {
         echo ~{sep="," samples} | tr ',' '\n' > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . ~{cohort_bcf}
         rm -f ~{cohort_bcf}
+        ls -laht
         
         # Keeping only present records, then removing FORMAT and SAMPLE.
         for FILE in $(ls *.bcf); do
             SAMPLE_ID=$(basename ${FILE} .bcf)
             if [ ~{keep_only_present} -eq 1 ]; then
                 ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type b ${FILE} > tmp.bcf
-                bcftools index tmp.bcf
             else
                 mv ${FILE} tmp.bcf
-                mv ${FILE}.csi tmp.bcf.csi
             fi
+            bcftools index tmp.bcf
             if [ ~{remove_sample} -eq 1 ]; then
                 ${TIME_COMMAND} bcftools view --drop-genotypes --output-type b tmp.bcf > ${SAMPLE_ID}_~{suffix}.bcf
                 bcftools index ${SAMPLE_ID}_~{suffix}.bcf
