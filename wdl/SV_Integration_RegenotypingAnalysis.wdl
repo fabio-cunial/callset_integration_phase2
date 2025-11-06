@@ -619,7 +619,7 @@ task Kanpig {
         
         String remote_outdir
         
-        String kanpig_params_singlesample = "--neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
+        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
         File reference_fa
         File reference_fai
         File ploidy_bed_male
@@ -656,8 +656,10 @@ task Kanpig {
         mv ~{personalized_vcf_gz} in.vcf.gz
         mv ~{personalized_tbi} in.vcf.gz.tbi
         
-        # Remark: kanpig needs --sizemin >= --kmer
-        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
+        # Remark: we set --sizemin 10 instead of zero or one, just because
+        # kanpig needs --sizemin >= --kmer . The purpose is still to
+        # re-genotype every record in the input VCF.
+        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
         rm -f in.vcf.gz* ; mv out.vcf in.vcf
         
         # Sorting
@@ -1013,7 +1015,7 @@ task BenchTrio {
             ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
             
             # De novo rate
-            ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
+            ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
             NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm_${SUFFIX}.txt
