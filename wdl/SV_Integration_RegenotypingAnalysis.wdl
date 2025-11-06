@@ -8,7 +8,7 @@ version 1.0
 # │   └── mendelian/                     for each sample, mendelian error stats;
 # └── X_samples
 #     ├── infrequent/             for each sample, the infrequent records in it;
-#     ├── kanpig/             for each sample, its personalized and re-GT'd VCF;
+#     ├── kanpig/        for each sample, its full personalized and re-GT'd VCF;
 #     ├── precision_recall/             for each sample, precision/recall stats;
 #     └── mendelian/                     for each sample, mendelian error stats;
 #
@@ -42,11 +42,13 @@ workflow SV_Integration_RegenotypingAnalysis {
         File reference_fai
         File reference_agp
         File standard_chromosomes_bed
+        File autosomes_bed
         File tandem_bed
         File ploidy_bed_male
         File ploidy_bed_female
     }
     parameter_meta {
+        min_sv_length: "The program subsets `cohort_truvari_vcf_gz` to this SVLEN range before every other step, and only afterwards re-genotypes. Regardless of this variable, benchmarking results are always reported for >=20bp and >=50bp records separately."
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
@@ -59,18 +61,14 @@ workflow SV_Integration_RegenotypingAnalysis {
         input:
             cohort_truvari_vcf_gz = cohort_truvari_vcf_gz,
             cohort_truvari_tbi = cohort_truvari_tbi,
-            limit_to_chromosome = limit_to_chromosome
-    }
-    call FilterCohortBcf_ByLength {
-        input:
-            cohort_truvari_bcf = PrepareCohortBcf.out_bcf,
-            cohort_truvari_csi = PrepareCohortBcf.out_csi,
-            min_sv_length = min_sv_length
+            limit_to_chromosome = limit_to_chromosome,
+            min_sv_length = min_sv_length,
+            max_sv_length = max_sv_length
     }
     call SplitBcf as split_truvari {
         input:
-            cohort_bcf = FilterCohortBcf_ByLength.out_bcf,
-            cohort_csi = FilterCohortBcf_ByLength.out_csi,
+            cohort_bcf = PrepareCohortBcf.out_bcf,
+            cohort_csi = PrepareCohortBcf.out_csi,
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
             remote_dir = remote_dir+"/truvari",
             suffix = "truvari",
@@ -78,22 +76,38 @@ workflow SV_Integration_RegenotypingAnalysis {
             remove_sample = 0
     }
     scatter (i in range(mendelian_error_n_trios)) {
-        call BenchTrio as me_bench_truvari {
+        call BenchTrio as me_bench_truvari_20 {
             input:
                 ped_tsv = mendelian_error_ped,
                 ped_tsv_row = i+1,
                 remote_indir = remote_dir+"/truvari",
                 remote_outdir = remote_dir+"/truvari/mendelian",
+                min_sv_length = 20,
+                max_sv_length = max_sv_length,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
+                autosomes_bed = autosomes_bed,
+                in_flag = [split_truvari.out_flag]
+        }
+        call BenchTrio as me_bench_truvari_50 {
+            input:
+                ped_tsv = mendelian_error_ped,
+                ped_tsv_row = i+1,
+                remote_indir = remote_dir+"/truvari",
+                remote_outdir = remote_dir+"/truvari/mendelian",
+                min_sv_length = 50,
+                max_sv_length = max_sv_length,
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
+                autosomes_bed = autosomes_bed,
                 in_flag = [split_truvari.out_flag]
         }
     }
     scatter (i in range(length(min_n_samples))) {
         call PartitionCohortBcf {
             input:
-                cohort_truvari_bcf = FilterCohortBcf_ByLength.out_bcf,
-                cohort_truvari_csi = FilterCohortBcf_ByLength.out_csi,
+                cohort_truvari_bcf = PrepareCohortBcf.out_bcf,
+                cohort_truvari_csi = PrepareCohortBcf.out_csi,
                 min_n_samples = min_n_samples[i]
         }
         call SplitBcf as split_infrequent {
@@ -129,7 +143,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                     ploidy_bed_male = ploidy_bed_male,
                     ploidy_bed_female = ploidy_bed_female
             }
-            call PrecisionRecallAnalysis {
+            call PrecisionRecallAnalysis as pr_analysis_20 {
                 input:
                     sample_id = precision_recall_samples[j],
                     sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
@@ -140,7 +154,31 @@ workflow SV_Integration_RegenotypingAnalysis {
                     min_n_samples = min_n_samples[i],
                 
                     bench_method = precision_recall_bench_method,
-                    min_sv_length = min_sv_length,
+                    min_sv_length = 20,
+                    max_sv_length = max_sv_length,    
+                
+                    reference_fa = reference_fa,
+                    reference_fai = reference_fai,
+                    reference_agp = reference_agp,
+                    standard_chromosomes_bed = standard_chromosomes_bed,
+                    tandem_bed = ComplementBed.sorted_bed,
+                    not_tandem_bed = ComplementBed.complement_bed,
+                    
+                    in_flag_truvari = split_truvari.out_flag,
+                    in_flag_kanpig = pr_kanpig.out_flag
+            }
+            call PrecisionRecallAnalysis as pr_analysis_50 {
+                input:
+                    sample_id = precision_recall_samples[j],
+                    sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
+                    sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
+                    chromosome = limit_to_chromosome,
+                    
+                    remote_dir = remote_dir,
+                    min_n_samples = min_n_samples[i],
+                
+                    bench_method = precision_recall_bench_method,
+                    min_sv_length = 50,
                     max_sv_length = max_sv_length,    
                 
                     reference_fa = reference_fa,
@@ -179,14 +217,30 @@ workflow SV_Integration_RegenotypingAnalysis {
             }
         }
         scatter (j in range(mendelian_error_n_trios)) {
-            call BenchTrio as me_bench_kanpig {
+            call BenchTrio as me_bench_kanpig_20 {
                 input:
                     ped_tsv = mendelian_error_ped,
                     ped_tsv_row = j+1,
                     remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
                     remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    min_sv_length = 20,
+                    max_sv_length = max_sv_length,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
+                    autosomes_bed = autosomes_bed,
+                    in_flag = me_kanpig.out_flag
+            }
+            call BenchTrio as me_bench_kanpig_50 {
+                input:
+                    ped_tsv = mendelian_error_ped,
+                    ped_tsv_row = j+1,
+                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    min_sv_length = 50,
+                    max_sv_length = max_sv_length,
+                    tandem_bed = ComplementBed.sorted_bed,
+                    not_tandem_bed = ComplementBed.complement_bed,
+                    autosomes_bed = autosomes_bed,
                     in_flag = me_kanpig.out_flag
             }
         }
@@ -260,7 +314,10 @@ task PrepareCohortBcf {
     input {
         File cohort_truvari_vcf_gz
         File cohort_truvari_tbi
+        
         String limit_to_chromosome
+        Int min_sv_length
+        Int max_sv_length
         
         Int n_cpu = 4
         Int ram_size_gb = 8
@@ -288,9 +345,9 @@ task PrepareCohortBcf {
         
         # Converting to BCF, to speed up all steps downstream.
         if [ ~{limit_to_chromosome} = "all" ]; then
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type b in.vcf.gz > out.bcf
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b in.vcf.gz > out.bcf
         else
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions ~{limit_to_chromosome} --output-type b in.vcf.gz > out.bcf
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --regions ~{limit_to_chromosome} --output-type b in.vcf.gz > out.bcf
         fi
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
@@ -302,57 +359,6 @@ task PrepareCohortBcf {
         echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> header.txt
         ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type z in.bcf > out.bcf
         bcftools index out.bcf
-    >>>
-    
-    output {
-        File out_bcf = "out.bcf"
-        File out_csi = "out.bcf.csi"
-    }
-    runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
-    }
-}
-
-
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
-#
-# TOOL                CPU     RAM     TIME
-# bcftools filter     500%    500M    3m
-# bcftools index      100%    15M     1m
-#
-task FilterCohortBcf_ByLength {
-    input {
-        File cohort_truvari_bcf
-        File cohort_truvari_csi
-        
-        Int min_sv_length
-        
-        Int n_cpu = 6
-        Int ram_size_gb = 8
-    }
-    parameter_meta {
-        cohort_truvari_bcf: "Every record is assumed be already annotated with the correct SVLEN."
-    }
-    
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type b ~{cohort_truvari_bcf} > out.bcf
-        ${TIME_COMMAND} bcftools index out.bcf
     >>>
     
     output {
@@ -669,9 +675,13 @@ task Kanpig {
         mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
         mv in.vcf.gz.tbi ~{sample_id}_kanpig.vcf.gz.tbi
         
+        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig.vcf.gz.tbi)
+        N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig.vcf.gz | wc -l)
+        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_nrecords.txt
+        
         # Uploading
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{sample_id}_kanpig.'vcf*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{sample_id}_kanpig'*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading ~{sample_id}_kanpig.vcf.gz. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -700,8 +710,6 @@ task Kanpig {
 
 #------------------------------- Benchmarking ----------------------------------
 
-# Remark: `truvari bench` is used with default parameters.
-#
 # Performance with 4 cores and 32GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
@@ -719,8 +727,8 @@ task PrecisionRecallAnalysis {
         String min_n_samples
         
         Int bench_method
-        Int min_sv_length = 20
-        Int max_sv_length = 10000
+        Int min_sv_length
+        Int max_sv_length
         
         File reference_fa
         File reference_fai
@@ -737,7 +745,9 @@ task PrecisionRecallAnalysis {
         Int disk_size_gb = 20
     }
     parameter_meta {
-        chromosome: "all=do not restrict to a chromosome."
+        chromosome: "all=do not restrict to a chromosome."        
+        min_sv_length: "The input VCFs (truvari, kanpig and dipcall) are first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
+        bench_method: "0=truvari bench with default parameters; 1=vcfdist."
     }
     
     String docker_dir = "/callset_integration"
@@ -901,13 +911,13 @@ task PrecisionRecallAnalysis {
         gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.'bcf*' .
         gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
         
-        # Subsetting to the given chromosome, if specified.
+        # Subsetting every VCF to the given chromosome, if specified.
         if [ ~{chromosome} != "all" ]; then
             ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_prime.vcf.gz
             ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_tr.vcf.gz > ~{sample_id}_truth_tr_prime.vcf.gz
             ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_not_tr.vcf.gz > ~{sample_id}_truth_not_tr_prime.vcf.gz
             
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truvari.bcf > ~{sample_id}_truvari_prime.bcf
+            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type b ~{sample_id}_truvari.bcf > ~{sample_id}_truvari_prime.bcf
             ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_kanpig.vcf.gz > ~{sample_id}_kanpig_prime.vcf.gz
             
             rm -f ~{sample_id}_truth.vcf.gz* ; mv ~{sample_id}_truth_prime.vcf.gz ~{sample_id}_truth.vcf.gz ; bcftools index ~{sample_id}_truth.vcf.gz
@@ -918,16 +928,22 @@ task PrecisionRecallAnalysis {
             rm -f ~{sample_id}_kanpig.vcf.gz* ; mv ~{sample_id}_kanpig_prime.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index ~{sample_id}_kanpig.vcf.gz
         fi
         
+        # Keeping only records in the given length range
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_truvari.bcf > out.vcf.gz
+        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; tabix -f ~{sample_id}_truvari.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
+        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; tabix -f ~{sample_id}_kanpig.vcf.gz
+        
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_truvari.bcf > out.vcf.gz
-        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; tabix -f ~{sample_id}_truvari.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_truvari.vcf.gz > out.vcf.gz
+        rm -f ~{sample_id}_truvari.vcf.gz* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; tabix -f ~{sample_id}_truvari.vcf.gz
         ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
         rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; tabix -f ~{sample_id}_kanpig.vcf.gz
         
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}_truvari.vcf.gz truvari
-        Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig
+        Benchmark ~{sample_id} ~{sample_id}_truvari.vcf.gz truvari_~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig_~{min_sv_length}bp
         
         # Uploading
         while : ; do
@@ -977,8 +993,12 @@ task BenchTrio {
         String remote_indir
         String remote_outdir
         
+        Int min_sv_length
+        Int max_sv_length
+        
         File tandem_bed
         File not_tandem_bed
+        File autosomes_bed
         
         Array[File] in_flag
         
@@ -988,6 +1008,7 @@ task BenchTrio {
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
+        min_sv_length: "The input VCFs are first hard-filtered based on SVLEN, and then fed to the chosen benchmarking tool."
     }
     
     String docker_dir = "/callset_integration"
@@ -1045,21 +1066,41 @@ task BenchTrio {
                 break
             fi
         done
+        
+        # Restricting to autosomes. This is just for simplicity and is not
+        # strictly necessary.
         TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ls ${PROBAND_ID}_*.bcf > list.txt
-            ls ${FATHER_ID}_*.bcf >> list.txt
-            ls ${MOTHER_ID}_*.bcf >> list.txt
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_autosomes.vcf.gz &
         else
-            ls ${PROBAND_ID}_*.vcf.gz > list.txt
-            ls ${FATHER_ID}_*.vcf.gz >> list.txt
-            ls ${MOTHER_ID}_*.vcf.gz >> list.txt
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.vcf.gz) > ${PROBAND_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.vcf.gz) > ${FATHER_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.vcf.gz) > ${MOTHER_ID}_autosomes.vcf.gz &
         fi
+        wait
+        tabix -f ${PROBAND_ID}_autosomes.vcf.gz &
+        tabix -f ${FATHER_ID}_autosomes.vcf.gz &
+        tabix -f ${MOTHER_ID}_autosomes.vcf.gz &
+        wait
+        echo ${PROBAND_ID}_autosomes.vcf.gz > list.txt
+        echo ${FATHER_ID}_autosomes.vcf.gz >> list.txt
+        echo ${MOTHER_ID}_autosomes.vcf.gz >> list.txt
         ls -laht
         
         # Remark: we keep all records from the three files, since otherwise
-        # bcftools merge might transform a 0/0 into a ./., affecting the number
-        # of records over which Mendelian error is computed.
+        # bcftools merge might transform a 0/0 (that would have disappeared)
+        # into a ./., affecting the number of records over which Mendelian
+        # error is computed.
+        
+        # Keeping only records in the given length range
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${PROBAND_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_autosomes.vcf.gz ; tabix -f ${PROBAND_ID}_autosomes.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${FATHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_autosomes.vcf.gz ; tabix -f ${FATHER_ID}_autosomes.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${MOTHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_autosomes.vcf.gz ; tabix -f ${MOTHER_ID}_autosomes.vcf.gz
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
@@ -1069,14 +1110,14 @@ task BenchTrio {
         ls -laht
         
         # Benchmarking
-        Benchmark trio.vcf.gz ${PROBAND_ID} all
+        Benchmark trio.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > tr.vcf.gz
         ${TIME_COMMAND} tabix -f tr.vcf.gz
-        Benchmark tr.vcf.gz ${PROBAND_ID} tr
+        Benchmark tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr
         rm -f tr.vcf.gz*
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > not_tr.vcf.gz
         ${TIME_COMMAND} tabix -f not_tr.vcf.gz
-        Benchmark not_tr.vcf.gz ${PROBAND_ID} not_tr
+        Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr
         rm -f not_tr.vcf.gz*
         
         # Uploading
