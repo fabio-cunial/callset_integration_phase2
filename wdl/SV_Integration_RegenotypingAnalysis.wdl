@@ -1032,15 +1032,22 @@ task BenchTrio {
             local SAMPLE_ID=$2
             local SUFFIX=$3
             
-            # Mendelian error
+            # 1. Mendelian error
             ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
             
-            # De novo rate
+            # 2. De novo rate
+            
+            # 2.1 +trio-dnm2
             ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
             NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
-            echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm_${SUFFIX}.txt
+            echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
+            
+            # 2.2 Simple count
+            ${TIME_COMMAND} bcftools query --format '[%GT,]\n' ${INPUT_VCF_GZ} > ${SAMPLE_ID}_matrix.csv
+            ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix.csv > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
+            rm -f ${SAMPLE_ID}_matrix.csv
         }
         
 
