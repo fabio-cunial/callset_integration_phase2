@@ -1044,10 +1044,11 @@ task BenchTrio {
             echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
             
-            # 2.2 Simple count
-            ${TIME_COMMAND} bcftools query --format '[%GT,]\n' ${INPUT_VCF_GZ} > ${SAMPLE_ID}_matrix.csv
-            ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix.csv > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
-            rm -f ${SAMPLE_ID}_matrix.csv
+            # 2.2 Simple count (and saving the whole matrix for future analysis)
+            ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${INPUT_VCF_GZ} | bgzip > ${SAMPLE_ID}_annotated.vcf.gz
+            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix.txt
+            ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix.txt > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
+            rm -f ${SAMPLE_ID}_annotated.vcf.gz*
         }
         
 
