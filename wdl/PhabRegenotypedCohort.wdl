@@ -11,7 +11,7 @@ workflow PhabRegenotypedCohort {
         
         Int min_sv_length = 20
         Int max_sv_length = 10000
-        Int n_phab_tasks = 2
+        Int n_phab_tasks = 1
         String phab_align = "poa"
 
         File reference_fa
@@ -50,6 +50,12 @@ workflow PhabRegenotypedCohort {
 }
 
 
+# Performance on a VM with 8 virtual cores and 8GB of RAM:
+#
+# TOOL              CPU%    RAM     TIME
+# bcftools view     300%    300M    20m
+# GetKanpigRegions  100%    400M    10m
+# 
 #
 task PrepareCohortVcf {
     input {
@@ -94,7 +100,7 @@ task PrepareCohortVcf {
         # sample, but regions should be identical across all samples.
         ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigRegions in.vcf.gz ${INFINITY} > regions.bed
         N_ROWS=$(wc -l < regions.bed)
-        if [ ${N_ROWS} -qt ~{n_phab_tasks} ]; then
+        if [ ${N_ROWS} -gt ~{n_phab_tasks} ]; then
             N_ROWS_PER_TASK=$(( ${N_ROWS} / ~{n_phab_tasks} ))
             split -l ${N_ROWS_PER_TASK} -d -a 4 regions.bed chunk_
         else
