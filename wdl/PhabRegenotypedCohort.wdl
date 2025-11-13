@@ -100,9 +100,9 @@ task PrepareCohortVcf {
         # sample, but regions should be identical across all samples.
         ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigRegions in.vcf.gz ${INFINITY} > regions.bed
         N_ROWS=$(wc -l < regions.bed)
-        if [ ${N_ROWS} -gt ~{n_phab_tasks} ]; then
+        if [ ~{n_phab_tasks} -gt 1 -a ${N_ROWS} -gt ~{n_phab_tasks} ]; then
             N_ROWS_PER_TASK=$(( ${N_ROWS} / ~{n_phab_tasks} ))
-            split -l ${N_ROWS_PER_TASK} -d -a 4 regions.bed chunk_
+            split -l ${N_ROWS_PER_TASK} -d -a 4 regions.bed chunk_ && echo 0 || echo "Error"
         else
             mv regions.bed chunk_0000
         fi
