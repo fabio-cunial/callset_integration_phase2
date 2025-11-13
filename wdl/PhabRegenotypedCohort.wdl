@@ -183,7 +183,9 @@ task PhabChunk {
         mv ~{cohort_regenotyped_vcf_gz} in.vcf.gz
         mv ~{cohort_regenotyped_tbi} in.vcf.gz.tbi
         
-        ${TIME_COMMAND} truvari phab --debug -t ${N_THREADS} --align ~{phab_align} -b in.vcf.gz -r ~{regions_bed} -f ~{reference_fa} -o out.vcf.gz
+        head -n 1 ~{regions_bed} > regions.bed
+        
+        ${TIME_COMMAND} truvari phab --debug -t ${N_THREADS} --align ~{phab_align} -b in.vcf.gz -r regions.bed -f ~{reference_fa} -o out.vcf.gz
         rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
         ${TIME_COMMAND} truvari anno svinfo -o out.vcf.gz in.vcf.gz
