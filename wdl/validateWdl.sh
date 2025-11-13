@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l PhabRegenotypedCohort.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_RegenotypingAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage8.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage7.wdl

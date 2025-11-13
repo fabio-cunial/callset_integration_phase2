@@ -480,3 +480,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_RegenotypingAnalysis.wdl
   testParameterFiles:
+- name: PhabRegenotypedCohort
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/PhabRegenotypedCohort.wdl
+  testParameterFiles:
