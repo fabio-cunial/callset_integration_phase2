@@ -106,6 +106,11 @@ task PrepareCohortVcf {
         else
             mv regions.bed chunk_0000
         fi
+        ls -laht
+        
+        # Preparing for delocalization
+        mv in.vcf.gz out.vcf.gz
+        mv in.vcf.gz.tbi out.vcf.gz.tbi
     >>>
     
     output {
