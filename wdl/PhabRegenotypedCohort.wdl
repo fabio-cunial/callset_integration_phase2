@@ -11,8 +11,8 @@ workflow PhabRegenotypedCohort {
         
         Int min_sv_length = 20
         Int max_sv_length = 10000
-        Int n_phab_tasks = 1
-        String phab_align = "wfa"
+        Int n_phab_tasks = 200
+        String phab_align = "poa"
         String remote_output_dir
 
         File reference_fa
@@ -22,6 +22,7 @@ workflow PhabRegenotypedCohort {
         cohort_regenotyped_vcf_gz: "The result of re-genotyping a truvari-collapsed VCF with kanpig."
         phab_align: "Possible values: mafft, wfa, poa."
         min_sv_length: "Keep only calls >=X from the input regenotyped cohort, and from the output of truvari phab."
+        n_phab_tasks: "chr6 has 4412 windows in the v1 0.7 callset, and each window takes 15 mins."
     }
     
     call PrepareCohortVcf {
@@ -72,7 +73,7 @@ task PrepareCohortVcf {
         Int max_sv_length
         
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
     }
     parameter_meta {
         cohort_regenotyped_vcf_gz: "The result of re-genotyping a truvari-collapsed VCF with kanpig."
@@ -130,8 +131,8 @@ task GetRegions {
 
         Int n_phab_tasks
         
-        Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int n_cpu = 1
+        Int ram_size_gb = 4
     }
     parameter_meta {
         cohort_regenotyped_vcf_gz: "The result of re-genotyping a truvari-collapsed VCF with kanpig."
@@ -212,7 +213,7 @@ task PhabChunk {
         String remote_output_dir
         
         Int n_cpu = 8
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
     }
     parameter_meta {
         remote_output_dir: "Without final slash"
