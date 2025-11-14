@@ -12,7 +12,8 @@ workflow PhabRegenotypedCohort {
         Int min_sv_length = 20
         Int max_sv_length = 10000
         Int n_phab_tasks = 1
-        String phab_align = "poa"
+        String phab_align = "wfa"
+        String remote_output_dir
 
         File reference_fa
         File reference_fai
@@ -29,15 +30,21 @@ workflow PhabRegenotypedCohort {
             cohort_regenotyped_tbi = cohort_regenotyped_tbi,
             limit_to_chromosome = limit_to_chromosome,
             min_sv_length = min_sv_length,
-            max_sv_length = max_sv_length,
+            max_sv_length = max_sv_length
+    }
+    call GetRegions {
+        input:
+            cohort_regenotyped_vcf_gz = PrepareCohortVcf.out_vcf_gz,
+            cohort_regenotyped_tbi = PrepareCohortVcf.out_tbi,
             n_phab_tasks = n_phab_tasks
     }
-    scatter (chunk_bed in PrepareCohortVcf.region_chunks) {
+    scatter (chunk_bed in GetRegions.region_chunks) {
         call PhabChunk {
             input:
                 regions_bed = chunk_bed,
                 cohort_regenotyped_vcf_gz = PrepareCohortVcf.out_vcf_gz,
                 cohort_regenotyped_tbi = PrepareCohortVcf.out_tbi,
+                remote_output_dir = remote_output_dir,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 phab_align = phab_align,
@@ -50,12 +57,10 @@ workflow PhabRegenotypedCohort {
 }
 
 
-# Performance on a VM with 8 virtual cores and 8GB of RAM:
+# Performance on a VM with 8 virtual cores and 8GB of RAM, chr6:
 #
 # TOOL              CPU%    RAM     TIME
 # bcftools view     300%    300M    20m
-# GetKanpigRegions  100%    400M    10m
-# 
 #
 task PrepareCohortVcf {
     input {
@@ -65,7 +70,6 @@ task PrepareCohortVcf {
         String limit_to_chromosome = "chr6"
         Int min_sv_length
         Int max_sv_length
-        Int n_phab_tasks = 100
         
         Int n_cpu = 4
         Int ram_size_gb = 8
@@ -95,6 +99,61 @@ task PrepareCohortVcf {
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --regions ~{limit_to_chromosome} --output-type z in.vcf.gz > out.vcf.gz
         rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
         
+        # Preparing for delocalization
+        mv in.vcf.gz out.vcf.gz
+        mv in.vcf.gz.tbi out.vcf.gz.tbi
+    >>>
+    
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Performance on a VM with 8 virtual cores and 8GB of RAM:
+#
+# TOOL              CPU%    RAM     TIME
+# GetKanpigRegions  100%    400M    10m
+#
+task GetRegions {
+    input {
+        File cohort_regenotyped_vcf_gz
+        File cohort_regenotyped_tbi
+
+        Int n_phab_tasks
+        
+        Int n_cpu = 4
+        Int ram_size_gb = 8
+    }
+    parameter_meta {
+        cohort_regenotyped_vcf_gz: "The result of re-genotyping a truvari-collapsed VCF with kanpig."
+    }
+    
+    Int disk_size_gb = 4*ceil(size(cohort_regenotyped_vcf_gz,"GB"))
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        INFINITY="1000000000"
+        
+        mv ~{cohort_regenotyped_vcf_gz} in.vcf.gz
+        mv ~{cohort_regenotyped_tbi} in.vcf.gz.tbi
+        
         # Computing regions, using WLOG the first sample. Each sample might have
         # different region IDs, since kanpig was run in isolation on each
         # sample, but regions should be identical across all samples.
@@ -107,15 +166,9 @@ task PrepareCohortVcf {
             mv regions.bed chunk_0000
         fi
         ls -laht
-        
-        # Preparing for delocalization
-        mv in.vcf.gz out.vcf.gz
-        mv in.vcf.gz.tbi out.vcf.gz.tbi
     >>>
     
     output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
         Array[File] region_chunks = glob("chunk_*")
     }
     runtime {
@@ -137,13 +190,12 @@ task PrepareCohortVcf {
 # chr1    996427  .       G       A       .       .       .       GT      1/0
 # chr1    996458  .       A       G       .       .       .       GT      1/0
 #
-# Performance on a VM with 16 virtual cores and 32GB of RAM, just 3 samples,
-# whole genome:
+# Performance on a VM with 8 virtual cores and 8GB of RAM, one 90bp window:
 #
 # METHOD    CPU%    RAM     TIME
-# wfa       700%    1.3G    1h20m
-# poa       1000%   4.2G    2h15m
-# mafft     1500%   2.6G    50m
+# wfa       
+# poa       800%    150M    15m
+# mafft     
 #
 task PhabChunk {
     input {
@@ -157,10 +209,13 @@ task PhabChunk {
         String phab_align
         Int min_sv_length
         
+        String remote_output_dir
+        
         Int n_cpu = 8
         Int ram_size_gb = 8
     }
     parameter_meta {
+        remote_output_dir: "Without final slash"
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_regenotyped_vcf_gz,"GB"))
@@ -196,11 +251,20 @@ task PhabChunk {
         
         mv in.vcf.gz chunk_${CHUNK_ID}.vcf.gz
         mv in.vcf.gz.tbi chunk_${CHUNK_ID}.vcf.gz.tbi
+        
+        # Uploading
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp chunk_${CHUNK_ID}.vcf.'gz*' ~{remote_output_dir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading VCF. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
     >>>
     
     output {
-        Array[File] out_vcf_gz = glob("chunk_*.vcf.gz")
-        Array[File] out_tbi = glob("chunk_*.vcf.gz.tbi")
     }
     runtime {
         docker: "fcunial/callset_integration_phase2"
