@@ -172,9 +172,6 @@ task PrepareKanpigHapsBcf {
         File kanpig_haps_bcf
         File kanpig_haps_csi
         
-        Int min_sv_length
-        Int max_sv_length
-        
         Int n_cpu = 4
         Int ram_size_gb = 8
     }
@@ -599,7 +596,6 @@ task BenchTrio {
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
-        min_sv_length: "The input VCFs are first hard-filtered based on SVLEN, and then fed to the chosen benchmarking tool."
     }
     
     String docker_dir = "/callset_integration"
