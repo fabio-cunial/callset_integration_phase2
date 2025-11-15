@@ -125,7 +125,7 @@ task BuildWindowBcfs {
         
         
         # -------------------------- Main program ------------------------------
-        N_FILES_FOR_HAP_VCF="1000"
+        N_FILES_FOR_HAP_VCF="50"
         
         mv ~{truvari_collapsed_vcf_gz} in.vcf.gz
         mv ~{truvari_collapsed_tbi} in.vcf.gz.tbi
