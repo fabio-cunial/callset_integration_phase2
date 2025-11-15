@@ -81,7 +81,6 @@ task BuildWindowBcfs {
             local CHUNK_FILE=$2
             local INPUT_BCF=$3
             local FIRST_WINDOW=$4
-            local HEADER_TXT=$5
             
             mkdir -p ./${THREAD_ID}_input_vcfs/
             mkdir -p ./${THREAD_ID}_output_vcfs/
@@ -95,9 +94,9 @@ task BuildWindowBcfs {
                 COUNTER=$(( ${COUNTER} + 1 ))
                 if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt ~{reference_fa} ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
+                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
                     for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
-                        cat ${HEADER_TXT} ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
+                        cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                         bcftools index ${VCF_FILE%*.vcf}.bcf
                         rm -f ${VCF_FILE}
                     done
@@ -110,9 +109,9 @@ task BuildWindowBcfs {
             N_CHUNKS=$(ls ./${THREAD_ID}_input_vcfs/*.vcf | wc -l || echo 0)
             if [ ${N_CHUNKS} -gt 0 ]; then
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt ~{reference_fa} ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
+                java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
                 for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
-                    cat ${HEADER_TXT} ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
+                    cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                     bcftools index ${VCF_FILE%*.vcf}.bcf
                     rm -f ${VCF_FILE}
                 done
@@ -143,14 +142,16 @@ task BuildWindowBcfs {
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
         # Building window BCFs in parallel
-        cat ~{windows_bed} | tr '\t' ',' > windows.csv
+        mv ~{reference_fa} reference.fa
+        samtools faidx reference.fa
+        bedtools slop -b 1 -i ~{windows_bed} -g reference.fa.fai | tr '\t' ',' > windows.csv
         N_ROWS=$(wc -l < windows.csv)
         N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
         split -l ${N_ROWS_PER_THREAD} -d -a 4 windows.csv chunk_
         cat chunk_0000
         THREAD_ID="0"; FIRST_WINDOW="0"
         for CHUNK_FILE in $(ls chunk_* | sort -V); do
-            ChunkThread ${THREAD_ID} ${CHUNK_FILE} in.bcf ${FIRST_WINDOW} header.txt &
+            ChunkThread ${THREAD_ID} ${CHUNK_FILE} in.bcf ${FIRST_WINDOW} &
             THREAD_ID=$(( ${THREAD_ID} + 1 ))
             N_WINDOWS=$(wc -l < ${CHUNK_FILE})
             FIRST_WINDOW=$(( ${FIRST_WINDOW} + ${N_WINDOWS} ))

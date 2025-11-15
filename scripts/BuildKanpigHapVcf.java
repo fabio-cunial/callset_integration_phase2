@@ -61,12 +61,12 @@ public class BuildKanpigHapVcf {
         // Translating chunks
         br1 = new BufferedReader(new FileReader(CHUNKS_FILE));
         str1=br1.readLine();
-        while (str1!=null) {  // For each chunk
+        while (str1!=null) {  // For each chunk     
             // Computing `refChrom,refFirst,refLast`.
             refChrom=""; refFirst=Integer.MAX_VALUE; refLast=-1;
             br2 = new BufferedReader(new FileReader(str1));
-            str2=br2.readLine();
-            while (str2!=null) {
+            str2=br2.readLine();        
+            while (str2!=null) {                
                 tokens=str2.split("\t");
                 if (refChrom.length()==0) refChrom=tokens[0];
                 pos=Integer.parseInt(tokens[1]);  // One-based
@@ -76,6 +76,10 @@ public class BuildKanpigHapVcf {
                 str2=br2.readLine();
             }
             br2.close();
+            if (refFirst==Integer.MAX_VALUE) {
+                System.err.println("WARNING: "+str1+" is empty.");
+                str1=br1.readLine(); continue;
+            }
             
             // Building new REF, and new ALT haplotypes for each sample.
             Arrays.fill(lastPos1,refFirst-1); Arrays.fill(lastPos2,refFirst-1);
