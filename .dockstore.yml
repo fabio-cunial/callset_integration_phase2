@@ -490,3 +490,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/BuildKanpigHapVcf.wdl
   testParameterFiles:
+- name: RegenotypeKanpigHapsVcf
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/RegenotypeKanpigHapsVcf.wdl
+  testParameterFiles:
