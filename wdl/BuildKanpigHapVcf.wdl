@@ -204,10 +204,10 @@ task ConcatWindowBcfs {
         gsutil -m cp ~{remote_input_dir}/'*.bcf*' .
         date
         ls *.bcf | sort -V > list.txt
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --output-type z --file-list list.txt > out.vcf.gz
-        ${TIME_COMMAND} tabix out.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --output-type b --file-list list.txt > out.bcf
+        ${TIME_COMMAND} bcftools index out.bcf
         
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv out.vcf.'gz*' ~{remote_output_dir}
+        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv out.'bcf*' ~{remote_output_dir}
     >>>
     
     output {
@@ -216,7 +216,7 @@ task ConcatWindowBcfs {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
