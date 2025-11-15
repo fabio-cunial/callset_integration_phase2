@@ -53,11 +53,11 @@ task BuildWindowBcfs {
         
         Int n_cpu = 2
         Int ram_size_gb = 8
+        Int disk_size_gb = 100
     }
     parameter_meta {
     }
     
-    Int disk_size_gb = 2*ceil(size(truvari_collapsed_vcf_gz,"GB"))
     String docker_dir = "/callset_integration"
     
     command <<<
@@ -167,7 +167,7 @@ task BuildWindowBcfs {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
 }
@@ -182,7 +182,7 @@ task ConcatWindowBcfs {
         
         Int n_cpu = 2
         Int ram_size_gb = 8
-        Int disk_size_gb = 500
+        Int disk_size_gb = 200
     }
     parameter_meta {
     }
@@ -215,7 +215,7 @@ task ConcatWindowBcfs {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk 100 HDD"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
     }
 }
