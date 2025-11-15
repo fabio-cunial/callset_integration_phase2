@@ -485,3 +485,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/PhabRegenotypedCohort.wdl
   testParameterFiles:
+- name: BuildKanpigHapVcf
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/BuildKanpigHapVcf.wdl
+  testParameterFiles:

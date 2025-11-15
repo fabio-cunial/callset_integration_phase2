@@ -8,10 +8,10 @@ import java.io.*;
 public class BuildKanpigHapVcf {
     
     /**
-     * Example usage: BuildKanpigHapVcf list.txt chr6.fa 12680
+     * Example usage: BuildKanpigHapVcf list.txt chr6.fa 12680 ./out_dir
      * 
      * Remark: the program writes in output a headerless VCF where all POS,REF 
-     * fields are the same.
+     * fields are the same, and with no FORMAT or SAMPLE columns.
      *
      * @param args 
      * 0: a list of files (one per row), each being a headerless, uncompressed
@@ -23,6 +23,7 @@ public class BuildKanpigHapVcf {
         final String CHUNKS_FILE = args[0];
         final String CHROMOSOME_FA = args[1];
         final int N_SAMPLES = Integer.parseInt(args[2]);
+        final String OUTPUT_DIR = args[3];
         
         int i, j;
         int lastDistinctHap, idGenerator, pos, refLength;
@@ -119,7 +120,7 @@ public class BuildKanpigHapVcf {
             // Writing the output chunk
             idGenerator=0;
             chunkID=str1.substring(str1.lastIndexOf("/")+1,str1.lastIndexOf(".vcf"));
-            bw = new BufferedWriter(new FileWriter(chunkID+"_haps.vcf"));
+            bw = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_haps.vcf"));
             refSequence=chromosome.substring(refFirst,refLast+1);
             for (i=0; i<=lastDistinctHap; i++) bw.write(refChrom+"\t"+(refFirst+1)+"\t"+chunkID+"-"+(idGenerator++)+"\t"+refSequence+"\t"+distinctHaps[i]+"\t100\tPASS\t.\n");
             bw.close();
