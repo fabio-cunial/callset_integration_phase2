@@ -87,7 +87,10 @@ task BuildWindowBcfs {
             mkdir -p ./${THREAD_ID}_output_vcfs/
             WINDOW_ID=${FIRST_WINDOW}; COUNTER="0"
             while read WINDOW; do
-                echo ${WINDOW} > ${THREAD_ID}.bed
+                CHROM=$(echo ${WINDOW} | cut -d , -f 1)
+                START=$(echo ${WINDOW} | cut -d , -f 2)
+                END=$(echo ${WINDOW} | cut -d , -f 3)
+                echo -e "${CHROM}\t${START}\t${END}" > ${THREAD_ID}.bed
                 bcftools view --no-header --regions-file ${THREAD_ID}.bed --regions-overlap pos ${INPUT_BCF} > ./${THREAD_ID}_input_vcfs/chunk_${WINDOW_ID}.vcf
                 COUNTER=$(( ${COUNTER} + 1 ))
                 if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
@@ -140,9 +143,11 @@ task BuildWindowBcfs {
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
         # Building window BCFs in parallel
-        N_ROWS=$(wc -l < ~{windows_bed})
+        cat ~{windows_bed} | tr '\t' ',' > windows.csv
+        N_ROWS=$(wc -l < windows.csv)
         N_ROWS_PER_THREAD=$(( ${N_ROWS} / ${N_THREADS} ))
-        split -l ${N_ROWS_PER_THREAD} -d -a 4 ~{windows_bed} chunk_
+        split -l ${N_ROWS_PER_THREAD} -d -a 4 windows.csv chunk_
+        cat chunk_0000
         THREAD_ID="0"; FIRST_WINDOW="0"
         for CHUNK_FILE in $(ls chunk_* | sort -V); do
             ChunkThread ${THREAD_ID} ${CHUNK_FILE} in.bcf ${FIRST_WINDOW} header.txt &
