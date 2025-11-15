@@ -587,9 +587,6 @@ task BenchTrio {
         String remote_indir
         String remote_outdir
         
-        Int min_sv_length
-        Int max_sv_length
-        
         File tandem_bed
         File not_tandem_bed
         File autosomes_bed
