@@ -322,7 +322,7 @@ task Kanpig {
 #
 # TASK                      % CPU       RAM     TIME
 # truvari bench             
-# vcfdist
+# vcfdist                   200%        11G     6m
 #
 task PrecisionRecallAnalysis {
     input {
@@ -346,8 +346,8 @@ task PrecisionRecallAnalysis {
         
         File in_flag_kanpig
         
-        Int n_cpu = 2
-        Int ram_size_gb = 4
+        Int n_cpu = 4
+        Int ram_size_gb = 16
         Int disk_size_gb = 20
     }
     parameter_meta {

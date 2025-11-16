@@ -165,7 +165,7 @@ task BuildWindowBcfs {
         File out_flag = "out.txt"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "fcunial/callset_integration_phase2_workpackages:fix"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
