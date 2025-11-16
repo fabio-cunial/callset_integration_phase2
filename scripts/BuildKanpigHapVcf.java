@@ -13,8 +13,9 @@ import java.io.*;
  * order.
  *
  * Remark: the program handles VCF records that overlap by one position on the
- * same hap. It stops with an error if two VCF records overlap by more than one
- * position on the same hap.
+ * same hap. If a VCF record is found to overlap with a previous record by more 
+ * than one position on the same hap, it is discarded and the program continues
+ * (i.e. conflicting records are removed greedily rather than optimally).
  */
 public class BuildKanpigHapVcf {
     
@@ -102,24 +103,22 @@ public class BuildKanpigHapVcf {
                 refLength=tokens[3].length();
                 for (i=0; i<N_SAMPLES; i++) {
                     if (tokens[9+i].charAt(0)=='1') {
-                        if (pos-1>=lastPos1[i]+2) hap1[i].append(chromosome.substring(lastPos1[i]+1,pos-1));
-                        if (pos-1<lastPos1[i]) {
-                            System.err.println("ERROR: overlapping records on the same hap1.");
-                            System.exit(1);
+                        if (pos-1<lastPos1[i]) overlappingError(str1,i,1);
+                        else {
+                            if (pos-1>=lastPos1[i]+2) hap1[i].append(chromosome.substring(lastPos1[i]+1,pos-1));
+                            if (pos-1==lastPos1[i]) hap1[i].append(tokens[4].substring(1));
+                            else hap1[i].append(tokens[4]);
+                            lastPos1[i]=pos-1+refLength-1;
                         }
-                        else if (pos-1==lastPos1[i]) hap1[i].append(tokens[4].substring(1));
-                        else hap1[i].append(tokens[4]);
-                        lastPos1[i]=pos-1+refLength-1;
                     }
                     if (tokens[9+i].charAt(2)=='1') {
-                        if (pos-1>=lastPos2[i]+2) hap2[i].append(chromosome.substring(lastPos2[i]+1,pos-1));
-                        if (pos-1<lastPos2[i]) {
-                            System.err.println("ERROR: overlapping records on the same hap2.");
-                            System.exit(1);
+                        if (pos-1<lastPos2[i]) overlappingError(str1,i,2);
+                        else {
+                            if (pos-1>=lastPos2[i]+2) hap2[i].append(chromosome.substring(lastPos2[i]+1,pos-1));
+                            if (pos-1==lastPos2[i]) hap2[i].append(tokens[4].substring(1));
+                            else hap2[i].append(tokens[4]);
+                            lastPos2[i]=pos-1+refLength-1;
                         }
-                        else if (pos-1==lastPos2[i]) hap2[i].append(tokens[4].substring(1));
-                        else hap2[i].append(tokens[4]);
-                        lastPos2[i]=pos-1+refLength-1;
                     }
                 }
                 str2=br2.readLine();
@@ -159,6 +158,29 @@ public class BuildKanpigHapVcf {
             str1=br1.readLine();
         }
         br1.close();
+    }
+    
+    
+    /**
+     * @param hap 1 or 2.
+     */
+    private static final void overlappingError(String chunkFile, int sampleID, int hap) throws IOException {
+        int i;
+        String str, out;
+        BufferedReader br;
+        String[] tokens;
+        
+        out="ERROR: overlapping records on the same hap"+hap+" of the "+sampleID+"-th sample of the VCF (zero-based).\n";
+        br = new BufferedReader(new FileReader(chunkFile));
+        str=br.readLine();
+        while (str!=null) {
+            tokens=str.split("\t");
+            for (i=0; i<9; i++) out+=tokens[i]+"\t";
+            out+=tokens[9+sampleID]+"\n";
+            str=br.readLine();
+        }
+        br.close();
+        System.err.println(out);
     }
     
 }
