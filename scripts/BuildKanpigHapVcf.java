@@ -12,10 +12,21 @@ import java.io.*;
  * phased, it is assumed to be phased and it is taken in the given unphased
  * order.
  *
- * Remark: the program handles VCF records that overlap by one position on the
- * same hap. If a VCF record is found to overlap with a previous record by more 
- * than one position on the same hap, it is discarded and the program continues
- * (i.e. conflicting records are removed greedily rather than optimally).
+ * Remark: multiple active INS at the same position are taken in the order in
+ * which they appear in the VCF.
+ *
+ * Remark: VCF records may (correctly) overlap by one position on the same hap, 
+ * and this is handled by the program. If a VCF record is found to overlap with 
+ * a previous record by more than one position on the same hap, it is discarded 
+ * and the program continues (i.e. colliding records are removed greedily 
+ * rather than optimally). This can happen even if the single-sample VCFs were
+ * re-genotyped with kanpig (which disallows collisions), since truvari collapse
+ * may create overlaps when choosing cluster representatives.
+ *
+ * Example of a collision:
+ *
+ * chr6	89548	id1	GTACATGGAGGGGAACAACACACACCAGGGCCTCTCAGCGGGACAGGGGGTAGGAGACCATCAGGACAAACACGTGGA	G	3462	PASS	NumCollapsed=59;NumConsolidated=199;SUPP_PAV=1;SUPP_PBSV=1;SUPP_SNIFFLES=1;SVTYPE=DEL;SVLEN=77	GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV	0|1:0:100:25:.:88971:20:8,12:93,96:0.6514:0.9983:0:1:0
+ * chr6	89579	id2	CTCTCAGCGGGACAGGGGGTAGGAGACCATCAGGACAAACACGTGGATACATGGAGGGGAACAACACACACCAGGGCCTCTCAGCGGGACAGGGGGTAGGAGACCATCAGGACAAACACGTGGGTACATGGAGGGGAACAACACACACCAGGGCCTCTCAGGGGGACAGGGGGTAGGAGACCATCAGGACAAACACGTGGGTACATGGAGGGGAACAACACACACCAGGGCCTCTCAGGGGGACAGGGGTAGGAGACCATCAGGACAAACACGTGGGTACATGGAGGGCAACAACACACACCAGGGCCTCTCAGGGGGACAGGGGGTAGGAGACCATCAGTACAAACACGTGGATACATGGAGGGGAACAGCACACACCAGGGCCTCTCAGCGGGACAGGGGTAGGAGACCATCAGGACAAACACGTGGGTACATGGAGGGGAACAACACACACCAGGGCC	C	196	PASS	SUPP_PAV=0;SUPP_PBSV=1;SUPP_SNIFFLES=0;SVTYPE=DEL;SVLEN=460;NumCollapsed=17;NumConsolidated=51	GT:FT:SQ:GQ:PS:NE:DP:AD:KS:SCORE:CALIBRATION_SENSITIVITY:SUPP_PBSV:SUPP_SNIFFLES:SUPP_PAV	0|1:0:100:25:.:88971:20:8,12:93,96:0.7083:0.9966:0:1:0
  */
 public class BuildKanpigHapVcf {
     
@@ -36,14 +47,17 @@ public class BuildKanpigHapVcf {
         final String CHROMOSOME_FA = args[1];
         final int N_SAMPLES = Integer.parseInt(args[2]);
         final String OUTPUT_DIR = args[3];
+        final boolean VERBOSE = args[4].equals("1");
         
         int i, j;
-        int lastDistinctHap, idGenerator, pos, refLength;
+        int lastDistinctHap, idGenerator, pos, refLength, altLength, svtype;
         int refFirst, refLast;  // Zero-based, inclusive.
+        long nOverlaps, nOverlapsTolerated;
         String str1, str2, refChrom, chunkID, refSequence;
         StringBuilder chromosome, tmpBuffer;
         BufferedReader br1, br2;
         BufferedWriter bw;
+        int[] lastType1, lastType2;  // 0=undefined, 1=DEL, 2=INS, 3=REPL.
         int[] lastPos1, lastPos2;  // Zero-based, inclusive.
         String[] tokens, distinctHaps;
         StringBuilder[] hap1, hap2;
@@ -63,6 +77,7 @@ public class BuildKanpigHapVcf {
         // Allocating memory
         System.err.print("Allocating memory for "+(2*N_SAMPLES)+" haplotypes... ");
         lastPos1 = new int[N_SAMPLES]; lastPos2 = new int[N_SAMPLES];
+        lastType1 = new int[N_SAMPLES]; lastType2 = new int[N_SAMPLES];
         hap1 = new StringBuilder[N_SAMPLES];
         for (i=0; i<N_SAMPLES; i++) hap1[i] = new StringBuilder();
         hap2 = new StringBuilder[N_SAMPLES];
@@ -71,6 +86,7 @@ public class BuildKanpigHapVcf {
         System.err.println("done");
         
         // Translating chunks
+        nOverlaps=0; nOverlapsTolerated=0;
         br1 = new BufferedReader(new FileReader(CHUNKS_FILE));
         str1=br1.readLine();
         while (str1!=null) {  // For each chunk     
@@ -95,29 +111,52 @@ public class BuildKanpigHapVcf {
             
             // Building new REF, and new ALT haplotypes for each sample.
             Arrays.fill(lastPos1,refFirst-1); Arrays.fill(lastPos2,refFirst-1);
+            Arrays.fill(lastType1,0); Arrays.fill(lastType2,0);
             br2 = new BufferedReader(new FileReader(str1));
             str2=br2.readLine(); 
             while (str2!=null) {
                 tokens=str2.split("\t");
                 pos=Integer.parseInt(tokens[1]);  // One-based
                 refLength=tokens[3].length();
+                altLength=tokens[4].length();
+                if (refLength>1 && altLength==1) svtype=1;
+                else if (refLength==1 && altLength>1) svtype=2;
+                else svtype=3;
                 for (i=0; i<N_SAMPLES; i++) {
                     if (tokens[9+i].charAt(0)=='1') {
-                        if (pos-1<lastPos1[i]) overlappingError(str1,i,1);
+                        if (pos-1<lastPos1[i]) {
+                            nOverlaps++;
+                            if (svtype==1 && svtype==lastType1[i]) {
+                                // Merging two colliding DELs
+                                lastPos1[i]=pos-1+refLength-1;
+                                nOverlapsTolerated++;
+                            }
+                            if (VERBOSE) overlappingError(str1,i,1);
+                        }
                         else {
                             if (pos-1>=lastPos1[i]+2) hap1[i].append(chromosome.substring(lastPos1[i]+1,pos-1));
                             if (pos-1==lastPos1[i]) hap1[i].append(tokens[4].substring(1));
                             else hap1[i].append(tokens[4]);
                             lastPos1[i]=pos-1+refLength-1;
+                            lastType1[i]=svtype;
                         }
                     }
                     if (tokens[9+i].charAt(2)=='1') {
-                        if (pos-1<lastPos2[i]) overlappingError(str1,i,2);
+                        if (pos-1<lastPos2[i]) {
+                            nOverlaps++;
+                            if (svtype==1 && svtype==lastType2[i]) {
+                                // Merging two colliding DELs
+                                lastPos2[i]=pos-1+refLength-1;
+                                nOverlapsTolerated++;
+                            }
+                            if (VERBOSE) overlappingError(str1,i,2);
+                        }
                         else {
                             if (pos-1>=lastPos2[i]+2) hap2[i].append(chromosome.substring(lastPos2[i]+1,pos-1));
                             if (pos-1==lastPos2[i]) hap2[i].append(tokens[4].substring(1));
                             else hap2[i].append(tokens[4]);
                             lastPos2[i]=pos-1+refLength-1;
+                            lastType2[i]=svtype;
                         }
                     }
                 }
@@ -158,6 +197,7 @@ public class BuildKanpigHapVcf {
             str1=br1.readLine();
         }
         br1.close();
+        System.err.println("Over all chunks: nOverlaps="+nOverlaps+" nOverlapsTolerated="+nOverlapsTolerated+" ("+((100.0*nOverlapsTolerated)/nOverlaps)+"%)");
     }
     
     
@@ -175,8 +215,10 @@ public class BuildKanpigHapVcf {
         str=br.readLine();
         while (str!=null) {
             tokens=str.split("\t");
-            for (i=0; i<9; i++) out+=tokens[i]+"\t";
-            out+=tokens[9+sampleID]+"\n";
+            if (tokens[9+sampleID].charAt(0)=='1' || tokens[9+sampleID].charAt(2)=='1') {
+                for (i=0; i<9; i++) out+=tokens[i]+"\t";
+                out+=tokens[9+sampleID]+"\n";
+            }
             str=br.readLine();
         }
         br.close();

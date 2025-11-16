@@ -94,7 +94,7 @@ task BuildWindowBcfs {
                 COUNTER=$(( ${COUNTER} + 1 ))
                 if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
+                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
                     for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
                         cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                         bcftools index ${VCF_FILE%*.vcf}.bcf
@@ -109,7 +109,7 @@ task BuildWindowBcfs {
             N_CHUNKS=$(ls ./${THREAD_ID}_input_vcfs/*.vcf | wc -l || echo 0)
             if [ ${N_CHUNKS} -gt 0 ]; then
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs
+                java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
                 for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
                     cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                     bcftools index ${VCF_FILE%*.vcf}.bcf
