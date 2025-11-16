@@ -239,6 +239,10 @@ task PrepareCohortBcf {
         mv ~{cohort_shapeit4_vcf_gz} in.vcf.gz
         mv ~{cohort_shapeit4_tbi} in.vcf.gz.tbi
         
+        # Removing SNVs
+        ${TIME_COMMAND} bcftools filter --exclude 'STRLEN(REF)=1 && STRLEN(ALT)=1' --output-type z in.vcf.gz > out.vcf.gz
+        rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
         # Making sure SVLEN and SVTYPE are consistently annotated
         ${TIME_COMMAND} truvari anno svinfo --minsize 1 in.vcf.gz | bgzip > out.vcf.gz
         rm -f in.vcf.gz* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
