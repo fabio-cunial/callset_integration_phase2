@@ -575,8 +575,12 @@ task PrecisionRecallAnalysis {
         ${TIME_COMMAND} tabix -f ~{sample_id}_truth_not_tr.vcf.gz &
         wait
         
-        # Localizing the VCFs to benchmark
+        # Localizing the VCF to benchmark
         gsutil -m cp ~{remote_dir}/shapeit4/~{sample_id}_shapeit4.'bcf*' .
+        
+        # Ensuring the right header for VCFDIST
+        bcftools reheader --fai ~{reference_fai} ~{sample_id}_shapeit4.bcf > out.bcf
+        rm -f ~{sample_id}_shapeit4.bcf* ; mv out.bcf ~{sample_id}_shapeit4.bcf ; bcftools index ~{sample_id}_shapeit4.bcf
         
         # Subsetting every VCF to the given chromosome, if specified.
         if [ ~{chromosome} != "all" ]; then
@@ -708,7 +712,7 @@ task BenchTrio {
             
             # 2.2 Simple count (and saving the whole matrix for future analysis)
             ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${INPUT_VCF_GZ} | bgzip > ${SAMPLE_ID}_annotated.vcf.gz
-            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix.txt
+            ${TIME_COMMAND} bcftools query --format '[%GT,]0,0,0,0,0,%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix.txt
             ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix.txt > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
         }
