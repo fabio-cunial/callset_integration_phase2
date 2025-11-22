@@ -50,16 +50,19 @@ public class BuildKanpigHapVcf {
         final boolean VERBOSE = args[4].equals("1");
         
         int i, j;
-        int lastDistinctHap, idGenerator, pos, refLength, altLength, svtype;
+        int lastDistinctHap, idGenerator, pos, refLength, altLength, svtype, lastRecord, nRecords;
         int refFirst, refLast;  // Zero-based, inclusive.
         long nOverlaps, nOverlapsTolerated;
         String str1, str2, refChrom, chunkID, refSequence;
         StringBuilder chromosome, tmpBuffer;
         BufferedReader br1, br2;
-        BufferedWriter bw;
+        BufferedWriter bw1, bw2;
+        Haplotype tmpHap;
         int[] lastType1, lastType2;  // 0=undefined, 1=DEL, 2=INS, 3=REPL.
         int[] lastPos1, lastPos2;  // Zero-based, inclusive.
-        String[] tokens, distinctHaps;
+        boolean[][] hap1records, hap2records, matrix; 
+        String[] tokens;
+        Haplotype[] distinctHaps;
         StringBuilder[] hap1, hap2;
         
         // Loading the reference
@@ -82,39 +85,54 @@ public class BuildKanpigHapVcf {
         for (i=0; i<N_SAMPLES; i++) hap1[i] = new StringBuilder();
         hap2 = new StringBuilder[N_SAMPLES];
         for (i=0; i<N_SAMPLES; i++) hap2[i] = new StringBuilder();
-        distinctHaps = new String[2*N_SAMPLES];
+        distinctHaps = new Haplotype[2*N_SAMPLES];
+        for (i=0; i<distinctHaps.length; i++) distinctHaps[i] = new Haplotype(false,-1,null);
+        hap1records=null; hap2records=null;
         System.err.println("done");
         
         // Translating chunks
         nOverlaps=0; nOverlapsTolerated=0;
         br1 = new BufferedReader(new FileReader(CHUNKS_FILE));
         str1=br1.readLine();
-        while (str1!=null) {  // For each chunk     
-            // Computing `refChrom,refFirst,refLast`.
-            refChrom=""; refFirst=Integer.MAX_VALUE; refLast=-1;
+        while (str1!=null) {  // For each chunk
+            chunkID=str1.substring(str1.lastIndexOf("/")+1,str1.lastIndexOf(".vcf"));
+            
+            // Computing `refChrom,refFirst,refLast`, and outputting the input
+            // VCF without samples.
+            nRecords=0; refChrom=""; refFirst=Integer.MAX_VALUE; refLast=-1;
+            bw1 = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_records.vcf"));
             br2 = new BufferedReader(new FileReader(str1));
             str2=br2.readLine();        
-            while (str2!=null) {                
+            while (str2!=null) {
+                nRecords++;
                 tokens=str2.split("\t");
                 if (refChrom.length()==0) refChrom=tokens[0];
                 pos=Integer.parseInt(tokens[1]);  // One-based
                 if (pos-1<refFirst) refFirst=pos-1;
                 refLength=tokens[3].length();
                 if (pos-1+refLength-1>refLast) refLast=pos-1+refLength-1;
+                bw1.write(tokens[0]);
+                for (i=1; i<=7; i++) bw1.write("\t"+tokens[i]);
+                bw1.newLine();
                 str2=br2.readLine();
             }
-            br2.close();
+            br2.close(); bw1.close();
             if (refFirst==Integer.MAX_VALUE) {
                 System.err.println("WARNING: "+str1+" is empty.");
                 str1=br1.readLine(); continue;
             }
+            if (hap1records==null || hap1records.length<nRecords) hap1records = new boolean[nRecords][N_SAMPLES];
+            if (hap2records==null || hap2records.length<nRecords) hap2records = new boolean[nRecords][N_SAMPLES];
             
-            // Building new REF, and new ALT haplotypes for each sample.
+            // Building the new REF and new distinct ALT haplotypes
             Arrays.fill(lastPos1,refFirst-1); Arrays.fill(lastPos2,refFirst-1);
             Arrays.fill(lastType1,0); Arrays.fill(lastType2,0);
+            for (i=0; i<nRecords; i++) Arrays.fill(hap1records[i],false);
+            for (i=0; i<nRecords; i++) Arrays.fill(hap2records[i],false);
             br2 = new BufferedReader(new FileReader(str1));
-            str2=br2.readLine(); 
+            str2=br2.readLine(); lastRecord=-1;
             while (str2!=null) {
+                lastRecord++;
                 tokens=str2.split("\t");
                 pos=Integer.parseInt(tokens[1]);  // One-based
                 refLength=tokens[3].length();
@@ -130,6 +148,7 @@ public class BuildKanpigHapVcf {
                                 // Merging two colliding DELs
                                 lastPos1[i]=pos-1+refLength-1;
                                 nOverlapsTolerated++;
+                                hap1records[lastRecord][i]=true;
                             }
                             if (VERBOSE) overlappingError(str1,i,1);
                         }
@@ -139,6 +158,7 @@ public class BuildKanpigHapVcf {
                             else hap1[i].append(tokens[4]);
                             lastPos1[i]=pos-1+refLength-1;
                             lastType1[i]=svtype;
+                            hap1records[lastRecord][i]=true;
                         }
                     }
                     if (tokens[9+i].charAt(2)=='1') {
@@ -148,6 +168,7 @@ public class BuildKanpigHapVcf {
                                 // Merging two colliding DELs
                                 lastPos2[i]=pos-1+refLength-1;
                                 nOverlapsTolerated++;
+                                hap2records[lastRecord][i]=true;
                             }
                             if (VERBOSE) overlappingError(str1,i,2);
                         }
@@ -157,6 +178,7 @@ public class BuildKanpigHapVcf {
                             else hap2[i].append(tokens[4]);
                             lastPos2[i]=pos-1+refLength-1;
                             lastType2[i]=svtype;
+                            hap2records[lastRecord][i]=true;
                         }
                     }
                 }
@@ -169,26 +191,49 @@ public class BuildKanpigHapVcf {
             }
             System.err.println("All haps of all samples built");
             
-            // Keeping only distinct haplotypes
+            // Keeping only distinct haplotypes.
+            // Remark: if a haplotype can be represented by multiple distinct
+            // sets of records, only one such set is selected arbitrarily.
             j=-1;
-            for (i=0; i<N_SAMPLES; i++) distinctHaps[++j]=hap1[i].toString();
-            for (i=0; i<N_SAMPLES; i++) distinctHaps[++j]=hap2[i].toString();
+            for (i=0; i<N_SAMPLES; i++) {
+                j++;
+                distinctHaps[j].matrixID=false;
+                distinctHaps[j].sampleID=i;
+                distinctHaps[j].sequence=hap1[i].toString();
+            }
+            for (i=0; i<N_SAMPLES; i++) {
+                j++;
+                distinctHaps[j].matrixID=true;
+                distinctHaps[j].sampleID=i;
+                distinctHaps[j].sequence=hap2[i].toString();
+            }
             Arrays.parallelSort(distinctHaps);
             lastDistinctHap=0;
             for (i=1; i<2*N_SAMPLES; i++) {
-                if (!distinctHaps[i].equalsIgnoreCase(distinctHaps[lastDistinctHap])) distinctHaps[++lastDistinctHap]=distinctHaps[i];
+                if (!distinctHaps[i].equals(distinctHaps[lastDistinctHap])) {
+                    lastDistinctHap++;
+                    tmpHap=distinctHaps[lastDistinctHap];
+                    distinctHaps[lastDistinctHap]=distinctHaps[i];
+                    distinctHaps[i]=tmpHap;
+                }
             }
-            System.err.println("Distinct haps: "+(lastDistinctHap+1));            
+            System.err.println("Distinct haps: "+(lastDistinctHap+1));
             
-            // Writing the output chunk
+            // Outputting the haps VCF and the hap->records map
             idGenerator=0;
-            chunkID=str1.substring(str1.lastIndexOf("/")+1,str1.lastIndexOf(".vcf"));
-            bw = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_haps.vcf"));
+            bw1 = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_haps.vcf"));
+            bw2 = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_map.csv"));
             refSequence=chromosome.substring(refFirst,refLast+1);
             for (i=0; i<=lastDistinctHap; i++) {
-                if (!distinctHaps[i].equalsIgnoreCase(refSequence)) bw.write(refChrom+"\t"+(refFirst+1)+"\t"+chunkID+"-"+(idGenerator++)+"\t"+refSequence+"\t"+distinctHaps[i]+"\t100\tPASS\t.\n");
+                if (distinctHaps[i].sequence.equalsIgnoreCase(refSequence)) continue;
+                bw1.write(refChrom+"\t"+(refFirst+1)+"\t"+chunkID+"-"+(idGenerator++)+"\t"+refSequence+"\t"+distinctHaps[i].sequence+"\t100\tPASS\t.\n");
+                matrix=distinctHaps[i].matrixID?hap2records:hap1records;
+                for (j=0; j<nRecords; j++) {
+                    if (matrix[j][distinctHaps[i].sampleID]) bw2.write(j+",");
+                }
+                bw2.newLine();
             }
-            bw.close();
+            bw1.close(); bw2.close();
             
             // Next chunk
             System.err.println("Chunk "+chunkID+" completed");
@@ -223,6 +268,29 @@ public class BuildKanpigHapVcf {
         }
         br.close();
         System.err.println(out);
+    }
+    
+    
+    private static class Haplotype implements Comparable {
+        public boolean matrixID;  // false=hap1records, true=hap2records.
+        public int sampleID;
+        public String sequence;
+        
+        public Haplotype(boolean matrixID, int sampleID, String sequence) {
+            this.matrixID=matrixID;
+            this.sampleID=sampleID;
+            this.sequence=sequence;
+        }
+        
+        public boolean equals(Object other) {
+            Haplotype otherHaplotype = (Haplotype)other;
+            return sequence.equalsIgnoreCase(otherHaplotype.sequence);
+        }
+        
+        public int compareTo(Object other) {
+            Haplotype otherHaplotype = (Haplotype)other;
+            return sequence.compareTo(otherHaplotype.sequence);
+        }
     }
     
 }
