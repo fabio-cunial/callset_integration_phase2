@@ -9,8 +9,8 @@ version 1.0
 #
 workflow RegenotypeKanpigHapsVcf {
     input {
-        File kanpig_haps_bcf
-        File kanpig_haps_csi
+        File kanpig_haps_vcf_gz
+        File kanpig_haps_tbi
         
         String remote_dir
         
@@ -46,20 +46,16 @@ workflow RegenotypeKanpigHapsVcf {
             tandem_bed = tandem_bed,
             reference_fai = reference_fai
     }
-    call PrepareKanpigHapsBcf {
-        input:
-            kanpig_haps_bcf = kanpig_haps_bcf,
-            kanpig_haps_csi = kanpig_haps_csi
-    }
     scatter (j in range(length(precision_recall_samples))) {
         call Kanpig as pr_kanpig {
             input:
                 sample_id = precision_recall_samples[j],
                 sex = precision_recall_sex[j],
-                personalized_vcf_gz = PrepareKanpigHapsBcf.out_vcf_gz,
-                personalized_tbi = PrepareKanpigHapsBcf.out_tbi,
+                personalized_vcf_gz = kanpig_haps_vcf_gz,
+                personalized_tbi = kanpig_haps_tbi,
                 alignments_bam = precision_recall_bam[j],
                 alignments_bai = precision_recall_bai[j],
+                remote_indir = remote_dir+"/chunks",
                 remote_outdir = remote_dir+"/kanpig",
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
@@ -88,10 +84,11 @@ workflow RegenotypeKanpigHapsVcf {
             input:
                 sample_id = mendelian_error_samples[j],
                 sex = mendelian_error_sex[j],
-                personalized_vcf_gz = PrepareKanpigHapsBcf.out_vcf_gz,
-                personalized_tbi = PrepareKanpigHapsBcf.out_tbi,
+                personalized_vcf_gz = kanpig_haps_vcf_gz,
+                personalized_tbi = kanpig_haps_tbi,
                 alignments_bam = mendelian_error_bam[j],
                 alignments_bai = mendelian_error_bai[j],
+                remote_indir = remote_dir+"/chunks",
                 remote_outdir = remote_dir+"/kanpig",
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
@@ -166,57 +163,6 @@ task ComplementBed {
 }
 
 
-#
-task PrepareKanpigHapsBcf {
-    input {
-        File kanpig_haps_bcf
-        File kanpig_haps_csi
-        
-        Int n_cpu = 4
-        Int ram_size_gb = 8
-    }
-    parameter_meta {
-    }
-    
-    Int disk_size_gb = 4*ceil(size(kanpig_haps_bcf,"GB"))
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        
-        mv ~{kanpig_haps_bcf} in.bcf
-        mv ~{kanpig_haps_csi} in.bcf.csi
-        
-        # Converting to VCF
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z in.bcf > out.vcf.gz
-        rm -f in.bcf* ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
-        
-        # Delocalizing
-        mv in.vcf.gz out.vcf.gz
-        mv in.vcf.gz.tbi out.vcf.gz.tbi
-    >>>
-    
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-    }
-    runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
-    }
-}
-
-
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                CPU     RAM     TIME
@@ -231,6 +177,7 @@ task Kanpig {
         File alignments_bam
         File alignments_bai
         
+        String remote_indir
         String remote_outdir
         
         String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
@@ -275,23 +222,32 @@ task Kanpig {
         # re-genotype every record in the input VCF.
         ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
         rm -f in.vcf.gz* ; mv out.vcf in.vcf
+        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z in.vcf > ~{sample_id}_kanpig_haps.vcf.gz
+        rm -f in.vcf
+        tabix -f ~{sample_id}_kanpig_haps.vcf.gz
+        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig_haps.vcf.gz.tbi)
+        N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig_haps.vcf.gz | wc -l)
+        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_haps_nrecords.txt
         
-        # Sorting
-        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z in.vcf > out.vcf.gz
-        rm -f in.vcf ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
-        
-        mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
-        mv in.vcf.gz.tbi ~{sample_id}_kanpig.vcf.gz.tbi
-        
-        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig.vcf.gz.tbi)
-        N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig.vcf.gz | wc -l)
-        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_nrecords.txt
+        # Converting the re-genotyped haps VCF into a re-genotyped records VCF
+        mkdir -p ./convert_input/
+        gsutil -m cp ~{remote_indir}/'*_records.vcf' ./convert_input/
+        gsutil -m cp ~{remote_indir}/'*_map.csv' ./convert_input/
+        ls ./convert_input/*_records.vcf | sort -V > tmp1.tsv
+        ls ./convert_input/*_map.csv | sort -V > tmp2.tsv
+        paste tmp1.tsv tmp2.tsv > for_convert.tsv
+        rm -f tmp1.tsv tmp2.tsv
+        java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G ConvertKanpigHapVcf ~{sample_id}_kanpig_haps.vcf.gz for_convert.tsv | bgzip > ~{sample_id}_kanpig_records.vcf.gz
+        tabix -f ~{sample_id}_kanpig_records.vcf.gz
+        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig_records.vcf.gz.tbi)
+        N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig_records.vcf.gz | wc -l)
+        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_records_nrecords.txt
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{sample_id}_kanpig'*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{sample_id}_kanpig_'*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading ~{sample_id}_kanpig.vcf.gz. Trying again..."
+                echo "Error uploading ~{sample_id}_kanpig_{haps,records}.vcf.gz. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
             else
                 break
@@ -524,15 +480,18 @@ task PrecisionRecallAnalysis {
             rm -f ~{sample_id}_truth_not_tr.vcf.gz* ; mv ~{sample_id}_truth_not_tr_prime.vcf.gz ~{sample_id}_truth_not_tr.vcf.gz ; bcftools index ~{sample_id}_truth_not_tr.vcf.gz
         fi
         
-        # Localizing the kanpig VCF
-        gsutil -m cp ~{remote_dir}/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
+        # Localizing the re-genotyped haps and records VCFs
+        gsutil -m cp ~{remote_dir}/kanpig/~{sample_id}_kanpig_'*.vcf.gz*' .
         
         # Keeping only records that are genotyped as present
-        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
-        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; tabix -f ~{sample_id}_kanpig.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_kanpig_haps.vcf.gz > out.vcf.gz
+        rm -f ~{sample_id}_kanpig_haps.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig_haps.vcf.gz ; tabix -f ~{sample_id}_kanpig_haps.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ~{sample_id}_kanpig_records.vcf.gz > out.vcf.gz
+        rm -f ~{sample_id}_kanpig_records.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig_records.vcf.gz ; tabix -f ~{sample_id}_kanpig_records.vcf.gz
         
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig_~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}_kanpig_haps.vcf.gz kanpig_haps_~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}_kanpig_records.vcf.gz kanpig_records_~{min_sv_length}bp
         
         # Uploading
         while : ; do
@@ -650,38 +609,35 @@ task BenchTrio {
         while : ; do
             TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.bcf*' ~{remote_indir}/${FATHER_ID}_'*.bcf*' ~{remote_indir}/${MOTHER_ID}_'*.bcf*' . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading VCF files. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            else 
+                echo "Error downloading VCF files. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
                 break
             fi
         done
         
         # Restricting to autosomes. This is just for simplicity and is not
         # strictly necessary.
-        TEST=$(ls *.vcf.gz && echo 0 || echo 1)
-        if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_autosomes.vcf.gz &
-        else
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.vcf.gz) > ${PROBAND_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.vcf.gz) > ${FATHER_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.vcf.gz) > ${MOTHER_ID}_autosomes.vcf.gz &
-        fi
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_kanpig_haps.vcf.gz) > ${PROBAND_ID}_autosomes_haps.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_kanpig_haps.vcf.gz) > ${FATHER_ID}_autosomes_haps.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_kanpig_haps.vcf.gz) > ${MOTHER_ID}_autosomes_haps.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_kanpig_records.vcf.gz) > ${PROBAND_ID}_autosomes_records.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_kanpig_records.vcf.gz) > ${FATHER_ID}_autosomes_records.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_kanpig_records.vcf.gz) > ${MOTHER_ID}_autosomes_records.vcf.gz &
         wait
-        tabix -f ${PROBAND_ID}_autosomes.vcf.gz &
-        tabix -f ${FATHER_ID}_autosomes.vcf.gz &
-        tabix -f ${MOTHER_ID}_autosomes.vcf.gz &
+        tabix -f ${PROBAND_ID}_autosomes_haps.vcf.gz &
+        tabix -f ${FATHER_ID}_autosomes_haps.vcf.gz &
+        tabix -f ${MOTHER_ID}_autosomes_haps.vcf.gz &
+        tabix -f ${PROBAND_ID}_autosomes_records.vcf.gz &
+        tabix -f ${FATHER_ID}_autosomes_records.vcf.gz &
+        tabix -f ${MOTHER_ID}_autosomes_records.vcf.gz &
         wait
-        echo ${PROBAND_ID}_autosomes.vcf.gz > list.txt
-        echo ${FATHER_ID}_autosomes.vcf.gz >> list.txt
-        echo ${MOTHER_ID}_autosomes.vcf.gz >> list.txt
+        echo ${PROBAND_ID}_autosomes_haps.vcf.gz > list_haps.txt
+        echo ${FATHER_ID}_autosomes_haps.vcf.gz >> list_haps.txt
+        echo ${MOTHER_ID}_autosomes_haps.vcf.gz >> list_haps.txt
+        echo ${PROBAND_ID}_autosomes_records.vcf.gz > list_records.txt
+        echo ${FATHER_ID}_autosomes_records.vcf.gz >> list_records.txt
+        echo ${MOTHER_ID}_autosomes_records.vcf.gz >> list_records.txt
         ls -laht
         
         # Remark: we keep all records from the three files, since otherwise
@@ -691,21 +647,26 @@ task BenchTrio {
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio.vcf.gz
-        ${TIME_COMMAND} tabix -f trio.vcf.gz
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list_haps.txt > trio_haps.vcf.gz &
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list_records.txt > trio_records.vcf.gz &
+        wait
+        ${TIME_COMMAND} tabix -f trio_haps.vcf.gz &
+        ${TIME_COMMAND} tabix -f trio_records.vcf.gz &
+        wait
         rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
         ls -laht
         
         # Benchmarking
-        Benchmark trio.vcf.gz ${PROBAND_ID} all
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > tr.vcf.gz
-        ${TIME_COMMAND} tabix -f tr.vcf.gz
-        Benchmark tr.vcf.gz ${PROBAND_ID} tr
-        rm -f tr.vcf.gz*
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > not_tr.vcf.gz
-        ${TIME_COMMAND} tabix -f not_tr.vcf.gz
-        Benchmark not_tr.vcf.gz ${PROBAND_ID} not_tr
-        rm -f not_tr.vcf.gz*
+        Benchmark trio_haps.vcf.gz ${PROBAND_ID} all_haps
+        Benchmark trio_records.vcf.gz ${PROBAND_ID} all_records
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio_records.vcf.gz > tr_records.vcf.gz
+        ${TIME_COMMAND} tabix -f tr_records.vcf.gz
+        Benchmark tr_records.vcf.gz ${PROBAND_ID} tr_records
+        rm -f tr_records.vcf.gz*
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio_records.vcf.gz > not_tr_records.vcf.gz
+        ${TIME_COMMAND} tabix -f not_tr_records.vcf.gz
+        Benchmark not_tr_records.vcf.gz ${PROBAND_ID} not_tr_records
+        rm -f not_tr_records.vcf.gz*
         
         # Uploading
         while : ; do

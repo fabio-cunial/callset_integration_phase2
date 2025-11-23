@@ -18,7 +18,7 @@ workflow BuildKanpigHapVcf {
         min_sv_length: "Keep only calls >=X from the input VCF."
     }
     
-    call BuildWindowBcfs {
+    call BuildWindowVcfs {
         input:
             truvari_collapsed_vcf_gz = truvari_collapsed_vcf_gz,
             truvari_collapsed_tbi = truvari_collapsed_tbi,
@@ -27,11 +27,11 @@ workflow BuildKanpigHapVcf {
             reference_fa = reference_fa,
             remote_output_dir = remote_dir+"/chunks"
     }
-    call ConcatWindowBcfs {
+    call ConcatWindowVcfs {
         input:
             remote_input_dir = remote_dir+"/chunks",
             remote_output_dir = remote_dir+"/concatenated",
-            input_flag = BuildWindowBcfs.out_flag
+            input_flag = BuildWindowVcfs.out_flag
     }
     
     output {
@@ -39,9 +39,9 @@ workflow BuildKanpigHapVcf {
 }
 
 
-# Creates a BCF for each window in a BED file.
+# Creates a VCF for each window in a BED file.
 #
-task BuildWindowBcfs {
+task BuildWindowVcfs {
     input {
         File truvari_collapsed_vcf_gz
         File truvari_collapsed_tbi
@@ -96,11 +96,11 @@ task BuildWindowBcfs {
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
                     java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
                     for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
-                        cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
-                        bcftools index ${VCF_FILE%*.vcf}.bcf
+                        cat header.txt ${VCF_FILE} | bcftools view --output-type z > ${VCF_FILE}.gz
+                        tabix -f ${VCF_FILE}.gz
                         rm -f ${VCF_FILE}
                     done
-                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.bcf*' ~{remote_output_dir}/
+                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.vcf.gz*' ~{remote_output_dir}/
                     gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_records.vcf' ~{remote_output_dir}/
                     gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_map.csv' ~{remote_output_dir}/
                     rm -f ./${THREAD_ID}_input_vcfs/*.vcf
@@ -113,11 +113,11 @@ task BuildWindowBcfs {
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
                 java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
                 for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
-                    cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
-                    bcftools index ${VCF_FILE%*.vcf}.bcf
+                    cat header.txt ${VCF_FILE} | bcftools view --output-type z > ${VCF_FILE}.gz
+                    tabix -f ${VCF_FILE}.gz
                     rm -f ${VCF_FILE}
                 done
-                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.bcf*' ~{remote_output_dir}/
+                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.vcf.gz*' ~{remote_output_dir}/
                 gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_records.vcf' ~{remote_output_dir}/
                 gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_map.csv' ~{remote_output_dir}/
                 rm -f ./${THREAD_ID}_input_vcfs/*.vcf
@@ -145,7 +145,7 @@ task BuildWindowBcfs {
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length} --output-type b in.vcf.gz > out.bcf
         rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
-        # Building window BCFs in parallel
+        # Building window VCFs in parallel
         mv ~{reference_fa} reference.fa
         samtools faidx reference.fa
         bedtools slop -b 1 -i ~{windows_bed} -g reference.fa.fai | tr '\t' ',' > windows.csv
@@ -179,7 +179,7 @@ task BuildWindowBcfs {
 
 
 #
-task ConcatWindowBcfs {
+task ConcatWindowVcfs {
     input {
         String remote_input_dir
         String remote_output_dir
@@ -205,13 +205,13 @@ task ConcatWindowBcfs {
         GSUTIL_DELAY_S="600"
         
         date
-        gsutil -m cp ~{remote_input_dir}/'*.bcf*' .
+        gsutil -m cp ~{remote_input_dir}/'*.vcf*' .
         date
         ls *.bcf | sort -V > list.txt
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --output-type b --file-list list.txt > out.bcf
-        ${TIME_COMMAND} bcftools index out.bcf
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --output-type z --file-list list.txt > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
         
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv out.'bcf*' ~{remote_output_dir}
+        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv out.vcf.'gz*' ~{remote_output_dir}
     >>>
     
     output {
