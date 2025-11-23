@@ -18,9 +18,11 @@ public class ConvertKanpigHapVcf {
      * 0: the output of kanpig when given in input the cohort haps VCF and one 
      *    BAM; assumed to contain only one sample;
      * 1: every row corresponds to a chunk and has format: 
-     *    `records_file_path \t map_file_path`. The rows of every 
+     *    `records_file_path \t map_file_path`, where `records_file_path` does 
+     *    not contain FORMAT and SAMPLE columns. The rows of every 
      *    `map_file_path`, in order, are assumed to correspond to the rows of 
-     *    the haps VCF.
+     *    the haps VCF. `map_file_path` may be empty, if the haps VCF has no 
+     *    non-ref haplotype in the chunk.
      */
     public static void main(String[] args) throws IOException {
         final String HAPS_VCF_GZ = args[0];
