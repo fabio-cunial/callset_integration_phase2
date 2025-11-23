@@ -36,8 +36,12 @@ public class BuildKanpigHapVcf {
     /**
      * Example usage: BuildKanpigHapVcf list.txt chr6.fa 12680 ./out_dir
      * 
-     * Remark: the program writes in output a headerless VCF where all POS,REF 
-     * fields are the same, and with no FORMAT or SAMPLE columns.
+     * Output files: 
+     * - `CHUNKID_records.vcf`: the input VCF, without header, FORMAT, SAMPLE;
+     * - `CHUNKID_haps.vcf`: the headerless haplotypes VCF, where all POS,REF 
+     *   fields are the same, and with no FORMAT or SAMPLE;
+     * - `CHUNKID_map.csv`: maps each record of `CHUNKID_haps.vcf` to the 
+     *   records of `CHUNKID_records.vcf` that compose it.
      *
      * @param args 
      * 0: a list of files (one per row), each being a headerless, uncompressed
@@ -45,7 +49,11 @@ public class BuildKanpigHapVcf {
      *    to one kanpig window;
      * 2: total number of samples in the cohort;
      * 5: 1=tests the program: assumes that the input VCF contains only one 
-     *    autosome and one sample, and prints GTs in the output VCF.
+     *    autosome and one sample, and prints GTs in the output VCF. The test
+     *    must show that `input.vcf > BuildKanpigHapVcf > ConvertKanpigHapVcf > 
+     *    output.vcf` is such that `input.vcf` and `output.vcf` have the same 
+     *    records in the same order, and the same GTs modulo '/', '|', '.' and
+     *    side of '|'.
      */
     public static void main(String[] args) throws IOException {
         final String CHUNKS_FILE = args[0];

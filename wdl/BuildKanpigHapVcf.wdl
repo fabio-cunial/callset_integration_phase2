@@ -94,13 +94,15 @@ task BuildWindowBcfs {
                 COUNTER=$(( ${COUNTER} + 1 ))
                 if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
-                    for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
+                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
+                    for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
                         cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                         bcftools index ${VCF_FILE%*.vcf}.bcf
                         rm -f ${VCF_FILE}
                     done
-                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*.bcf*' ~{remote_output_dir}/
+                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.bcf*' ~{remote_output_dir}/
+                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_records.vcf' ~{remote_output_dir}/
+                    gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_map.csv' ~{remote_output_dir}/
                     rm -f ./${THREAD_ID}_input_vcfs/*.vcf
                     COUNTER="0"
                 fi
@@ -110,12 +112,14 @@ task BuildWindowBcfs {
             if [ ${N_CHUNKS} -gt 0 ]; then
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
                 java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
-                for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*.vcf); do
+                for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
                     cat header.txt ${VCF_FILE} | bcftools view --output-type b > ${VCF_FILE%*.vcf}.bcf
                     bcftools index ${VCF_FILE%*.vcf}.bcf
                     rm -f ${VCF_FILE}
                 done
-                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*.bcf*' ~{remote_output_dir}/
+                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_haps.bcf*' ~{remote_output_dir}/
+                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_records.vcf' ~{remote_output_dir}/
+                gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ./${THREAD_ID}_output_vcfs/'*_map.csv' ~{remote_output_dir}/
                 rm -f ./${THREAD_ID}_input_vcfs/*.vcf
             fi
         }
