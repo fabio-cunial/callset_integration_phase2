@@ -1,11 +1,16 @@
 version 1.0
 
 
-# XGBoost scoring
+# Given a single-sample VCF, the program scores it with XGBoost, filters it by
+# score, and then splits it into ~100 pieces, in order to run bcftools merge
+# over all samples on parallel chunks.
 #
 workflow SV_Integration_Workpackage3 {
     input {
         File sv_integration_chunk_tsv
+        File split_for_bcftools_merge_csv
+        String filter_string = "FORMAT/CALIBRATION_SENSITIVITY<=0.999"
+        
         String remote_indir
         String remote_outdir
         
@@ -17,6 +22,8 @@ workflow SV_Integration_Workpackage3 {
         File hyperparameters_json
     }
     parameter_meta {
+        split_for_bcftools_merge_csv: "A partition that covers all chromosomes. Every line is a 0-based, half-open, consecutive chunk of a chromosome. Lines are assumed to be sorted."
+        filter_string: "Use `none` to apply no filter."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
         training_resource_bed: "The same BED used in `SV_Integration_Workpackage2`."
@@ -26,6 +33,8 @@ workflow SV_Integration_Workpackage3 {
     call Impl {
         input:
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
+            split_for_bcftools_merge_csv = split_for_bcftools_merge_csv,
+            filter_string = filter_string,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
@@ -44,6 +53,9 @@ workflow SV_Integration_Workpackage3 {
 task Impl {
     input {
         File sv_integration_chunk_tsv
+        File split_for_bcftools_merge_csv
+        String filter_string
+        
         String remote_indir
         String remote_outdir
         
@@ -165,6 +177,35 @@ task Impl {
             # Removing temporary files
             rm -f ${SAMPLE_ID}_header.txt ${SAMPLE_ID}_format.tsv.gz*
         }
+        
+        
+        # Filters and chunks using one command
+        # 
+        function ChunkVcf() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            i="0"
+            while read INTERVAL; do
+                echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
+                if [ ~{filter_string} != "none" ]; then
+                    ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include ~{filter_string} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                else
+                    ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                fi
+                tabix -f ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                i=$(( ${i} + 1 ))
+            done < ~{split_for_bcftools_merge_csv}
+            while : ; do
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+                if [ ${TEST} -eq 1 ]; then
+                    echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
+                    sleep ${GSUTIL_DELAY_S}
+                else
+                    break
+                fi
+            done
+        }
 
         
 
@@ -176,20 +217,9 @@ task Impl {
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
-            
-            # Removing END, since inconsistent END values make gatk crash.
-            bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_preprocessed.vcf.gz > ${SAMPLE_ID}_preprocessed_cleaned.vcf.gz
-            mv ${SAMPLE_ID}_preprocessed_cleaned.vcf.gz ${SAMPLE_ID}_preprocessed.vcf.gz
-            tabix -f ${SAMPLE_ID}_preprocessed.vcf.gz
-            bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_training.vcf.gz > ${SAMPLE_ID}_training_cleaned.vcf.gz
-            mv ${SAMPLE_ID}_training_cleaned.vcf.gz ${SAMPLE_ID}_training.vcf.gz
-            tabix -f ${SAMPLE_ID}_training.vcf.gz
-            
-            # Scoring
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
-            
-            gcloud storage mv ${SAMPLE_ID}_scored.vcf.'gz*' ~{remote_outdir}/
+            ChunkVcf ${SAMPLE_ID} ${SAMPLE_ID}_scored.vcf.gz
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv

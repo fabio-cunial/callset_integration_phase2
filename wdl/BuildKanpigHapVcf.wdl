@@ -51,8 +51,8 @@ task BuildWindowVcfs {
         File reference_fa
         String remote_output_dir
         
-        Int n_cpu = 2
-        Int ram_size_gb = 8
+        Int n_cpu = 4
+        Int ram_size_gb = 64
         Int disk_size_gb = 100
     }
     parameter_meta {
@@ -66,7 +66,8 @@ task BuildWindowVcfs {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB_PER_THREAD=$(( ( ~{ram_size_gb} - 2 ) / ${N_THREADS} ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
@@ -94,7 +95,7 @@ task BuildWindowVcfs {
                 COUNTER=$(( ${COUNTER} + 1 ))
                 if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                    java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
+                    java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB_PER_THREAD}G BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
                     for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
                         cat header.txt ${VCF_FILE} | bcftools view --output-type z > ${VCF_FILE}.gz
                         tabix -f ${VCF_FILE}.gz
@@ -111,7 +112,7 @@ task BuildWindowVcfs {
             N_CHUNKS=$(ls ./${THREAD_ID}_input_vcfs/*.vcf | wc -l || echo 0)
             if [ ${N_CHUNKS} -gt 0 ]; then
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                java -cp ~{docker_dir} BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
+                java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB_PER_THREAD}G BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
                 for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
                     cat header.txt ${VCF_FILE} | bcftools view --output-type z > ${VCF_FILE}.gz
                     tabix -f ${VCF_FILE}.gz

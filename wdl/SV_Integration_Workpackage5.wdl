@@ -1,13 +1,11 @@
 version 1.0
 
 
-# For a given chromosome chunk, the procedure performs a CAL_SENS filter and a
-# bcftools merge.
+# A bcftools merge for a given chromosome chunk.
 #
 workflow SV_Integration_Workpackage5 {
     input {
         Int chunk_id
-        String filter_string = "FORMAT/CALIBRATION_SENSITIVITY<=0.999"
         File sample_ids
         
         String remote_indir
@@ -22,7 +20,6 @@ workflow SV_Integration_Workpackage5 {
     call Impl {
         input:
             chunk_id = chunk_id,
-            filter_string = filter_string,
             sample_ids = sample_ids,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir
@@ -33,8 +30,7 @@ workflow SV_Integration_Workpackage5 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, one 10 MB chunk of chr6,
-# CAL_SENS<=0.999:
+# Performance on 12'680 samples, 15x, GRCh38, one 10 MB chunk of chr6:
 #
 # TOOL               CPU     RAM     TIME
 # bcftools merge     120%    23G     30m
@@ -43,7 +39,6 @@ workflow SV_Integration_Workpackage5 {
 task Impl {
     input {
         Int chunk_id
-        String filter_string
         File sample_ids
         
         String remote_indir
@@ -87,27 +82,10 @@ task Impl {
             exit 1
         fi
         
-        # Filtering
-        
-# -----------> FILTERING SHOULD HAVE BEEN DONE BY THE PREVIOUS WORKPACKAGE!!!!!        
-
-        FILTER_STRING="~{filter_string}"
-        if [ ${FILTER_STRING} != none ]; then
-            INCLUDE_STR="--include ${FILTER_STRING}"
-            while read SAMPLE_ID; do
-                bcftools filter --threads ${N_THREADS} ${INCLUDE_STR} --output-type z ${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz > ${SAMPLE_ID}_filtered.vcf.gz
-                tabix -f ${SAMPLE_ID}_filtered.vcf.gz
-                echo ${SAMPLE_ID}_filtered.vcf.gz >> list.txt
-                rm -f ${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz*
-            done < ~{sample_ids}
-        else
-            while read SAMPLE_ID; do
-                echo ${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz >> list.txt
-            done < ~{sample_ids}
-        fi
-        df -h
-        
         # Merging
+        while read SAMPLE_ID; do
+            echo ${SAMPLE_ID}_chunk_~{chunk_id}.vcf.gz >> list.txt
+        done < ~{sample_ids}
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type z > ~{chunk_id}_merged.vcf.gz
         tabix -f ~{chunk_id}_merged.vcf.gz
         rm -f *_filtered.vcf.gz
