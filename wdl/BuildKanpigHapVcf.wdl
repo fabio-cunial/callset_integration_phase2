@@ -205,9 +205,9 @@ task ConcatWindowVcfs {
         GSUTIL_DELAY_S="600"
         
         date
-        gsutil -m cp ~{remote_input_dir}/'*.vcf*' .
+        gsutil -m cp ~{remote_input_dir}/'*_haps.vcf.gz*' .
         date
-        ls *.bcf | sort -V > list.txt
+        ls *_haps.vcf.gz | sort -V > list.txt
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --output-type z --file-list list.txt > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
         
