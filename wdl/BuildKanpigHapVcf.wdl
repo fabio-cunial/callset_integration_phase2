@@ -113,7 +113,7 @@ task BuildWindowVcfs {
             N_CHUNKS=$(ls ./${THREAD_ID}_input_vcfs/*.vcf | wc -l || echo 0)
             if [ ${N_CHUNKS} -gt 0 ]; then
                 ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
-                java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB_PER_THREAD}G BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0
+                java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB_PER_THREAD}G BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
                 for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
                     cat header.txt ${VCF_FILE} | bcftools view --output-type z > ${VCF_FILE}.gz
                     tabix -f ${VCF_FILE}.gz
