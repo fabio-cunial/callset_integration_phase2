@@ -102,26 +102,35 @@ task Impl {
         }
         
         
-        # Sets QUAL to AC, to simulate `--keep common` (which is slow on 10k
-        # samples) with `--keep maxqual`. See e.g.:
+        # Sets QUAL to the number of samples where a record was discovered, to
+        # simulate `--keep common` (which is slow on 10k samples) with `--keep
+        # maxqual`. See e.g.:
         #
         # https://github.com/ACEnglish/truvari/issues/220#issuecomment-
         # 2830920205
         #
-        function CopyAcToQual() {
+        # Remark: we use the number of samples rather than AC, since we don't
+        # trust genotypes at this stage, and since a record being discovered
+        # independently in more samples is more informative than it being
+        # genotyped more times in fewer samples.
+        #
+        function CopyNSamplesToQual() {
             local CHUNK_ID=$1
         
             mv ~{chromosome_id}_chunk_${CHUNK_ID}.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
             mv ~{chromosome_id}_chunk_${CHUNK_ID}.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
         
-            # Ensuring that all records have a consistent AC annotation
-            ${TIME_COMMAND} bcftools +fill-tags chunk_${CHUNK_ID}_in.vcf.gz -Oz -o chunk_${CHUNK_ID}_out.vcf.gz -- --tags AC
+            # Ensuring that all records are consistently annotated
+            ${TIME_COMMAND} bcftools +fill-tags chunk_${CHUNK_ID}_in.vcf.gz -Oz -o chunk_${CHUNK_ID}_out.vcf.gz -- --tags AC_Hom,AC_Het
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
         
-            # Copying AC to QUAL.
-            # Remark: joining annotations on REF and ALT is important, since
-            # IDs are not necessarily all distinct at this stage.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AC\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+            # Copying the number of samples to QUAL.
+            # Remark: joining annotations on REF and ALT in addition to ID is
+            # important, since IDs are not necessarily all distinct at this
+            # stage.
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AC_Hom\t%AC_Het\n' chunk_${CHUNK_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                printf("%s\t%s\t%s\t%s\t%s\t%d\n",$1,$2,$3,$4,$5,$6 / 2 + $7); \
+            }' | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; tabix -f chunk_${CHUNK_ID}_in.vcf.gz
@@ -145,7 +154,9 @@ task Impl {
         # 2830920205
         #
         # However, this would also discard e.g. SUPP fields that were copied to
-        # FORMAT upstream, so it is not correct for our setup. 
+        # FORMAT upstream, so it is not correct for our setup. It would also
+        # make it impossible e.g. to compare precision/recall after collapse to
+        # precision/recall after cohort re-genotyping.
         #
         function Collapse() {
             local CHUNK_ID=$1
@@ -179,7 +190,7 @@ task Impl {
         fi
         while read CHUNK_ID; do
             LocalizeChunk ${CHUNK_ID}
-            CopyAcToQual ${CHUNK_ID}
+            CopyNSamplesToQual ${CHUNK_ID}
             Collapse ${CHUNK_ID}
             
             # Uploading

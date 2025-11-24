@@ -50,6 +50,7 @@ task BuildWindowVcfs {
         File windows_bed
         File reference_fa
         String remote_output_dir
+        Int n_chunks_for_upload = 100
         
         Int n_cpu = 4
         Int ram_size_gb = 64
@@ -93,7 +94,7 @@ task BuildWindowVcfs {
                 echo -e "${CHROM}\t${START}\t${END}" > ${THREAD_ID}.bed
                 bcftools view --no-header --regions-file ${THREAD_ID}.bed --regions-overlap pos ${INPUT_BCF} > ./${THREAD_ID}_input_vcfs/chunk_${WINDOW_ID}.vcf
                 COUNTER=$(( ${COUNTER} + 1 ))
-                if [ ${COUNTER} -eq ${N_FILES_FOR_HAP_VCF} ]; then
+                if [ ${COUNTER} -eq ~{n_chunks_for_upload} ]; then
                     ls ./${THREAD_ID}_input_vcfs/chunk_*.vcf | sort -V > ${THREAD_ID}_list.txt
                     java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB_PER_THREAD}G BuildKanpigHapVcf ${THREAD_ID}_list.txt reference.fa ${N_SAMPLES} ./${THREAD_ID}_output_vcfs 0 0
                     for VCF_FILE in $(ls ./${THREAD_ID}_output_vcfs/*_haps.vcf); do
@@ -129,8 +130,6 @@ task BuildWindowVcfs {
         
         
         # -------------------------- Main program ------------------------------
-        N_FILES_FOR_HAP_VCF="50"
-        
         mv ~{truvari_collapsed_vcf_gz} in.vcf.gz
         mv ~{truvari_collapsed_tbi} in.vcf.gz.tbi
         

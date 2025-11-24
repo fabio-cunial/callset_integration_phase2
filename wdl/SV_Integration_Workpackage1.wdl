@@ -553,8 +553,12 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             # Discarding records that are not marked as present by kanpig
+            N_RECORDS_BEFORE=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            N_RECORDS_AFTER=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
+            PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER} / ${N_RECORDS_BEFORE}" | bc )
+            echo "Number of records that are marked as present by kanpig: ${N_RECORDS_AFTER}/${N_RECORDS_BEFORE} (${PERCENT}%)"
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
@@ -580,9 +584,6 @@ task Impl {
             if [ ${TEST1} != "0" -a ${TEST2} != "0" -a ${TEST3} != "0" ]; then
                 continue
             fi
-            
-#-----------> Make this preemptable in production, to reduce cost.
-#------> Handle duplicated samples in different centers?????      
             
             # Merging
             LocalizeSample ${SAMPLE_ID} 1 ${LINE}
@@ -612,6 +613,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 4
     }
 }
