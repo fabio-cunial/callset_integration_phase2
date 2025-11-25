@@ -228,12 +228,20 @@ task Kanpig {
         N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig_haps.vcf.gz.tbi)
         N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig_haps.vcf.gz | wc -l)
         echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_haps_nrecords.txt
+        rm -f ~{alignments_bam} ~{reference_fa}
         
         # Converting the re-genotyped haps VCF into a re-genotyped records VCF
         mkdir -p ./convert_input/
         gsutil -m cp ~{remote_indir}/'*_records.vcf' ./convert_input/
         gsutil -m cp ~{remote_indir}/'*_map.csv' ./convert_input/
         ls ./convert_input/*_records.vcf | sort -V > tmp1.tsv
+        N_RECORDS=$(wc -l < tmp1.tsv)
+        N_RECORDS=$(( ${N_RECORDS} - 1 ))
+        for i in $(seq 0 ${N_RECORDS}); do
+            # Creating the map file if absent. This is just to fix a bug in
+            # BuildKanpigHapVcf.java and is not needed any more.
+            touch ./convert_input/chunk_${i}_map.csv
+        done
         ls ./convert_input/*_map.csv | sort -V > tmp2.tsv
         paste tmp1.tsv tmp2.tsv > for_convert.tsv
         rm -f tmp1.tsv tmp2.tsv

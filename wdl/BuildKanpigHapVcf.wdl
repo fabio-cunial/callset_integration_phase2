@@ -52,8 +52,8 @@ task BuildWindowVcfs {
         String remote_output_dir
         Int n_chunks_for_upload = 50
         
-        Int n_cpu = 16
-        Int ram_size_gb = 34
+        Int n_cpu = 8
+        Int ram_size_gb = 65
         Int disk_size_gb = 100
     }
     parameter_meta {
@@ -77,6 +77,9 @@ task BuildWindowVcfs {
         
         # Remark: the procedure uploads the window BCFs at regular intervals,
         # to use minimal disk.
+        
+# --------------> Tar files rather than uploading tens of thousands of them!!!
+
         #
         function ChunkThread() {
             local THREAD_ID=$1

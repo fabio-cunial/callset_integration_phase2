@@ -134,6 +134,8 @@ public class BuildKanpigHapVcf {
             br2.close(); bw1.close();
             if (refFirst==Integer.MAX_VALUE) {
                 System.err.println("WARNING: "+str1+" is empty.");
+                bw1 = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_haps.vcf")); bw1.close();
+                bw2 = new BufferedWriter(new FileWriter(OUTPUT_DIR+"/"+chunkID+"_map.csv")); bw2.close();
                 str1=br1.readLine(); continue;
             }
             if (hap1records==null || hap1records.length<nRecords) hap1records = new boolean[nRecords][N_SAMPLES];
