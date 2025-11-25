@@ -38,7 +38,6 @@ workflow RegenotypeKanpigHapsVcf {
         File ploidy_bed_female
     }
     parameter_meta {
-        precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
     call ComplementBed {
