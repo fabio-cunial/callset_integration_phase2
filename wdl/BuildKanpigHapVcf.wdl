@@ -50,10 +50,10 @@ task BuildWindowVcfs {
         File windows_bed
         File reference_fa
         String remote_output_dir
-        Int n_chunks_for_upload = 100
+        Int n_chunks_for_upload = 50
         
-        Int n_cpu = 4
-        Int ram_size_gb = 64
+        Int n_cpu = 16
+        Int ram_size_gb = 34
         Int disk_size_gb = 100
     }
     parameter_meta {
@@ -67,8 +67,8 @@ task BuildWindowVcfs {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB_PER_THREAD=$(( ( ~{ram_size_gb} - 2 ) / ${N_THREADS} ))
+        N_THREADS=$(( ~{n_cpu} ))
+        EFFECTIVE_RAM_GB_PER_THREAD=$(( ( ~{ram_size_gb} - 1 ) / ${N_THREADS} ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
@@ -172,7 +172,7 @@ task BuildWindowVcfs {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
