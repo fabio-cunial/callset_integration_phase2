@@ -514,9 +514,17 @@ task IntraSampleKanpig {
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
             if [ ~{use_trgt} -eq 1 ]; then
                 TRGT_STRING="${SAMPLE_ID}_trgt_sv.vcf.gz"
+bcftools view ${SAMPLE_ID}_trgt_sv.vcf.gz chr6:575456
             else
                 TRGT_STRING=" "
             fi
+            
+            
+bcftools view ${SAMPLE_ID}_pav_sv.vcf.gz chr6:575456
+bcftools view ${SAMPLE_ID}_pbsv_sv.vcf.gz chr6:575456
+bcftools view ${SAMPLE_ID}_sniffles_sv.vcf.gz chr6:575456
+
+            
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${TRGT_STRING} ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
