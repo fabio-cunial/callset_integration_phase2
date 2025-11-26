@@ -256,7 +256,7 @@ task Kanpig {
     parameter_meta {
     }
     
-    Int disk_size_gb = 4*ceil( size(alignments_bam,"GB") )
+    Int disk_size_gb = 500
     String docker_dir = "/callset_integration"
     
     command <<<
@@ -315,7 +315,7 @@ task Kanpig {
         docker: "fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
