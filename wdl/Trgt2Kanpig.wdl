@@ -370,9 +370,16 @@ task IntraSampleKanpig {
             local INPUT_VCF_GZ=$1
             local OUTPUT_PREFIX=$2
             
-            truvari anno svinfo --minsize 1 ${INPUT_VCF_GZ} | bgzip > ${OUTPUT_PREFIX}_tmp.vcf.gz
-            tabix -f ${OUTPUT_PREFIX}_tmp.vcf.gz
-            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\n' ${OUTPUT_PREFIX}_tmp.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            truvari anno svinfo --minsize 1 ${INPUT_VCF_GZ} | bgzip > ${OUTPUT_PREFIX}_tmp1.vcf.gz
+            
+            # Fixing truvari's SVLEN header
+            bcftools view --header-only ${OUTPUT_PREFIX}_tmp1.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > ${OUTPUT_PREFIX}_header.txt
+            ${TIME_COMMAND} bcftools reheader --header ${OUTPUT_PREFIX}_header.txt --output ${OUTPUT_PREFIX}_tmp2.vcf.gz ${OUTPUT_PREFIX}_tmp1.vcf.gz
+            rm -f ${OUTPUT_PREFIX}_tmp1.vcf.gz* ${OUTPUT_PREFIX}_header.txt
+            tabix -f ${OUTPUT_PREFIX}_tmp2.vcf.gz
+            
+            # Fixing truvari's SVLEN and SVTYPE values
+            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\n' ${OUTPUT_PREFIX}_tmp2.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 if (substr($5,1,1)!="<" && length($4)>1 && length($5)>1) {
                     printf("%s",$1); \
                     for (i=2; i<=5; i++) printf("\t%s",$i); \
@@ -381,9 +388,9 @@ task IntraSampleKanpig {
                 } \
             }' | bgzip -c > ${OUTPUT_PREFIX}_annotations.tsv.gz
             tabix -f -s1 -b2 -e2 ${OUTPUT_PREFIX}_annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --annotations ${OUTPUT_PREFIX}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,INFO/SVLEN,INFO/SVTYPE --output-type z ${OUTPUT_PREFIX}_tmp.vcf.gz > ${OUTPUT_PREFIX}.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --annotations ${OUTPUT_PREFIX}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,INFO/SVLEN,INFO/SVTYPE --output-type z ${OUTPUT_PREFIX}_tmp2.vcf.gz > ${OUTPUT_PREFIX}.vcf.gz
             tabix -f ${OUTPUT_PREFIX}.vcf.gz
-            rm -f ${OUTPUT_PREFIX}_tmp.vcf.gz* ${OUTPUT_PREFIX}_annotations.tsv.gz*
+            rm -f ${OUTPUT_PREFIX}_tmp2.vcf.gz* ${OUTPUT_PREFIX}_annotations.tsv.gz*
         }
         
         
