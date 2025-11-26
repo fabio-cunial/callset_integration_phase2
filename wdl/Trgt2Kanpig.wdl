@@ -1,7 +1,9 @@
 version 1.0
 
 
-# 
+# Studies the effect on intra-sample precision/recall of including the TRGT VCF 
+# among the single-sample VCFs that are truvari-collapsed and re-genotyped with
+# kanpig.
 #
 workflow Trgt2Kanpig {
     input {

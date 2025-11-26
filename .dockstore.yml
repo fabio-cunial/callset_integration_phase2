@@ -500,3 +500,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Trgt2Kanpig.wdl
   testParameterFiles:
+- name: CollapseHapsVcf
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/CollapseHapsVcf.wdl
+  testParameterFiles:
