@@ -686,7 +686,7 @@ task BenchTrio {
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list_haps.txt > trio_haps.vcf.gz &
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list_haps.txt > trio_haps.vcf.gz
         ${TIME_COMMAND} tabix -f trio_haps.vcf.gz
         rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
         ls -laht
