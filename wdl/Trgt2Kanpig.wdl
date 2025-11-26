@@ -357,6 +357,36 @@ task IntraSampleKanpig {
         }
         
         
+        # Makes sure that SVLEN and SVTYPE are consistently annotated.
+        #
+        # Remark: for non-symbolic replacement records (where REF and ALT are
+        # both >1bp), `truvari anno svinfo` sets SVLEN to ||REF|-|ALT|| and
+        # SVTYPE to INS or DEL based only on SVLEN: this is incorrect, it
+        # affects in particular INVs, TRGT VCFs, and VCFs with entire
+        # haplotypes, and it leads to wrong SVLEN filtering downstream. The
+        # procedure sets SVLEN=max(|REF|,|ALT|)-1 and SVTYPE=UNK in such cases.
+        #
+        function addSvlenSvtype() {
+            local INPUT_VCF_GZ=$1
+            local OUTPUT_PREFIX=$2
+            
+            truvari anno svinfo --minsize 1 ${INPUT_VCF_GZ} | bgzip > ${OUTPUT_PREFIX}_tmp.vcf.gz
+            tabix -f ${OUTPUT_PREFIX}_tmp.vcf.gz
+            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\n' ${OUTPUT_PREFIX}_tmp.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                if (substr($5,1,1)!="<" && length($4)>1 && length($5)>1) {
+                    printf("%s",$1); \
+                    for (i=2; i<=5; i++) printf("\t%s",$i); \
+                    max=length($5)>length($4)?length($5):length($4); \
+                    printf("\t%d\tUNK\n",max-1); \
+                } \
+            }' | bgzip -c > ${OUTPUT_PREFIX}_annotations.tsv.gz
+            tabix -f -s1 -b2 -e2 ${OUTPUT_PREFIX}_annotations.tsv.gz
+            ${TIME_COMMAND} bcftools annotate --annotations ${OUTPUT_PREFIX}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,INFO/SVLEN,INFO/SVTYPE --output-type z ${OUTPUT_PREFIX}_tmp.vcf.gz > ${OUTPUT_PREFIX}.vcf.gz
+            tabix -f ${OUTPUT_PREFIX}.vcf.gz
+            rm -f ${OUTPUT_PREFIX}_tmp.vcf.gz* ${OUTPUT_PREFIX}_annotations.tsv.gz*
+        }
+        
+        
         # Puts in canonical form a raw VCF from an SV caller. The procedure
         # creates sorted output files `SAMPLEID_CALLERID_X.vcf.gz`, where X is:
         #
@@ -424,7 +454,7 @@ task IntraSampleKanpig {
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Making sure SVLEN and SVTYPE are consistently annotated
-            truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            addSvlenSvtype ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_out
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Isolating BNDs
@@ -560,7 +590,9 @@ task IntraSampleKanpig {
         
         # Merging
         LocalizeSample ${SAMPLE_ID} 1 ${LINE}
-        CanonizeVcf ${SAMPLE_ID}_trgt.vcf.gz ${SAMPLE_ID}_trgt.vcf.gz.tbi ${SAMPLE_ID} trgt ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+        if [ ~{use_trgt} -eq 1 ]; then
+            CanonizeVcf ${SAMPLE_ID}_trgt.vcf.gz ${SAMPLE_ID}_trgt.vcf.gz.tbi ${SAMPLE_ID} trgt ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+        fi
         CanonizeVcf ${SAMPLE_ID}_pav.vcf.gz ${SAMPLE_ID}_pav.vcf.gz.tbi ${SAMPLE_ID} pav ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
         CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
         CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
