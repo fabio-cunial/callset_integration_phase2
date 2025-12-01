@@ -978,6 +978,17 @@ task PrecisionRecallAnalysis {
 }
 
 
+# Remark: `bcftools +trio-dnm2` marks the following triplets (child, father,
+# mother) as de novos:
+#
+# 0|0, 0|0, 1|1
+# 0|0, 0|1, 1|1
+# 1|1, 1|1, 0|0
+# 1|1, 0|0, 1|0
+#
+# I.e. the disappearance of a record is considered a de novo, and the
+# appearance of a record on a haplotype is considered a de novo.
+#
 # Performance with 8 cores and 16GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME

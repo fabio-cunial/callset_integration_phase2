@@ -247,7 +247,7 @@ public class BuildKanpigHapVcf {
             debugModeFlag=false;
             for (i=0; i<=lastDistinctHap; i++) {
                 if (distinctHaps[i].sequence.equalsIgnoreCase(refSequence)) continue;
-                bw1.write(refChrom+"\t"+(refFirst+1)+"\t"+chunkID+"-"+(idGenerator++)+"\t"+refSequence+"\t"+distinctHaps[i].sequence+"\t100\tPASS\t.");
+                bw1.write(refChrom+"\t"+(refFirst+1)+"\t"+chunkID+"-"+(idGenerator++)+"\t"+refSequence+"\t"+distinctHaps[i].sequence+"\t"+distinctHaps[i].count+"\tPASS\t.");
                 if (DEBUG_MODE) {
                     if (distinctHaps[i].count==2) bw1.write("\tGT\t1|1");
                     else {
