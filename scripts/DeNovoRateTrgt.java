@@ -3,7 +3,7 @@ import java.io.*;
 
 
 /**
- * 
+ * Remark: the program handles multiallelic sites, which are common in TRGT.
  */
 public class DeNovoRateTrgt {
     
@@ -44,7 +44,7 @@ public class DeNovoRateTrgt {
             // Collecting the ALTs of the child
             tokens=strChild.split("\t"); chr=tokens[0]; pos=tokens[1]; ref=tokens[3]; alt=tokens[4];
             if (alt.equals(".")) { 
-                // Not ALT in the child
+                // Not ALT in the child: not counted.
                 strChild=brChild.readLine(); str1=br1.readLine(); str2=br2.readLine(); 
                 continue;
             }
