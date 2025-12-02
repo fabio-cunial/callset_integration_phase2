@@ -65,7 +65,7 @@ public class BuildKanpigHapVcf {
         
         boolean debugModeFlag;
         int i, j;
-        int lastDistinctHap, idGenerator, pos, refLength, altLength, svtype, lastRecord, nRecords;
+        int lastDistinctHap, idGenerator, pos, refLength, altLength, svtype, lastRecord, nRecords, sum;
         int refFirst, refLast;  // Zero-based, inclusive.
         long nOverlaps, nOverlapsTolerated;
         String str1, str2, refChrom, chunkID, refSequence;
@@ -236,6 +236,12 @@ public class BuildKanpigHapVcf {
                     distinctHaps[i]=tmpHap;
                 }
                 else distinctHaps[lastDistinctHap].count++;
+            }
+            sum=0;
+            for (i=0; i<=lastDistinctHap; i++) sum+=distinctHaps[i].count;
+            if (sum!=2*N_SAMPLES) {
+                System.err.println("ERROR: the instances of the distinct haplotypes are "+sum+" != "+(2*N_SAMPLES)+"=2*N_SAMPLES");
+                System.exit(1);
             }
             System.err.println("Distinct haps: "+(lastDistinctHap+1));
             
