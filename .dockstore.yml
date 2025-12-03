@@ -505,3 +505,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/CollapseHapsVcf.wdl
   testParameterFiles:
+- name: SV_Integration_Workpackage8_Prime
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_Workpackage8_Prime.wdl
+  testParameterFiles:
