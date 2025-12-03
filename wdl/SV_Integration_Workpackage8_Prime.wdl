@@ -127,7 +127,7 @@ task Impl {
         bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
         N_SAMPLES=$(wc -l < samples.txt)
         MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
-        MIN_N_SAMPLES=$(printf "%d" ${MIN_N_SAMPLES})
+        MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
         mkdir ./infrequent/
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
         ${TIME_COMMAND} bcftools +split --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --samples-file samples.txt --output-type b --output ./infrequent/ in.bcf &
