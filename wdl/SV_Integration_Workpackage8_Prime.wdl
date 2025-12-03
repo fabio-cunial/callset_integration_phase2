@@ -48,15 +48,17 @@ workflow SV_Integration_Workpackage8_Prime {
 # Remark: this should probably be parallelized by chromosome in the final
 # version.
 #
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, HDD:
 #
 # TOOL                              CPU     RAM     TIME
-# bcftools view b                   200%    600M    15m
+# bcftools view b                   200%    600M    18m
 # bcftools query                    100%    600M    3m
 # bcftools annotate                 100%    1G      15m
-# bcftools view --drop-genotypes    100%    500M    3m
-# bcftools +split                   100%    500M    3m
+# bcftools view --drop-genotypes    100%    500M    16m
+# bcftools +split                   ???????????????????
 # bcftools view --drop-genotypes    100%    15M     10s
+#
+# Disk usage: 
 #
 task Impl {
     input {
@@ -76,7 +78,7 @@ task Impl {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 10*ceil(size(cohort_truvari_vcf_gz,"GB"))
+    Int disk_size_gb = 20*ceil(size(cohort_truvari_vcf_gz,"GB"))
     
     command <<<
         set -euxo pipefail
@@ -129,11 +131,22 @@ task Impl {
         MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
         MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
         mkdir ./infrequent/
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
-        ${TIME_COMMAND} bcftools +split --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --samples-file samples.txt --output-type b --output ./infrequent/ in.bcf &
-        wait
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf
         ${TIME_COMMAND} bcftools index frequent.bcf
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ./frequent.'bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading frequent BCF. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                rm -f ./frequent.bcf*
+                break
+            fi
+        done
+        df -h
+        ${TIME_COMMAND} bcftools +split --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --samples-file samples.txt --output-type b --output ./infrequent/ in.bcf
         rm -f in.bcf
+        df -h
         
         # Formatting the infrequent BCFs
         ls ./infrequent/*.bcf > infrequent_files.txt
@@ -143,12 +156,10 @@ task Impl {
             FormatFiles ${CHUNK_FILE} &
         done
         wait
-        
-        # Uploading
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ./frequent.'bcf*' './infrequent/*_infrequent.bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp './infrequent/*_infrequent.bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading frequent and infrequent VCFs. Trying again..."
+                echo "Error uploading frequent and infrequent BCFs. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
             else
                 break
