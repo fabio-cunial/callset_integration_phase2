@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage9.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage8_Prime.wdl
 java -jar ${WOMTOOL_PATH} validate -l CollapseHapsVcf.wdl
 java -jar ${WOMTOOL_PATH} validate -l Trgt2Kanpig.wdl
