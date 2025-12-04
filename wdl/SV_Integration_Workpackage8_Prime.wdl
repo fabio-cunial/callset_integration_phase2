@@ -2,13 +2,12 @@ version 1.0
 
 # Transforms `cohort_truvari_vcf_gz` into the following BCFs:
 # - Frequent: the subset of all records that occur in at least the specified 
-#   fraction of all samples.
-# - Infrequent: a single BCF per sample, containing all and only the records
-#   that occur in the sample and that occur in less than the specified 
-#   fraction of all samples.
+#   fraction of all samples. This BCF has no FORMAT and SAMPLE columns.
+# - Infrequent: the subset of all records that occur in less than the specified 
+#   fraction of all samples. This BCF has all the original SAMPLE columns.
 # Every record in every BCF above has a globally unique integer ID (this is
 # necessary for kanpig downstream), and an INFO field that counts the number of
-# samples it occurs in, but it does not have FORMAT and SAMPLE columns.
+# samples it occurs in.
 #
 # Remark: this is a temporary step to go from `SV_Integration_Workpackage8.wdl`
 # to personalized-VCF re-genotyping. It should eventually be merged with

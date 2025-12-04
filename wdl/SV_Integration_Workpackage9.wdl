@@ -1,9 +1,9 @@
 version 1.0
 
 
-# Re-genotypes a personalized inter-sample VCF using the BAM of every sample,
-# and partitions the result into ~100 pieces to run bcftools merge over all
-# samples on parallel chunks.
+# Re-genotypes a personalized cohort VCF using the BAM of each sample, and
+# partitions the result into ~100 pieces to run bcftools merge over all samples
+# on parallel chunks.
 #
 workflow SV_Integration_Workpackage9 {
     input {
@@ -45,10 +45,13 @@ workflow SV_Integration_Workpackage9 {
 }
 
 
-# Performance on 10'070 samples, 15x, GRCh38:
+# Performance on 12'680 samples, 15x, GRCh38, 8 logical cores:
 #
-# TOOL          CPU     RAM     TIME
-# kanpig        700%    2.5G    6m
+# TOOL                      CPU     RAM     TIME
+# bcftools view --samples                   3m
+# bcftools concat           600%    34M     3s
+# kanpig                    400%    500M    12m
+# bcftools sort             100%    800M    20m
 #
 task Impl {
     input {
