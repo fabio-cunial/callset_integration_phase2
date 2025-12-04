@@ -112,6 +112,7 @@ task Impl {
                     break
                 fi
             done
+            touch ${SAMPLE_ID}_aligned.bam.bai
         }
         
         
@@ -128,7 +129,6 @@ task Impl {
             local SAMPLE_ID=$1
             local SEX=$2
 
-            touch ${ALIGNMENTS_BAM}.bai
             if [ ${SEX} == "M" ]; then
                 PLOIDY_BED=$(echo ~{ploidy_bed_male})
             else
