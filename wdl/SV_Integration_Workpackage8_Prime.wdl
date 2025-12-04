@@ -131,7 +131,7 @@ task Impl {
         MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
         MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --output-type b in.bcf > infrequent.bcf &
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf > infrequent.bcf &
         wait
         ${TIME_COMMAND} bcftools index frequent.bcf &
         ${TIME_COMMAND} bcftools index infrequent.bcf &
