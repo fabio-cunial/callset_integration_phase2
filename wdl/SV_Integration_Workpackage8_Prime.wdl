@@ -130,9 +130,13 @@ task Impl {
         N_SAMPLES=$(wc -l < samples.txt)
         MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
         MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
-        mkdir ./infrequent/
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf
-        ${TIME_COMMAND} bcftools index frequent.bcf
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --output-type b in.bcf > infrequent.bcf &
+        wait
+        ${TIME_COMMAND} bcftools index frequent.bcf &
+        ${TIME_COMMAND} bcftools index infrequent.bcf &
+        wait
+        df -h
         while : ; do
             TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ./frequent.'bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
@@ -144,9 +148,10 @@ task Impl {
             fi
         done
         df -h
-        ${TIME_COMMAND} bcftools +split --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES} --samples-file samples.txt --output-type b --output ./infrequent/ in.bcf
-        rm -f in.bcf
+        mkdir ./infrequent/
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output ./infrequent/ infrequent.bcf
         df -h
+        rm -f infrequent.bcf
         
         # Formatting the infrequent BCFs
         ls ./infrequent/*.bcf > infrequent_files.txt
