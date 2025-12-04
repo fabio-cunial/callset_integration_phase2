@@ -149,7 +149,7 @@ task SeparateFrequentInfrequent {
     
     output {
         File infrequent_bcf = "infrequent.bcf"
-        File infrequent_csi = "infrequent.csi"
+        File infrequent_csi = "infrequent.bcf.csi"
         Array[File] samples_files = glob("chunk_*")
     }
     runtime {
