@@ -45,13 +45,21 @@ workflow SV_Integration_Workpackage9 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, 8 logical cores:
+# Performance on 12'680 samples, 15x, GRCh38, 8 logical cores, 8GB RAM:
 #
 # TOOL                      CPU     RAM     TIME
 # bcftools view --samples                   3m
 # bcftools concat           600%    34M     3s
 # kanpig                    400%    500M    3m
 # bcftools sort             100%    800M    40s
+#
+# Performance on 12'680 samples, 30x, GRCh38, 16 logical cores, 16GB RAM:
+#
+# TOOL                      CPU     RAM     TIME
+# bcftools view --samples                   3m                
+# bcftools concat           900%    50M     3s
+# kanpig                    100%    1G      3m
+# bcftools sort             100%    800M    20s
 #
 task Impl {
     input {
@@ -71,6 +79,7 @@ task Impl {
         Int disk_size_gb = 50
     }
     parameter_meta {
+        disk_size_gb: "50GB is enough for most 15x samples, but sometimes it is not sufficient. 200GB is enough for all 30x samples."
     }
     
     String docker_dir = "/callset_integration"
