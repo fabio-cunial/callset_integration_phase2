@@ -50,8 +50,8 @@ workflow SV_Integration_Workpackage9 {
 # TOOL                      CPU     RAM     TIME
 # bcftools view --samples                   3m
 # bcftools concat           600%    34M     3s
-# kanpig                    400%    500M    12m
-# bcftools sort             100%    800M    20m
+# kanpig                    400%    500M    3m
+# bcftools sort             100%    800M    40s
 #
 task Impl {
     input {
@@ -82,7 +82,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export RUST_BACKTRACE="full"
