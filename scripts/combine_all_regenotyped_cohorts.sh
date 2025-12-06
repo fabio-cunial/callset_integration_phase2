@@ -67,3 +67,5 @@ gsutil -m cp ${REMOTE_INPUT_DIR_CONTROLS_15X}/'*.bcf*' ${REMOTE_OUTPUT_DIR}/
 for SAMPLE_ID in ${CONTROL_30X_SAMPLES_TO_COPY}; do
     gsutil -m cp ${REMOTE_INPUT_DIR_CONTROLS_30X}/${SAMPLE_ID}_'*.bcf*' ${REMOTE_OUTPUT_DIR}/
 done
+
+# It is now safe to remove the input directories

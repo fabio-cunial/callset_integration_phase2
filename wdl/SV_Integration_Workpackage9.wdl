@@ -197,7 +197,7 @@ task Impl {
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
-            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_chunk_0.vcf.gz && echo "" || echo "ERROR")
+            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_chunk_0.bcf && echo "" || echo "ERROR")
             if [ ${TEST} = "ERROR" ]; then
                 # Proceeding only if the sample has not already been regenotyped
                 LocalizeSample ${SAMPLE_ID} ${LINE}
