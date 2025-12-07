@@ -1,8 +1,8 @@
 version 1.0
 
 
-# Merging by ID the re-genotyped personalized BCFs of all samples, in a given 
-# chromosome chunk.
+# Merges by ID the re-genotyped personalized BCFs of all samples, limited to a
+# given chromosome chunk. Handles samples that occur in multiple centers.
 #
 workflow SV_Integration_Workpackage10 {
     input {
@@ -108,37 +108,37 @@ task Impl {
         GSUTIL_DELAY_S="600"
 
         
-        # Checking that every input dataset has the expected number of samples
+        # Ensuring that every input dataset has the expected number of samples
         # in the chunk.
         N_FILES=$(gsutil ls ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
             echo "ERROR: BI has ${N_FILES} files != ~{n_expected_samples_bi}"
-            exit
+            exit 1
         fi
         N_FILES=$(gsutil ls ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
             echo "ERROR: HA has ${N_FILES} files != ~{n_expected_samples_ha}"
-            exit
+            exit 1
         fi
         N_FILES=$(gsutil ls ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
             echo "ERROR: BCM has ${N_FILES} files != ~{n_expected_samples_bcm}"
-            exit
+            exit 1
         fi
         N_FILES=$(gsutil ls ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
             echo "ERROR: UW has ${N_FILES} files != ~{n_expected_samples_uw}"
-            exit
+            exit 1
         fi
         N_FILES=$(gsutil ls ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
             echo "ERROR: CONTROLS_15X has ${N_FILES} files != ~{n_expected_samples_controls_15x}"
-            exit
+            exit 1
         fi
         N_FILES=$(gsutil ls ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf | wc -l)
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
             echo "ERROR: CONTROLS_30X has ${N_FILES} files != ~{n_expected_samples_controls_30x}"
-            exit
+            exit 1
         fi
         
         # Localizing all the samples for the given chunk, and handling samples
@@ -152,7 +152,7 @@ task Impl {
             echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
             echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
         done < bi_samples_to_prefer_over_ha.txt
-        cat list.txt | gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp -I ./input_bcfs/
+        cat list.txt | gsutil -m cp -I ./input_bcfs/
         gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
