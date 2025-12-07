@@ -146,17 +146,21 @@ task Impl {
         mkdir ./input_bcfs/
         gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        for SAMPLE_ID in ~{bi_samples_to_prefer_over_ha}; do
-            gsutil -m cp ~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        done
+        echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
+        rm -f list.txt
+        while read SAMPLE_ID; do
+            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
+            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
+        done < bi_samples_to_prefer_over_ha.txt
+        cat list.txt | gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp -I ./input_bcfs/
         gsutil -m cp ~{remote_indir_uw}/'*.bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_bcm}/'*.bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_controls_15x}/'*.bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_controls_30x}/'*.bcf*' ./input_bcfs/
         N_DOWNLOADED_SAMPLES=$(ls ./input_bcfs/*_chunk_~{chunk_id}.bcf | wc -l)
         N_SAMPLES=$(cat ~{sample_ids} | wc -l)
-        if [ ${N_DOWNLOADED_SAMPLES} -ne ${N_SAMPLES} ]; then
-            echo "Error: the number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is different from the number of samples specified (${N_SAMPLES})."
+        if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
+            echo "Error: the number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
             exit 1
         fi
         df -h
