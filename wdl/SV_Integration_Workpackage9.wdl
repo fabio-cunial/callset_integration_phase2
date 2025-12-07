@@ -79,7 +79,7 @@ task Impl {
         Int disk_size_gb = 50
     }
     parameter_meta {
-        disk_size_gb: "50GB is enough for most 15x samples, but sometimes it is not sufficient. 200GB is enough for all 30x samples."
+        disk_size_gb: "50GB is enough for many 15x samples, but for ~1500 samples it is not sufficient. 200GB is enough for all 15x and 30x samples."
     }
     
     String docker_dir = "/callset_integration"
