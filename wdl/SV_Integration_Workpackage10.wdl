@@ -63,7 +63,7 @@ workflow SV_Integration_Workpackage10 {
 # TOOL               CPU     RAM     TIME
 # bcftools merge     120%    23G     30m
 #
-# Disk usage of all input files of chunk_0: 74G
+# Disk usage of all input files of chunk 0: 74G
 # Peak disk usage: ????????
 #
 task Impl {
@@ -86,7 +86,7 @@ task Impl {
         Int n_expected_samples_controls_15x
         Int n_expected_samples_controls_30x
         
-        Int n_files_per_merge = 1000
+        Int n_files_per_merge = 500
         String remote_outdir
         
         Int n_cpu = 16
@@ -147,18 +147,18 @@ task Impl {
         # Localizing all the samples for the given chunk, and handling samples
         # that occur in multiple input datasets.
         mkdir ./input_bcfs/
-        #gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        #gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        #echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
-        #rm -f list.txt
-        #while read SAMPLE_ID; do
-        #    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
-        #    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
-        #done < bi_samples_to_prefer_over_ha.txt
-        #cat list.txt | gsutil -m cp -I ./input_bcfs/
-        #gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        #gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        #gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
+        rm -f list.txt
+        while read SAMPLE_ID; do
+            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
+            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
+        done < bi_samples_to_prefer_over_ha.txt
+        cat list.txt | gsutil -m cp -I ./input_bcfs/
+        gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         N_DOWNLOADED_SAMPLES=$(ls ./input_bcfs/*_chunk_~{chunk_id}.bcf | wc -l)
         N_SAMPLES=$(cat ~{sample_ids} | wc -l)
