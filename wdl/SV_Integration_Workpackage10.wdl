@@ -167,6 +167,7 @@ task Impl {
         
         # Merging records by ID, since the records in every BCF originate from
         # the same cohort BCF, which had distinct IDs.
+        rm -f list.txt
         while read SAMPLE_ID; do
             echo ./input_bcfs/${SAMPLE_ID}_chunk_~{chunk_id}.bcf >> list.txt
         done < ~{sample_ids}
