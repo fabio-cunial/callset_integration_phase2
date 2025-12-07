@@ -89,7 +89,7 @@ task Impl {
         
         Int n_cpu = 16
         Int ram_size_gb = 128
-        Int disk_size_gb = 50
+        Int disk_size_gb = 200
     }
     parameter_meta {
     }
@@ -153,10 +153,10 @@ task Impl {
             echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
         done < bi_samples_to_prefer_over_ha.txt
         cat list.txt | gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp -I ./input_bcfs/
-        gsutil -m cp ~{remote_indir_uw}/'*.bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_bcm}/'*.bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_controls_15x}/'*.bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_controls_30x}/'*.bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        gsutil -m cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         N_DOWNLOADED_SAMPLES=$(ls ./input_bcfs/*_chunk_~{chunk_id}.bcf | wc -l)
         N_SAMPLES=$(cat ~{sample_ids} | wc -l)
         if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
