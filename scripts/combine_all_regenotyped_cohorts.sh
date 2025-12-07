@@ -2,6 +2,11 @@
 #
 # Total samples in output: 12680
 #
+BI_BUCKET="gs://"
+HA_BUCKET="gs://"
+BCM_BUCKET="gs://"
+UW_BUCKET="gs://"
+
 REMOTE_OUTPUT_DIR="${BI_BUCKET}/scratch/cunial_intersample_vcf/v2/workpackage_9_all_centers"
 
 REMOTE_INPUT_DIR_BI="${BI_BUCKET}/scratch/cunial_intersample_vcf/v2/workpackage_9"
