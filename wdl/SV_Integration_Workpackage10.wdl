@@ -63,7 +63,8 @@ workflow SV_Integration_Workpackage10 {
 # TOOL               CPU     RAM     TIME
 # bcftools merge     120%    23G     30m
 #
-# Peak disk usage: ??????
+# Disk usage of all input files of chunk_0: 74G
+# Peak disk usage: ????????
 #
 task Impl {
     input {
@@ -85,6 +86,7 @@ task Impl {
         Int n_expected_samples_controls_15x
         Int n_expected_samples_controls_30x
         
+        Int n_files_per_merge = 1000
         String remote_outdir
         
         Int n_cpu = 16
@@ -92,6 +94,7 @@ task Impl {
         Int disk_size_gb = 200
     }
     parameter_meta {
+        n_files_per_merge: "Number of BCFs to be merged in the first of a two-step bcftools merge."
     }
     
     String docker_dir = "/callset_integration"
@@ -144,18 +147,18 @@ task Impl {
         # Localizing all the samples for the given chunk, and handling samples
         # that occur in multiple input datasets.
         mkdir ./input_bcfs/
-        gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
-        rm -f list.txt
-        while read SAMPLE_ID; do
-            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
-            echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
-        done < bi_samples_to_prefer_over_ha.txt
-        cat list.txt | gsutil -m cp -I ./input_bcfs/
-        gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
-        gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        #gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        #gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        #echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
+        #rm -f list.txt
+        #while read SAMPLE_ID; do
+        #    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf" >> list.txt
+        #    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.bcf.csi" >> list.txt
+        #done < bi_samples_to_prefer_over_ha.txt
+        #cat list.txt | gsutil -m cp -I ./input_bcfs/
+        #gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        #gsutil -m cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
+        #gsutil -m cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         N_DOWNLOADED_SAMPLES=$(ls ./input_bcfs/*_chunk_~{chunk_id}.bcf | wc -l)
         N_SAMPLES=$(cat ~{sample_ids} | wc -l)
@@ -171,8 +174,19 @@ task Impl {
         while read SAMPLE_ID; do
             echo ./input_bcfs/${SAMPLE_ID}_chunk_~{chunk_id}.bcf >> list.txt
         done < ~{sample_ids}
+        split -l ~{n_files_per_merge} -d -a 4 list.txt list_
+        for LIST_FILE in $(ls list_* | sort -V); do
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type b --file-list ${LIST_FILE} > ${LIST_FILE}.bcf
+            bcftools index ${LIST_FILE}.bcf
+            df -h
+            while read INPUT_BCF; do
+                rm -f ${INPUT_BCF}*
+            done < ${LIST_FILE}
+        done
+        ls list_*.bcf > list.txt
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type b --file-list list.txt > chunk_~{chunk_id}.bcf
         bcftools index chunk_~{chunk_id}.bcf
+        df -h
         ls -laht
         
         # Uploading
