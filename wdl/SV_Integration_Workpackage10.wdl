@@ -115,7 +115,7 @@ task Impl {
         
         # Ensuring that every input dataset has the expected number of samples
         # in the chunk.
-        gsutil ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf > bi_files.txt
+        gsutil ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > bi_files.txt
         N_FILES=$(wc -l < bi_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
@@ -124,7 +124,7 @@ task Impl {
         fi
         head -n ${N_FILES} bi_files.txt >> all_remote_files.txt
         
-        gsutil ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf > ha_files.txt
+        gsutil ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > ha_files.txt
         N_FILES=$(wc -l < ha_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
@@ -133,7 +133,7 @@ task Impl {
         fi
         head -n ${N_FILES} ha_files.txt >> all_remote_files.txt
         
-        gsutil ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf > bcm_files.txt
+        gsutil ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > bcm_files.txt
         N_FILES=$(wc -l < bcm_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
@@ -142,7 +142,7 @@ task Impl {
         fi
         head -n ${N_FILES} bcm_files.txt >> all_remote_files.txt
         
-        gsutil ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf > uw_files.txt
+        gsutil ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
         N_FILES=$(wc -l < uw_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
@@ -151,7 +151,7 @@ task Impl {
         fi
         head -n ${N_FILES} uw_files.txt >> all_remote_files.txt
         
-        gsutil ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf > control_15x_files.txt
+        gsutil ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
         N_FILES=$(wc -l < control_15x_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
@@ -160,7 +160,7 @@ task Impl {
         fi
         head -n ${N_FILES} control_15x_files.txt >> all_remote_files.txt
         
-        gsutil ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf > control_30x_files.txt
+        gsutil ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
         N_FILES=$(wc -l < control_30x_files.txt)
         N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
