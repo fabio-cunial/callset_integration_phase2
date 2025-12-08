@@ -94,7 +94,7 @@ task Impl {
         Int disk_size_gb = 100
     }
     parameter_meta {
-        n_cpu: "The main part that takes advantage of multiple cores is file download."
+        n_cpu: "The main part that takes advantage of multiple cores is file download (which takes ~1h with 16 logical cores)."
         n_files_per_merge: "Number of BCFs to be merged in the first level of a two-step bcftools merge."
     }
     
@@ -209,6 +209,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 3
     }
 }
