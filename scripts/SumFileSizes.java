@@ -24,8 +24,10 @@ public class SumFileSizes {
         br = new BufferedReader(new FileReader(GSUTIL_LS_FILE));
         str=br.readLine(); sum=0L;
         while (str!=null) {
-            p=str.indexOf(" ");
-            sum+=Long.parseLong(str.substring(0,p));
+            if (str.length()>0) {
+                p=str.indexOf(" ");
+                sum+=Long.parseLong(str.substring(0,p));
+            }
             str=br.readLine();
         }
         br.close();
