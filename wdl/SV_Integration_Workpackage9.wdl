@@ -112,7 +112,7 @@ task Impl {
             AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
-            BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | cut -w -f 2)
+            BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | tr -s ' ' | cut -d ' ' -f 2)
             BAM_GB=${BAM_GB%.*}
             SLACK_GB="5"
             BAM_GB=$(( ${BAM_GB} + ${SLACK_GB} ))
