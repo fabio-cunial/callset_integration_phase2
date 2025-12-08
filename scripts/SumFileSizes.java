@@ -3,7 +3,8 @@ import java.io.*;
 
 
 /**
- * 
+ * Returns the sum of all file sizes printed by `gsutil ls -l` (assumed to be in
+ * bytes) as an integer number of GBs (ceil).
  */
 public class SumFileSizes {
     
