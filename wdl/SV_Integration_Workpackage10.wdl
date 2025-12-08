@@ -94,8 +94,9 @@ task Impl {
         Int disk_size_gb = 200
     }
     parameter_meta {
-        n_cpu: "The main part that takes advantage of multiple cores is file download (which takes ~1h with 16 logical cores)."
         n_files_per_merge: "Number of BCFs to be merged in the first level of a two-step bcftools merge."
+        n_cpu: "The main part that takes advantage of multiple cores is file download (which takes ~1h with 16 logical cores)."
+        disk_size_gb: "The largest chunk on chr6 takes 500GB"
     }
     
     String docker_dir = "/callset_integration"
@@ -114,36 +115,58 @@ task Impl {
         
         # Ensuring that every input dataset has the expected number of samples
         # in the chunk.
-        N_FILES=$(gsutil ls ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf > bi_files.txt
+        N_FILES=$(wc -l < bi_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
             echo "ERROR: BI has ${N_FILES} files != ~{n_expected_samples_bi}"
             exit 1
         fi
-        N_FILES=$(gsutil ls ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf > ha_files.txt
+        N_FILES=$(wc -l < ha_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
             echo "ERROR: HA has ${N_FILES} files != ~{n_expected_samples_ha}"
             exit 1
         fi
-        N_FILES=$(gsutil ls ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf > bcm_files.txt
+        N_FILES=$(wc -l < bcm_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
             echo "ERROR: BCM has ${N_FILES} files != ~{n_expected_samples_bcm}"
             exit 1
         fi
-        N_FILES=$(gsutil ls ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf > uw_files.txt
+        N_FILES=$(wc -l < uw_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
             echo "ERROR: UW has ${N_FILES} files != ~{n_expected_samples_uw}"
             exit 1
         fi
-        N_FILES=$(gsutil ls ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf > control_15x_files.txt
+        N_FILES=$(wc -l < control_15x_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
             echo "ERROR: CONTROLS_15X has ${N_FILES} files != ~{n_expected_samples_controls_15x}"
             exit 1
         fi
-        N_FILES=$(gsutil ls ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf | wc -l)
+        gsutil ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf > control_30x_files.txt
+        N_FILES=$(wc -l < control_30x_files.txt)
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
             echo "ERROR: CONTROLS_30X has ${N_FILES} files != ~{n_expected_samples_controls_30x}"
             exit 1
         fi
+        
+        # Quitting immediately if the files are too large WRT the available
+        # disk. Otherwise the VM may get stuck forever, and this is even worse
+        # with preemption.
+        AVAILABLE_GB=$(df -h | grep "cromwell_root" | cut -w -f 4)
+        AVAILABLE_GB=${AVAILABLE_GB%G}
+        AVAILABLE_GB=${AVAILABLE_GB%.*}
+        cat *_files.txt > all_remote_files.txt
+        REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
+        SLACK_GB="5"
+        REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
+        if [ ${REMOTE_GB} -gt ${AVAILABLE_GB} ]; then
+            echo "ERROR: the remote files are too large for the allocated disk. Remote files: ${REMOTE_GB}GB. Disk available: ${AVAILABLE_GB}GB."
+            exit 1
+        fi
+        rm -f *_files.txt
         
         # - Localizing all the samples for the given chunk.
         # - Handling samples that occur in multiple input datasets.
@@ -209,6 +232,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 3
     }
 }
