@@ -109,7 +109,7 @@ task Impl {
             
             # Quitting immediately if the BAM is too large. Otherwise the VM
             # may get stuck forever, and this is even worse with preemption.
-            AVAILABLE_GB=$(df -h | grep "cromwell_root" | cut -w -f 4)
+            AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
             BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | cut -w -f 2)
