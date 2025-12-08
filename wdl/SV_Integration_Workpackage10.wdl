@@ -91,7 +91,7 @@ task Impl {
         
         Int n_cpu = 16
         Int ram_size_gb = 8
-        Int disk_size_gb = 100
+        Int disk_size_gb = 200
     }
     parameter_meta {
         n_cpu: "The main part that takes advantage of multiple cores is file download (which takes ~1h with 16 logical cores)."
@@ -145,8 +145,8 @@ task Impl {
             exit 1
         fi
         
-        # Localizing all the samples for the given chunk, and handling samples
-        # that occur in multiple input datasets.
+        # - Localizing all the samples for the given chunk.
+        # - Handling samples that occur in multiple input datasets.
         mkdir ./input_bcfs/
         gsutil -m cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         gsutil -m cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
@@ -209,6 +209,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 3
+        preemptible: 0
     }
 }
