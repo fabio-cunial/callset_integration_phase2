@@ -60,11 +60,11 @@ workflow SV_Integration_Workpackage10 {
 
 # Performance on 12'680 samples, 15x, GRCh38, one 10 MB chunk of chr6:
 #
-# TOOL               CPU     RAM     TIME
-# bcftools merge     120%    23G     30m
+# TOOL                          CPU     RAM     TIME
+# bcftools merge level 1        400%    1.5G    5s          // 100 files
+# bcftools merge level 2        300%    2.5G    30s         // 126 files
 #
-# Disk usage of all input files of chunk 0: 74G
-# Peak disk usage: ????????
+# Peak disk usage (all input files of chunk 0): 74G
 #
 task Impl {
     input {
@@ -86,15 +86,16 @@ task Impl {
         Int n_expected_samples_controls_15x
         Int n_expected_samples_controls_30x
         
-        Int n_files_per_merge = 500
+        Int n_files_per_merge = 100
         String remote_outdir
         
         Int n_cpu = 16
-        Int ram_size_gb = 128
-        Int disk_size_gb = 200
+        Int ram_size_gb = 8
+        Int disk_size_gb = 100
     }
     parameter_meta {
-        n_files_per_merge: "Number of BCFs to be merged in the first of a two-step bcftools merge."
+        n_cpu: "The main part that takes advantage of multiple cores is file download."
+        n_files_per_merge: "Number of BCFs to be merged in the first level of a two-step bcftools merge."
     }
     
     String docker_dir = "/callset_integration"
