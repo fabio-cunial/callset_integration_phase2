@@ -106,6 +106,22 @@ task Impl {
             
             ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
             ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+            
+            # Quitting immediately if the BAM is too large. Otherwise the VM
+            # may get stuck forever, and this is even worse with preemption.
+            AVAILABLE_GB=$(df -h | grep "cromwell_root" | cut -w -f 4)
+            AVAILABLE_GB=${AVAILABLE_GB%G}
+            AVAILABLE_GB=${AVAILABLE_GB%.*}
+            BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | cut -w -f 2)
+            BAM_GB=${BAM_GB%.*}
+            SLACK_GB="5"
+            BAM_GB=$(( ${BAM_GB} + ${SLACK_GB} ))
+            if [ ${BAM_GB} -gt ${AVAILABLE_GB} ]; then
+                echo "ERROR: the BAM is too large for the allocated disk. BAM size: ${BAM_GB}GB. Disk available: ${AVAILABLE_GB}GB."
+                exit 1
+            fi
+            
+            # Downloading
             while : ; do
                 TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
