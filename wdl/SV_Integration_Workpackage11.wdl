@@ -33,7 +33,7 @@ workflow SV_Integration_Workpackage11 {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                          CPU     RAM     TIME
-# bcftools concat               12%??     20M??     1h??
+# bcftools concat               17%     20M     10s
 # 
 task Impl {
     input {
@@ -45,7 +45,7 @@ task Impl {
         
         Int n_cpu = 2
         Int ram_size_gb = 4
-        Int disk_size_gb = 100
+        Int disk_size_gb = 50
     }
     parameter_meta {
     }
@@ -79,10 +79,12 @@ task Impl {
                 break
             fi
         done
+        df -h
         
         # Concatenating all the bcftools merge chunks
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > ~{chromosome_id}.bcf
         bcftools index ~{chromosome_id}.bcf
+        df -h
         
         # Uploading
         while : ; do
