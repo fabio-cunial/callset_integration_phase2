@@ -117,40 +117,57 @@ task Impl {
         # in the chunk.
         gsutil ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.bcf > bi_files.txt
         N_FILES=$(wc -l < bi_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
             echo "ERROR: BI has ${N_FILES} files != ~{n_expected_samples_bi}"
             exit 1
         fi
+        head -n ${N_FILES} bi_files.txt >> all_remote_files.txt
+        
         gsutil ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.bcf > ha_files.txt
         N_FILES=$(wc -l < ha_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
             echo "ERROR: HA has ${N_FILES} files != ~{n_expected_samples_ha}"
             exit 1
         fi
+        head -n ${N_FILES} ha_files.txt >> all_remote_files.txt
+        
         gsutil ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.bcf > bcm_files.txt
         N_FILES=$(wc -l < bcm_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
             echo "ERROR: BCM has ${N_FILES} files != ~{n_expected_samples_bcm}"
             exit 1
         fi
+        head -n ${N_FILES} bcm_files.txt >> all_remote_files.txt
+        
         gsutil ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf > uw_files.txt
         N_FILES=$(wc -l < uw_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
             echo "ERROR: UW has ${N_FILES} files != ~{n_expected_samples_uw}"
             exit 1
         fi
+        head -n ${N_FILES} uw_files.txt >> all_remote_files.txt
+        
         gsutil ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf > control_15x_files.txt
         N_FILES=$(wc -l < control_15x_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
             echo "ERROR: CONTROLS_15X has ${N_FILES} files != ~{n_expected_samples_controls_15x}"
             exit 1
         fi
+        head -n ${N_FILES} control_15x_files.txt >> all_remote_files.txt
+        
         gsutil ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf > control_30x_files.txt
         N_FILES=$(wc -l < control_30x_files.txt)
+        N_FILES=$(( ${N_FILES} - 1 ))
         if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
             echo "ERROR: CONTROLS_30X has ${N_FILES} files != ~{n_expected_samples_controls_30x}"
             exit 1
         fi
+        head -n ${N_FILES} control_30x_files.txt >> all_remote_files.txt
         
         # Failing immediately if the files are too large WRT the available
         # disk. Otherwise the VM may get stuck forever, and this is even worse
@@ -158,7 +175,6 @@ task Impl {
         AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
         AVAILABLE_GB=${AVAILABLE_GB%G}
         AVAILABLE_GB=${AVAILABLE_GB%.*}
-        cat *_files.txt > all_remote_files.txt
         REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
         SLACK_GB="5"
         REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
