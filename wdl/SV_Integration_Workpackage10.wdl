@@ -152,10 +152,10 @@ task Impl {
             exit 1
         fi
         
-        # Quitting immediately if the files are too large WRT the available
+        # Failing immediately if the files are too large WRT the available
         # disk. Otherwise the VM may get stuck forever, and this is even worse
         # with preemption.
-        AVAILABLE_GB=$(df -h | grep "cromwell_root" | cut -w -f 4)
+        AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
         AVAILABLE_GB=${AVAILABLE_GB%G}
         AVAILABLE_GB=${AVAILABLE_GB%.*}
         cat *_files.txt > all_remote_files.txt
@@ -163,7 +163,7 @@ task Impl {
         SLACK_GB="5"
         REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
         if [ ${REMOTE_GB} -gt ${AVAILABLE_GB} ]; then
-            echo "ERROR: the remote files are too large for the allocated disk. Remote files: ${REMOTE_GB}GB. Disk available: ${AVAILABLE_GB}GB."
+            echo "ERROR: the remote files are larger than the available disk space. Remote files + slack: ${REMOTE_GB}GB. Available disk: ${AVAILABLE_GB}GB."
             exit 1
         fi
         rm -f *_files.txt
