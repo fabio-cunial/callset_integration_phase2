@@ -46,6 +46,7 @@ task Impl {
         Int n_cpu = 2
         Int ram_size_gb = 4
         Int disk_size_gb = 50
+        Int preemptible_number = 3
     }
     parameter_meta {
     }
@@ -105,6 +106,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 3
+        preemptible: preemptible_number
     }
 }

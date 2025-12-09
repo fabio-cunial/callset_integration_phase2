@@ -90,12 +90,12 @@ task Impl {
         Int n_cpu = 6
         Int ram_size_gb = 8
         Int disk_size_gb = 256
+        Int preemptible_number = 4
     }
     parameter_meta {
     }
     
     String docker_dir = "/callset_integration"
-    Int compression_level = 1
     
     command <<<
         set -euxo pipefail
@@ -613,6 +613,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 4
+        preemptible: preemptible_number
     }
 }
