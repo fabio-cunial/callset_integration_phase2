@@ -5,77 +5,45 @@ workflow SV_Integration_PlotHwe {
     input {
         File intersample_bcf
         File intersample_csi
-        File tandem_track_bed
         
-        Int min_allele_count = 2
-        Int max_distance_bp = 10
+        Int sv_length_threshold = 50
+        Int smaller_or_larger = 1
+        Int min_discovery_count = 1268
+        
+        File tandem_track_bed
         
         File? plothw_r
     }
+    parameter_meta {
+        smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
+    }
     
     # All
-    call Bcf2Vcf {
+    call FilterByLengthAndType as all {
         input:
             bcf = intersample_bcf,
-            csi = intersample_csi
+            csi = intersample_csi,
+            sv_length_threshold = sv_length_threshold,
+            smaller_or_larger = smaller_or_larger,
+            sv_type = 0
     }
-    call Vcf2Counts as counts {
+    call Vcf2Counts as all_counts {
         input:
-            vcf_gz = Bcf2Vcf.out_vcf_gz,
-            tbi = Bcf2Vcf.out_tbi
+            vcf_gz = all.out_vcf_gz,
+            tbi = all.out_tbi
     }
-    call Counts2Plot as plot {
+    call Counts2Plot as all_plot {
         input:
-            gt_counts = counts.gt_counts,
+            gt_counts = all_counts.gt_counts,
             out_file_name = "all.png",
-            plothw_r = plothw_r
-    }
-    
-    # DEL
-    call FilterByLengthAndType as del {
-        input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
-            min_sv_length = 1,
-            sv_type = 1
-    }
-    call Vcf2Counts as del_counts {
-        input:
-            vcf_gz = del.out_vcf_gz,
-            tbi = del.out_tbi
-    }
-    call Counts2Plot as del_plot {
-        input:
-            gt_counts = del_counts.gt_counts,
-            out_file_name = "del.png",
-            plothw_r = plothw_r
-    }
-    
-    # INS
-    call FilterByLengthAndType as ins {
-        input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
-            min_sv_length = 1,
-            sv_type = 2
-    }
-    call Vcf2Counts as ins_counts {
-        input:
-            vcf_gz = ins.out_vcf_gz,
-            tbi = ins.out_tbi
-    }
-    call Counts2Plot as ins_plot {
-        input:
-            gt_counts = ins_counts.gt_counts,
-            out_file_name = "ins.png",
             plothw_r = plothw_r
     }
     
     # TRs
     call SelectTRs as trs {
         input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
+            bcf = all.out_vcf_gz,
+            csi = all.out_tbi,
             tandem_track_bed = tandem_track_bed,
             mode = 1
     }
@@ -94,8 +62,8 @@ workflow SV_Integration_PlotHwe {
     # Not TRs
     call SelectTRs as not_trs {
         input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
+            bcf = all.out_vcf_gz,
+            csi = all.out_tbi,
             tandem_track_bed = tandem_track_bed,
             mode = 0
     }
@@ -112,11 +80,12 @@ workflow SV_Integration_PlotHwe {
     }
     
     # Frequently discovered
-    call FilterByNDiscoverySamplesGeq as frequent {
+    call FilterByNDiscoverySamples as frequent {
         input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
-            min_count = 2
+            bcf = all.out_vcf_gz,
+            csi = all.out_tbi,
+            min_count = min_discovery_count,
+            smaller_or_larger = 1
     }
     call Vcf2Counts as frequent_counts {
         input:
@@ -126,16 +95,17 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as frequent_plot {
         input:
             gt_counts = frequent_counts.gt_counts,
-            out_file_name = "ac.png",
+            out_file_name = "frequent.png",
             plothw_r = plothw_r
     }
     
     # Infrequently discovered
-    call FilterByNDiscoverySamplesLt as infrequent {
+    call FilterByNDiscoverySamples as infrequent {
         input:
-            bcf = intersample_bcf,
-            csi = intersample_csi,
-            min_count = 2
+            bcf = all.out_vcf_gz,
+            csi = all.out_tbi,
+            min_count = min_discovery_count,
+            smaller_or_larger = 0
     }
     call Vcf2Counts as infrequent_counts {
         input:
@@ -145,7 +115,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as infrequent_plot {
         input:
             gt_counts = infrequent_counts.gt_counts,
-            out_file_name = "ac.png",
+            out_file_name = "infrequent.png",
             plothw_r = plothw_r
     }
     
@@ -203,13 +173,15 @@ task FilterByLengthAndType {
     input {
         File bcf
         File csi
-        Int min_sv_length
+        Int sv_length_threshold
+        Int smaller_or_larger
         Int sv_type
         
         Int n_cpu = 8
         Int ram_size_gb = 16
     }
     parameter_meta {
+        smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
         sv_type: "0=all, 1=del, 2=ins."
     }
     
@@ -227,12 +199,17 @@ task FilterByLengthAndType {
         for CHR in $(seq 1 22); do
             echo -e "chr${CHR}\t0\t3000000000" >> list.bed
         done
+        if [ ~{smaller_or_larger} -eq 0 ]; then
+            OPERATOR='<'
+        else
+            OPERATOR='>='
+        fi
         if [ ~{sv_type} -eq 0 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"DEL\" && ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="DEL" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"INS\" && ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="INS" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
         fi
         ${TIME_COMMAND} tabix -f filtered.vcf.gz
     >>>
@@ -259,7 +236,7 @@ task SelectBiallelic {
     input {
         File vcf_gz
         File vcf_tbi
-        Int max_distance_bp = 10
+        Int max_distance_bp
         
         Int n_cpu = 2
         Int ram_size_gb = 128
@@ -346,19 +323,21 @@ task FilterByAc {
 }
 
 
-# Keeps only records with >= a given number of samples in which they were
+# Keeps only records with >= or < a given number of samples in which they were
 # discovered.
 #
-task FilterByNDiscoverySamplesGeq {
+task FilterByNDiscoverySamples {
     input {
         File bcf
         File csi
-        Int min_count = 1268
+        Int min_count
+        Int smaller_or_larger
         
         Int n_cpu = 8
         Int ram_size_gb = 16
     }
     parameter_meta {
+        smaller_or_larger: "0: <min_count, 1: >=min_count"
     }
     
     String docker_dir = "/callset_integration"
@@ -374,56 +353,12 @@ task FilterByNDiscoverySamplesGeq {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
-        
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES>=~{min_count}" --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
-    >>>
-
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-    }
-
-    runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
-    }
-}
-
-
-# Keeps only records with < a given number of samples in which they were
-# discovered.
-#
-task FilterByNDiscoverySamplesLt {
-    input {
-        File bcf
-        File csi
-        Int min_count = 1268
-        
-        Int n_cpu = 8
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        
-        
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES<~{min_count}" --output-type z ~{bcf} > out.vcf.gz
+        if [ ~{smaller_or_larger} -eq 0 ]; then
+            OPERATOR='<'
+        else
+            OPERATOR='>='
+        fi
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES'${OPERATOR}~{min_count} --output-type z ~{bcf} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
