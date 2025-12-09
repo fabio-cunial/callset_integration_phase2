@@ -394,7 +394,7 @@ task SelectTRs {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 10*ceil(size(bcf,"GB"))
+    Int disk_size_gb = 50*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
