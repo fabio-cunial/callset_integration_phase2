@@ -3,7 +3,8 @@ import java.util.zip.*;
 
 
 /**
- * Remark: the program prints only records that occur in some sample.
+ * Remark: the program prints only records whose GT has two alleles and that
+ * are ALT in some sample. Missing characters in a GT are assumed to be zeros.
  */
 public class PlotHwFast {
     
@@ -41,7 +42,7 @@ public class PlotHwFast {
                 end=str.indexOf(FIELD_SEPARATOR,start);
                 if (end<0) end=length;
                 p=str.indexOf(GT_SEPARATOR,start);
-                if (p==start+3) {
+                if (p==start+3) {  // Only GTs with two alleles
                     onLeft=str.charAt(start)=='1';
                     onRight=str.charAt(start+2)=='1';
                     if (onLeft==onRight) {
@@ -52,7 +53,9 @@ public class PlotHwFast {
                 }
                 start=end+1;
             } while (start<length);
-            if (gt01+gt11>0) bwHwe.write(gt00+","+gt01+","+gt11+"\n");
+            if (gt01+gt11>0) {  // Only records that occur in some sample
+                bwHwe.write(gt00+","+gt01+","+gt11+"\n");
+            }
             nLines++;
             if (nLines%QUANTUM==0) System.err.println("Processed "+nLines+" lines in "+((double)(System.currentTimeMillis()-ms)/1000)+"s");
             str=br.readLine();

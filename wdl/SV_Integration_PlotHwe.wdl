@@ -1,10 +1,10 @@
 version 1.0
 
 #
-workflow PlotHweImpl {
+workflow SV_Integration_PlotHwe {
     input {
-        File intersample_vcf_gz
-        File intersample_tbi
+        File intersample_bcf
+        File intersample_csi
         File tandem_track_bed
         
         Int min_allele_count = 2
@@ -14,10 +14,15 @@ workflow PlotHweImpl {
     }
     
     # All
+    call Bcf2Vcf {
+        input:
+            bcf = intersample_bcf,
+            csi = intersample_csi
+    }
     call Vcf2Counts as counts {
         input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi
+            vcf_gz = Bcf2Vcf.out_vcf_gz,
+            tbi = Bcf2Vcf.out_tbi
     }
     call Counts2Plot as plot {
         input:
@@ -29,15 +34,15 @@ workflow PlotHweImpl {
     # DEL
     call FilterByLengthAndType as del {
         input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi,
+            bcf = intersample_bcf,
+            csi = intersample_csi,
             min_sv_length = 1,
             sv_type = 1
     }
     call Vcf2Counts as del_counts {
         input:
             vcf_gz = del.out_vcf_gz,
-            vcf_tbi = del.out_tbi
+            tbi = del.out_tbi
     }
     call Counts2Plot as del_plot {
         input:
@@ -49,15 +54,15 @@ workflow PlotHweImpl {
     # INS
     call FilterByLengthAndType as ins {
         input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi,
+            bcf = intersample_bcf,
+            csi = intersample_csi,
             min_sv_length = 1,
             sv_type = 2
     }
     call Vcf2Counts as ins_counts {
         input:
             vcf_gz = ins.out_vcf_gz,
-            vcf_tbi = ins.out_tbi
+            tbi = ins.out_tbi
     }
     call Counts2Plot as ins_plot {
         input:
@@ -69,23 +74,15 @@ workflow PlotHweImpl {
     # TRs
     call SelectTRs as trs {
         input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi,
+            bcf = intersample_bcf,
+            csi = intersample_csi,
             tandem_track_bed = tandem_track_bed,
             mode = 1
-    }
-    # Not TRs
-    call SelectTRs as not_trs {
-        input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi,
-            tandem_track_bed = tandem_track_bed,
-            mode = 0
     }
     call Vcf2Counts as trs_counts {
         input:
             vcf_gz = trs.out_vcf_gz,
-            vcf_tbi = trs.out_tbi
+            tbi = trs.out_tbi
     }
     call Counts2Plot as trs_plot {
         input:
@@ -93,10 +90,19 @@ workflow PlotHweImpl {
             out_file_name = "trs.png",
             plothw_r = plothw_r
     }
+    
+    # Not TRs
+    call SelectTRs as not_trs {
+        input:
+            bcf = intersample_bcf,
+            csi = intersample_csi,
+            tandem_track_bed = tandem_track_bed,
+            mode = 0
+    }
     call Vcf2Counts as not_trs_counts {
         input:
             vcf_gz = not_trs.out_vcf_gz,
-            vcf_tbi = not_trs.out_tbi
+            tbi = not_trs.out_tbi
     }
     call Counts2Plot as not_trs_plot {
         input:
@@ -105,27 +111,88 @@ workflow PlotHweImpl {
             plothw_r = plothw_r
     }
     
-    # Frequent
-    call FilterByAc as ac {
+    # Frequently discovered
+    call FilterByNDiscoverySamplesGeq as frequent {
         input:
-            vcf_gz = intersample_vcf_gz,
-            vcf_tbi = intersample_tbi,
+            bcf = intersample_bcf,
+            csi = intersample_csi,
             min_count = 2
     }
-    call Vcf2Counts as ac_counts {
+    call Vcf2Counts as frequent_counts {
         input:
-            vcf_gz = ac.out_vcf_gz,
-            vcf_tbi = ac.out_tbi
+            vcf_gz = frequent.out_vcf_gz,
+            tbi = frequent.out_tbi
     }
-    call Counts2Plot as ac_plot {
+    call Counts2Plot as frequent_plot {
         input:
-            gt_counts = ac_counts.gt_counts,
+            gt_counts = frequent_counts.gt_counts,
             out_file_name = "ac.png",
             plothw_r = plothw_r
     }
     
+    # Infrequently discovered
+    call FilterByNDiscoverySamplesLt as infrequent {
+        input:
+            bcf = intersample_bcf,
+            csi = intersample_csi,
+            min_count = 2
+    }
+    call Vcf2Counts as infrequent_counts {
+        input:
+            vcf_gz = infrequent.out_vcf_gz,
+            tbi = infrequent.out_tbi
+    }
+    call Counts2Plot as infrequent_plot {
+        input:
+            gt_counts = infrequent_counts.gt_counts,
+            out_file_name = "ac.png",
+            plothw_r = plothw_r
+    }
     
     output {
+    }
+}
+
+
+#
+task Bcf2Vcf {
+    input {
+        File bcf
+        File csi
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{bcf} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
     }
 }
 
@@ -134,8 +201,8 @@ workflow PlotHweImpl {
 #
 task FilterByLengthAndType {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         Int min_sv_length
         Int sv_type
         
@@ -147,7 +214,7 @@ task FilterByLengthAndType {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -161,11 +228,11 @@ task FilterByLengthAndType {
             echo -e "chr${CHR}\t0\t3000000000" >> list.bed
         done
         if [ ~{sv_type} -eq 0 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "ABS(SVLEN)>=~{min_sv_length}" ~{vcf_gz} --output-type z > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"DEL\" && ABS(SVLEN)>=~{min_sv_length}" ~{vcf_gz} --output-type z > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"DEL\" && ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"INS\" && ABS(SVLEN)>=~{min_sv_length}" ~{vcf_gz} --output-type z > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include "SVTYPE==\"INS\" && ABS(SVLEN)>=~{min_sv_length}" --output-type z ~{bcf} > filtered.vcf.gz
         fi
         ${TIME_COMMAND} tabix -f filtered.vcf.gz
     >>>
@@ -236,8 +303,8 @@ task SelectBiallelic {
 #
 task FilterByAc {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         Int min_count = 2
         
         Int n_cpu = 8
@@ -247,7 +314,7 @@ task FilterByAc {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -260,7 +327,7 @@ task FilterByAc {
         GSUTIL_DELAY_S="600"
         
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "AC>=~{min_count}" --output-type z ~{vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "AC>=~{min_count}" --output-type z ~{bcf} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
@@ -284,8 +351,8 @@ task FilterByAc {
 #
 task FilterByNDiscoverySamplesGeq {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         Int min_count = 1268
         
         Int n_cpu = 8
@@ -295,7 +362,7 @@ task FilterByNDiscoverySamplesGeq {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -308,7 +375,7 @@ task FilterByNDiscoverySamplesGeq {
         GSUTIL_DELAY_S="600"
         
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES>=~{min_count}" --output-type z ~{vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES>=~{min_count}" --output-type z ~{bcf} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
@@ -332,8 +399,8 @@ task FilterByNDiscoverySamplesGeq {
 #
 task FilterByNDiscoverySamplesLt {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         Int min_count = 1268
         
         Int n_cpu = 8
@@ -343,7 +410,7 @@ task FilterByNDiscoverySamplesLt {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -356,7 +423,7 @@ task FilterByNDiscoverySamplesLt {
         GSUTIL_DELAY_S="600"
         
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES<~{min_count}" --output-type z ~{vcf_gz} > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "N_DISCOVERY_SAMPLES<~{min_count}" --output-type z ~{bcf} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
@@ -379,8 +446,8 @@ task FilterByNDiscoverySamplesLt {
 #
 task SelectTRs {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         File tandem_track_bed
         Int mode
         
@@ -392,7 +459,7 @@ task SelectTRs {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 10*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 10*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -403,13 +470,13 @@ task SelectTRs {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        bcftools view --header-only ~{vcf_gz} > out.vcf
+        bcftools view --header-only ~{bcf} > out.vcf
         if [ ~{mode} -eq 1 ]; then
             INTERSECTION_MODE="-u"
         elif [ ~{mode} -eq 0 ]; then
             INTERSECTION_MODE="-v"
         fi
-        ${TIME_COMMAND} bedtools intersect -a ~{vcf_gz} -b ~{tandem_track_bed} ${INTERSECTION_MODE} >> out.vcf
+        ${TIME_COMMAND} bedtools intersect -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} >> out.vcf
         ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 2 out.vcf
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
@@ -435,7 +502,7 @@ task SelectTRs {
 task Vcf2Counts {
     input {
         File vcf_gz
-        File vcf_tbi
+        File tbi
         File? PlotHw_java
         
         Int n_cpu = 1
@@ -527,8 +594,8 @@ task Counts2Plot {
 #
 task FilterBySamples {
     input {
-        File vcf_gz
-        File vcf_tbi
+        File bcf
+        File csi
         File sample_ids
         
         Int n_cpu = 8
@@ -539,7 +606,7 @@ task FilterBySamples {
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -552,10 +619,10 @@ task FilterBySamples {
         GSUTIL_DELAY_S="600"
         
         cut -f 1 ~{sample_ids} | sort -V > desired_samples.txt
-        bcftools view --header-only ~{vcf_gz} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort -V > present_samples.txt
+        bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort -V > present_samples.txt
         comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
         date
-        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{vcf_gz} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z > out.vcf.gz
+        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z > out.vcf.gz
         date
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>

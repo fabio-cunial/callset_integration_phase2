@@ -137,3 +137,4 @@ RUN wget https://github.com/TimD1/vcfdist/archive/refs/tags/v${vcfdist_version}.
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
+COPY *.r .
