@@ -92,6 +92,7 @@ task Impl {
         Int n_cpu = 16
         Int ram_size_gb = 8
         Int disk_size_gb = 200
+        Int preemptible_number = 3
     }
     parameter_meta {
         n_files_per_merge: "Number of BCFs to be merged in the first level of a two-step bcftools merge."
@@ -248,6 +249,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: preemptible_number
     }
 }
