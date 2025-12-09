@@ -210,12 +210,14 @@ task Impl {
         done
         
         # Re-genotyping every sample assigned to this task
+        N_EXPECTED_GENOME_CHUNKS=$(wc -l < ~{split_for_bcftools_merge_csv})
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
-            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_chunk_0.bcf && echo "" || echo "ERROR")
-            if [ ${TEST} = "ERROR" ]; then
+            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_chunk_'*.bcf' > genome_chunks.txt && echo "" || echo "ERROR")
+            N_EXISTING_GENOME_CHUNKS=$(wc -l < genome_chunks.txt)
+            if [ ${TEST} = "ERROR" -o ${N_EXISTING_GENOME_CHUNKS} -ne ${N_EXPECTED_GENOME_CHUNKS} ]; then
                 # Proceeding only if the sample has not already been regenotyped
                 LocalizeSample ${SAMPLE_ID} ${LINE}
                 date
