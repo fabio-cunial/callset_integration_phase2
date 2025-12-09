@@ -77,6 +77,7 @@ task Impl {
         Int n_cpu = 8
         Int ram_size_gb = 8
         Int disk_size_gb = 50
+        Int preemptible_number = 3
     }
     parameter_meta {
         disk_size_gb: "50GB is enough for many 15x samples, but for ~1500 samples it is not sufficient. 200GB is enough for all 15x and 30x samples."
@@ -247,6 +248,6 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 3
+        preemptible: preemptible_number
     }
 }
