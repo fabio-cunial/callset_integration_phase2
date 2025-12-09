@@ -78,46 +78,25 @@ workflow SV_Integration_PlotHwe {
             out_file_name = "not_trs.png",
             plothw_r = plothw_r
     }
-    
-    # Frequently discovered
-    call FilterByNDiscoverySamples as frequent {
-        input:
-            bcf = all.out_vcf_gz,
-            csi = all.out_tbi,
-            min_count = min_discovery_count,
-            smaller_or_larger = 1
-    }
-    call Vcf2Counts as frequent_counts {
-        input:
-            vcf_gz = frequent.out_vcf_gz,
-            tbi = frequent.out_tbi
-    }
-    call Counts2Plot as frequent_plot {
-        input:
-            gt_counts = frequent_counts.gt_counts,
-            out_file_name = "frequent.png",
-            plothw_r = plothw_r
-    }
-    
-    # Infrequently discovered
-    call FilterByNDiscoverySamples as infrequent {
-        input:
-            bcf = all.out_vcf_gz,
-            csi = all.out_tbi,
-            min_count = min_discovery_count,
-            smaller_or_larger = 0
-    }
-    call Vcf2Counts as infrequent_counts {
-        input:
-            vcf_gz = infrequent.out_vcf_gz,
-            tbi = infrequent.out_tbi
-    }
-    call Counts2Plot as infrequent_plot {
-        input:
-            gt_counts = infrequent_counts.gt_counts,
-            out_file_name = "infrequent.png",
-            plothw_r = plothw_r
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     
     output {
     }
