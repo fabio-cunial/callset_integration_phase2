@@ -8,6 +8,7 @@ workflow SV_Integration_Workpackage7 {
     input {
         String chromosome_id
         File chunks_ids
+        String truvari_matching_parameters = "--refdist 500 --pctseq 0.95 --pctsize 0.95 --pctovl 0.0"
         Boolean use_bed
         
         String remote_indir
@@ -15,6 +16,7 @@ workflow SV_Integration_Workpackage7 {
     }
     parameter_meta {
         chunks_ids: "One chunk ID per line"
+        truvari_matching_parameters: "Truvari's definition of a match. The default string contains truvari's defaults."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
     }
@@ -23,6 +25,7 @@ workflow SV_Integration_Workpackage7 {
         input:
             chromosome_id = chromosome_id,
             chunks_ids = chunks_ids,
+            truvari_matching_parameters = truvari_matching_parameters,
             use_bed = use_bed,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir
@@ -44,6 +47,7 @@ task Impl {
     input {
         String chromosome_id
         File chunks_ids
+        String truvari_matching_parameters
         Boolean use_bed
         
         String remote_indir
@@ -164,7 +168,7 @@ task Impl {
             mv chunk_${CHUNK_ID}_annotated.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
             mv chunk_${CHUNK_ID}_annotated.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
             
-            ${TIME_COMMAND} truvari collapse --sizemin 0 --sizemax ${INFINITY} --keep maxqual --gt off ${BED_FLAGS} --input chunk_${CHUNK_ID}_in.vcf.gz --output chunk_${CHUNK_ID}_out.vcf
+            ${TIME_COMMAND} truvari collapse --sizemin 0 --sizemax ${INFINITY} --keep maxqual --gt off ~{truvari_matching_parameters} ${BED_FLAGS} --input chunk_${CHUNK_ID}_in.vcf.gz --output chunk_${CHUNK_ID}_out.vcf
             ls -laht
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf chunk_${CHUNK_ID}_in.vcf
         
