@@ -601,8 +601,8 @@ task FilterBySamples {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
-        cut -f 1 ~{sample_ids} | sort -V > desired_samples.txt
-        bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort -V > present_samples.txt
+        cut -f 1 ~{sample_ids} | sort > desired_samples.txt
+        bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
         comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
         date
         bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z > out.vcf.gz
