@@ -84,24 +84,24 @@ workflow SV_Integration_PlotHwe {
             plothw_r = plothw_r
     }
 
-    # Frequently discovered: all.
-    call FilterByNDiscoverySamples as frequent {
+    # Frequently discovered: biallelic.
+    call SelectBiallelic as biallelic {
         input:
-            bcf = all.out_vcf_gz,
-            csi = all.out_tbi,
+            vcf_gz = all.out_vcf_gz,
+            vcf_tbi = all.out_tbi,
+            max_distance_bp = max_distance_bp
+    }
+    call FilterByNDiscoverySamples as biallelic_frequent {
+        input:
+            bcf = biallelic.out_vcf_gz,
+            csi = biallelic.out_tbi,
             min_count = min_discovery_count,
             smaller_or_larger = 1
     }
-    call SelectBiallelic as frequent_biallelic {
-        input:
-            vcf_gz = frequent.out_vcf_gz,
-            vcf_tbi = frequent.out_tbi,
-            max_distance_bp = max_distance_bp
-    }
     call Vcf2Counts as frequent_counts {
         input:
-            vcf_gz = frequent_biallelic.out_vcf_gz,
-            tbi = frequent_biallelic.out_tbi
+            vcf_gz = biallelic_frequent.out_vcf_gz,
+            tbi = biallelic_frequent.out_tbi
     }
     call Counts2Plot as frequent_plot {
         input:
@@ -113,8 +113,8 @@ workflow SV_Integration_PlotHwe {
     scatter (i in range(length(ancestry_samples))) {
         call FilterBySamples as ancestry {
             input:
-                bcf = frequent_biallelic.out_vcf_gz,
-                csi = frequent_biallelic.out_tbi,
+                bcf = biallelic_frequent.out_vcf_gz,
+                csi = biallelic_frequent.out_tbi,
                 sample_ids = ancestry_samples[i]
         }
         call Vcf2Counts as ancestry_counts {
