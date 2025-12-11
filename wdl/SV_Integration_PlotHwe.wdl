@@ -9,6 +9,7 @@ workflow SV_Integration_PlotHwe {
         Int sv_length_threshold = 50
         Int smaller_or_larger = 1
         Int min_discovery_count = 1268
+        Int max_distance_bp = 100
         
         File tandem_track_bed
         
@@ -91,10 +92,16 @@ workflow SV_Integration_PlotHwe {
             min_count = min_discovery_count,
             smaller_or_larger = 1
     }
-    call Vcf2Counts as frequent_counts {
+    call SelectBiallelic as frequent_biallelic {
         input:
             vcf_gz = frequent.out_vcf_gz,
-            tbi = frequent.out_tbi
+            vcf_tbi = frequent.out_tbi,
+            max_distance_bp = max_distance_bp
+    }
+    call Vcf2Counts as frequent_counts {
+        input:
+            vcf_gz = frequent_biallelic.out_vcf_gz,
+            tbi = frequent_biallelic.out_tbi
     }
     call Counts2Plot as frequent_plot {
         input:
@@ -106,8 +113,8 @@ workflow SV_Integration_PlotHwe {
     scatter (i in range(length(ancestry_samples))) {
         call FilterBySamples as ancestry {
             input:
-                bcf = frequent.out_vcf_gz,
-                csi = frequent.out_tbi,
+                bcf = frequent_biallelic.out_vcf_gz,
+                csi = frequent_biallelic.out_tbi,
                 sample_ids = ancestry_samples[i]
         }
         call Vcf2Counts as ancestry_counts {
