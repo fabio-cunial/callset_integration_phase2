@@ -97,6 +97,15 @@ task Impl {
         ${TIME_COMMAND} tabix -f truvari_collapsed.vcf.gz
         rm -rf *_chunk_*
         df -h
+        while : ; do
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp 'truvari_collapsed.vcf.gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "Error uploading concatenated VCFs. Trying again..."
+                sleep ${GSUTIL_DELAY_S}
+            else
+                break
+            fi
+        done
         
         # Preparing the inter-sample VCF for kanpig
         bcftools view --header-only truvari_collapsed.vcf.gz > header.txt
@@ -113,7 +122,7 @@ task Impl {
         
         # Uploading
         while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp 'truvari_collapsed.vcf.gz*' 'truvari_collapsed_for_kanpig.vcf.gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp 'truvari_collapsed_for_kanpig.vcf.gz*' ~{remote_outdir}/ && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "Error uploading concatenated VCFs. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
