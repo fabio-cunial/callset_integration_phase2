@@ -183,6 +183,7 @@ task FilterByLengthAndType {
         else
             OPERATOR='>='
         fi
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} ~{bcf}
         if [ ~{sv_type} -eq 0 ]; then
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
