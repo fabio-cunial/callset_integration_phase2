@@ -384,14 +384,12 @@ task SelectTRs {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        bcftools view --header-only ~{bcf} > out.vcf
         if [ ~{mode} -eq 1 ]; then
             INTERSECTION_MODE="-u"
         elif [ ~{mode} -eq 0 ]; then
             INTERSECTION_MODE="-v"
         fi
-        ${TIME_COMMAND} bedtools intersect -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} >> out.vcf
-        ${TIME_COMMAND} bgzip -@ ${N_THREADS} --compress-level 2 out.vcf
+        ( bcftools view --header-only ~{bcf}; ${TIME_COMMAND} bedtools intersect -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} ) | bgzip --compress-level 2 > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
