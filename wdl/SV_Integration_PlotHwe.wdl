@@ -12,10 +12,14 @@ workflow SV_Integration_PlotHwe {
         
         File tandem_track_bed
         
+        Array[String] ancestry_name
+        Array[File] ancestry_samples
+        
         File? plothw_r
     }
     parameter_meta {
         smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
+        ancestry_samples: "A list of sample IDs for each ancestry."
     }
     
     # All
@@ -77,6 +81,27 @@ workflow SV_Integration_PlotHwe {
             gt_counts = not_trs_counts.gt_counts,
             out_file_name = "not_trs.png",
             plothw_r = plothw_r
+    }
+
+    # Ancestry
+    scatter (i in range(length(ancestry_samples))) {
+        call FilterBySamples as ancestry {
+            input:
+                bcf = all.out_vcf_gz,
+                csi = all.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_counts {
+            input:
+                vcf_gz = ancestry.out_vcf_gz,
+                tbi = ancestry.out_tbi
+        }
+        call Counts2Plot as ancestry_plot {
+            input:
+                gt_counts = ancestry_counts.gt_counts,
+                out_file_name = ancestry_name[i]+".png",
+                plothw_r = plothw_r
+        }
     }
 
 
