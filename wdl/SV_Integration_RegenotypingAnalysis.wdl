@@ -626,6 +626,8 @@ task Kanpig {
         String remote_outdir
         
         String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
+        String kanpig_docker = "fcunial/callset_integration_phase2_workpackages"
+        
         File reference_fa
         File reference_fai
         File ploidy_bed_male
@@ -697,7 +699,7 @@ task Kanpig {
         File out_flag = "out.txt"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: kanpig_docker
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
