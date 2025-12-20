@@ -16,8 +16,6 @@ workflow SV_Integration_Workpackage9 {
         File reference_fai
         File ploidy_bed_female
         File ploidy_bed_male
-        
-        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
@@ -36,8 +34,7 @@ workflow SV_Integration_Workpackage9 {
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             ploidy_bed_female = ploidy_bed_female,
-            ploidy_bed_male = ploidy_bed_male,
-            kanpig_params_cohort = kanpig_params_cohort
+            ploidy_bed_male = ploidy_bed_male
     }
     
     output {
@@ -72,7 +69,8 @@ task Impl {
         File reference_fai
         File ploidy_bed_female
         File ploidy_bed_male
-        String kanpig_params_cohort
+        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
+        String kanpig_docker = "fcunial/callset_integration_phase2_workpackages"
         
         Int n_cpu = 8
         Int ram_size_gb = 8
@@ -246,7 +244,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: kanpig_docker
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
