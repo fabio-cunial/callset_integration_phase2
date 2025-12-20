@@ -150,7 +150,7 @@ task Impl {
             head -n ${N_FILES} bcm_files.txt >> all_remote_files.txt
         fi
         
-        if [ ~{n_expected_samples_uw} ]; then
+        if [ ~{n_expected_samples_uw} -gt 0 ]; then
             gsutil ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
             N_FILES=$(wc -l < uw_files.txt)
             N_FILES=$(( ${N_FILES} - 1 ))
@@ -161,7 +161,7 @@ task Impl {
             head -n ${N_FILES} uw_files.txt >> all_remote_files.txt
         fi
         
-        if [ ~{n_expected_samples_controls_15x} ]; then
+        if [ ~{n_expected_samples_controls_15x} -gt 0 ]; then
             gsutil ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
             N_FILES=$(wc -l < control_15x_files.txt)
             N_FILES=$(( ${N_FILES} - 1 ))
@@ -172,7 +172,7 @@ task Impl {
             head -n ${N_FILES} control_15x_files.txt >> all_remote_files.txt
         fi
         
-        if [ ~{n_expected_samples_controls_30x} ]; then
+        if [ ~{n_expected_samples_controls_30x} -gt 0 ]; then
             gsutil ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.bcf | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
             N_FILES=$(wc -l < control_30x_files.txt)
             N_FILES=$(( ${N_FILES} - 1 ))
@@ -216,7 +216,7 @@ task Impl {
             done < bi_samples_to_prefer_over_ha.txt
             cat list.txt | gsutil -m cp -I ./input_bcfs/
         fi
-        if [ ~{n_expected_samples_uw} ]; then
+        if [ ~{n_expected_samples_uw} -gt 0 ]; then
             gsutil -m cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.'bcf*' ./input_bcfs/
         fi
         if [ ~{n_expected_samples_bcm} -gt 0 ]; then
