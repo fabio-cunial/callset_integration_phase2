@@ -412,7 +412,7 @@ task SelectBiallelic {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        EXTENSION=$(basename ${vcf_gz})
+        EXTENSION=$(basename ~{vcf_gz})
         EXTENSION=${EXTENSION#*.}
         if [ ${EXTENSION} = "bcf" ]; then
             ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{vcf_gz} > input.vcf.gz
