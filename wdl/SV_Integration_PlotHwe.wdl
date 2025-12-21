@@ -84,50 +84,24 @@ workflow SV_Integration_PlotHwe {
             plothw_r = plothw_r
     }
 
-    # Frequently discovered: biallelic.
-    call SelectBiallelic as biallelic {
+    # Frequently discovered
+    call FilterByNDiscoverySamples as frequent {
         input:
-            vcf_gz = all.out_vcf_gz,
-            vcf_tbi = all.out_tbi,
-            max_distance_bp = max_distance_bp
-    }
-    call FilterByNDiscoverySamples as biallelic_frequent {
-        input:
-            bcf = biallelic.out_vcf_gz,
-            csi = biallelic.out_tbi,
+            bcf = all.out_vcf_gz,
+            csi = all.out_tbi,
             min_count = min_discovery_count,
             smaller_or_larger = 1
     }
     call Vcf2Counts as frequent_counts {
         input:
-            vcf_gz = biallelic_frequent.out_vcf_gz,
-            tbi = biallelic_frequent.out_tbi
+            vcf_gz = frequent.out_vcf_gz,
+            tbi = frequent.out_tbi
     }
     call Counts2Plot as frequent_plot {
         input:
             gt_counts = frequent_counts.gt_counts,
             out_file_name = "frequent.png",
             plothw_r = plothw_r
-    }
-    # Frequently discovered: by ancestry.
-    scatter (i in range(length(ancestry_samples))) {
-        call FilterBySamples as ancestry {
-            input:
-                bcf = biallelic_frequent.out_vcf_gz,
-                csi = biallelic_frequent.out_tbi,
-                sample_ids = ancestry_samples[i]
-        }
-        call Vcf2Counts as ancestry_counts {
-            input:
-                vcf_gz = ancestry.out_vcf_gz,
-                tbi = ancestry.out_tbi
-        }
-        call Counts2Plot as ancestry_plot {
-            input:
-                gt_counts = ancestry_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_frequent.png",
-                plothw_r = plothw_r
-        }
     }
     
     # Infrequently discovered
@@ -150,31 +124,156 @@ workflow SV_Integration_PlotHwe {
             plothw_r = plothw_r
     }
 
-
-
-
-
-
+    # Frequently discovered: biallelic.
+    call SelectBiallelic as biallelic {
+        input:
+            vcf_gz = intersample_bcf,
+            vcf_tbi = intersample_csi,
+            max_distance_bp = max_distance_bp
+    }
+    call FilterByLengthAndType as biallelic_length {
+        input:
+            bcf = biallelic.out_vcf_gz,
+            csi = biallelic.out_tbi,
+            sv_length_threshold = sv_length_threshold,
+            smaller_or_larger = smaller_or_larger,
+            sv_type = 0
+    }
+    call FilterByNDiscoverySamples as biallelic_frequent {
+        input:
+            bcf = biallelic_length.out_vcf_gz,
+            csi = biallelic_length.out_tbi,
+            min_count = min_discovery_count,
+            smaller_or_larger = 1
+    }
+    call Vcf2Counts as biallelic_frequent_counts {
+        input:
+            vcf_gz = biallelic_frequent.out_vcf_gz,
+            tbi = biallelic_frequent.out_tbi
+    }
+    call Counts2Plot as biallelic_frequent_plot {
+        input:
+            gt_counts = biallelic_frequent_counts.gt_counts,
+            out_file_name = "biallelic_frequent.png",
+            plothw_r = plothw_r
+    }
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # All of the above, but by ancestry.
+    scatter (i in range(length(ancestry_samples))) {
+        # All
+        call FilterBySamples as ancestry_all {
+            input:
+                bcf = all.out_vcf_gz,
+                csi = all.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_all_counts {
+            input:
+                vcf_gz = ancestry_all.out_vcf_gz,
+                tbi = ancestry_all.out_tbi
+        }
+        call Counts2Plot as ancestry_all_plot {
+            input:
+                gt_counts = ancestry_all_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_all.png",
+                plothw_r = plothw_r
+        }
+        
+        # TRs
+        call FilterBySamples as ancestry_trs {
+            input:
+                bcf = trs.out_vcf_gz,
+                csi = trs.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_trs_counts {
+            input:
+                vcf_gz = ancestry_trs.out_vcf_gz,
+                tbi = ancestry_trs.out_tbi
+        }
+        call Counts2Plot as ancestry_trs_plot {
+            input:
+                gt_counts = ancestry_trs_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_trs.png",
+                plothw_r = plothw_r
+        }
+        
+        # Not TRs
+        call FilterBySamples as ancestry_not_trs {
+            input:
+                bcf = not_trs.out_vcf_gz,
+                csi = not_trs.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_not_trs_counts {
+            input:
+                vcf_gz = ancestry_not_trs.out_vcf_gz,
+                tbi = ancestry_not_trs.out_tbi
+        }
+        call Counts2Plot as ancestry_not_trs_plot {
+            input:
+                gt_counts = ancestry_not_trs_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_not_trs.png",
+                plothw_r = plothw_r
+        }
+        
+        # Frequently discovered
+        call FilterBySamples as ancestry_frequent {
+            input:
+                bcf = frequent.out_vcf_gz,
+                csi = frequent.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_frequent_counts {
+            input:
+                vcf_gz = ancestry_frequent.out_vcf_gz,
+                tbi = ancestry_frequent.out_tbi
+        }
+        call Counts2Plot as ancestry_frequent_plot {
+            input:
+                gt_counts = ancestry_frequent_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_frequent.png",
+                plothw_r = plothw_r
+        }
+        
+        # Infrequently discovered
+        call FilterBySamples as ancestry_infrequent {
+            input:
+                bcf = infrequent.out_vcf_gz,
+                csi = infrequent.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_infrequent_counts {
+            input:
+                vcf_gz = ancestry_infrequent.out_vcf_gz,
+                tbi = ancestry_infrequent.out_tbi
+        }
+        call Counts2Plot as ancestry_infrequent_plot {
+            input:
+                gt_counts = ancestry_infrequent_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_infrequent.png",
+                plothw_r = plothw_r
+        }
+        
+        # Frequently discovered: biallelic.
+        call FilterBySamples as ancestry_biallelic {
+            input:
+                bcf = biallelic_length.out_vcf_gz,
+                csi = biallelic_length.out_tbi,
+                sample_ids = ancestry_samples[i]
+        }
+        call Vcf2Counts as ancestry_biallelic_counts {
+            input:
+                vcf_gz = ancestry_biallelic.out_vcf_gz,
+                tbi = ancestry_biallelic.out_tbi
+        }
+        call Counts2Plot as ancestry_biallelic_plot {
+            input:
+                gt_counts = ancestry_biallelic_counts.gt_counts,
+                out_file_name = ancestry_name[i]+"_biallelic_frequent.png",
+                plothw_r = plothw_r
+        }
+    }
     
     output {
     }
@@ -289,6 +388,8 @@ task FilterByLengthAndType {
 # A biallelic call is assumed to be an isolated call with no neighbor within 
 # `max_distance_bp`.
 #
+# Remark: the task accepts both a VCF.GZ and a .BCF in input.
+#
 task SelectBiallelic {
     input {
         File vcf_gz
@@ -309,10 +410,20 @@ task SelectBiallelic {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-
         
+        
+        EXTENSION=$(basename ${vcf_gz})
+        EXTENSION=${EXTENSION#*.}
+        if [ ${EXTENSION} = "bcf" ]; then
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{vcf_gz} > input.vcf.gz
+            ${TIME_COMMAND} tabix -f input.vcf.gz
+            rm -f ~{vcf_gz} ~{vcf_tbi}
+        else
+            mv ~{vcf_gz} input.vcf.gz
+            mv ~{vcf_tbi} input.vcf.gz.tbi
+        fi
         date
-        truvari anno numneigh --sizemin 1 --refdist ~{max_distance_bp} ~{vcf_gz} | bcftools view --include 'INFO/NumNeighbors == 0' | bgzip -@ ${N_THREADS} --compress-level 2 > biallelic.vcf.gz
+        truvari anno numneigh --sizemin 1 --refdist ~{max_distance_bp} input.vcf.gz | bcftools view --include 'INFO/NumNeighbors == 0' | bgzip -@ ${N_THREADS} --compress-level 2 > biallelic.vcf.gz
         date
         ${TIME_COMMAND} tabix -f biallelic.vcf.gz
         date
@@ -621,6 +732,108 @@ task FilterBySamples {
         File out_vcf_gz = "out.vcf.gz"
         File out_tbi = "out.vcf.gz.tbi"
         File selected_samples = "selected_samples.txt"
+    }
+
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+#
+task FilterByMedianDp {
+    input {
+        File bcf
+        File csi
+        Int median_dp_threshold = 2
+        Int smaller_or_larger = 1
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        
+        if [ ~{smaller_or_larger} -eq 0 ]; then
+            OPERATOR='<'
+        else
+            OPERATOR='>='
+        fi
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'AVG(DP)'${OPERATOR}~{median_dp_threshold} --output-type z ~{bcf} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+#
+task FilterByStdevDp {
+    input {
+        File bcf
+        File csi
+        Int stdev_dp_threshold = 2
+        Int smaller_or_larger = 1
+        
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+    }
+    parameter_meta {
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
+        GSUTIL_DELAY_S="600"
+        
+        if [ ~{smaller_or_larger} -eq 0 ]; then
+            OPERATOR='<'
+        else
+            OPERATOR='>='
+        fi
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'STDEV(DP)'${OPERATOR}~{stdev_dp_threshold} --output-type z ~{bcf} > out.vcf.gz
+        ${TIME_COMMAND} tabix -f out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
     }
 
     runtime {
