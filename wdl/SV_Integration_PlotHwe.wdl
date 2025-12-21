@@ -9,7 +9,7 @@ workflow SV_Integration_PlotHwe {
         Int sv_length_threshold = 50
         Int smaller_or_larger = 1
         Int min_discovery_count = 1268
-        Int max_distance_bp = 100
+        Int max_distance_bp = 500
         
         File tandem_track_bed
         
@@ -258,8 +258,8 @@ workflow SV_Integration_PlotHwe {
         # Frequently discovered: biallelic.
         call FilterBySamples as ancestry_biallelic {
             input:
-                bcf = biallelic_length.out_vcf_gz,
-                csi = biallelic_length.out_tbi,
+                bcf = biallelic_frequent.out_vcf_gz,
+                csi = biallelic_frequent.out_tbi,
                 sample_ids = ancestry_samples[i]
         }
         call Vcf2Counts as ancestry_biallelic_counts {
