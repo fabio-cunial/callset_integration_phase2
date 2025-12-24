@@ -120,10 +120,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > script.sh \
     && ./script.sh -y
 
 # Simplified Kanpig
-ARG branch_id=fc_simplified
+ARG commit_id=d2be555
 RUN git clone https://github.com/samuelklee/kanpig.git \
     && cd kanpig \
-    && git checkout ${branch_id} \
+    && git checkout ${commit_id} \
     && $HOME/.cargo/bin/cargo build --release \
     && mv ./target/release/kanpig ../kanpig-tmp \
     && cd .. \

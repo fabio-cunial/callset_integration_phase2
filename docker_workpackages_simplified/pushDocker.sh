@@ -12,6 +12,6 @@ TAG="$1"
 cp ../scripts/*.java .
 cp ../scripts/*.r .
 docker build --progress=plain -t fcunial/kanpig_simplified .
-docker tag fcunial/callset_integration_phase2_workpackages fcunial/kanpig_simplified:${TAG}
+docker tag fcunial/kanpig_simplified fcunial/kanpig_simplified:${TAG}
 docker push fcunial/kanpig_simplified:${TAG}
 rm -f *.java *.class *.r
