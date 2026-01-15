@@ -4,7 +4,6 @@ version 1.0
 workflow SV_Integration_PlotHwe_SNVs {
     input {
         File intersample_bcf
-        File intersample_csi
         
         Float min_af = 0.1
         
@@ -20,8 +19,7 @@ workflow SV_Integration_PlotHwe_SNVs {
     # All
     call SelectBiallelic as all {
         input:
-            vcf_gz = intersample_bcf,
-            vcf_tbi = intersample_csi
+            vcf_gz = intersample_bcf
     }
     call Vcf2Counts as all_counts {
         input:
@@ -106,7 +104,6 @@ workflow SV_Integration_PlotHwe_SNVs {
 task SelectBiallelic {
     input {
         File vcf_gz
-        File vcf_tbi
         
         Int n_cpu = 2
         Int ram_size_gb = 128
