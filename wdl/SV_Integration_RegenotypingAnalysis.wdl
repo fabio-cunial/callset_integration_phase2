@@ -1130,16 +1130,32 @@ task BenchTrio {
         rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
         ls -laht
         
-        # Benchmarking
+        # Benchmarking: original merged VCF.
         Benchmark trio.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all
+        
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > tr.vcf.gz
         ${TIME_COMMAND} tabix -f tr.vcf.gz
         Benchmark tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr
-        rm -f tr.vcf.gz*
+        
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > not_tr.vcf.gz
         ${TIME_COMMAND} tabix -f not_tr.vcf.gz
         Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr
-        rm -f not_tr.vcf.gz*
+        
+        # Benchmarking: VCF with missing->ref.
+        ${TIME_COMMAND} bcftools +setGT trio.vcf.gz --output-type z -- --target-gt . --new-gt 0 > trio_no_missing.vcf.gz
+        ${TIME_COMMAND} tabix -f trio_no_missing.vcf.gz
+        Benchmark trio_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all_no_missing
+        
+        ${TIME_COMMAND} bcftools +setGT tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > tr_no_missing.vcf.gz
+        ${TIME_COMMAND} tabix -f tr_no_missing.vcf.gz
+        Benchmark tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr_no_missing
+        
+        ${TIME_COMMAND} bcftools +setGT not_tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > not_tr_no_missing.vcf.gz
+        ${TIME_COMMAND} tabix -f not_tr_no_missing.vcf.gz
+        Benchmark not_tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr_no_missing
+        
+        rm -f tr*.vcf.gz*
+        rm -f not_tr*.vcf.gz*
         
         # Uploading
         while : ; do
