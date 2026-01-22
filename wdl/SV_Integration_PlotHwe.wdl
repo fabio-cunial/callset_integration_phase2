@@ -498,13 +498,15 @@ task FilterByNDiscoverySamples {
     input {
         File bcf
         File csi
-        Int min_count
+        String field
         Int smaller_or_larger
+        Int min_count
         
         Int n_cpu = 8
         Int ram_size_gb = 16
     }
     parameter_meta {
+        field: "N_DISCOVERY_SAMPLES or AC"
         smaller_or_larger: "0: <min_count, 1: >=min_count"
     }
     
@@ -526,7 +528,7 @@ task FilterByNDiscoverySamples {
         else
             OPERATOR='>='
         fi
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES'${OPERATOR}~{min_count} --output-type z ~{bcf} > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include ~{field}${OPERATOR}~{min_count} --output-type z ~{bcf} > out.vcf.gz
         ${TIME_COMMAND} tabix -f out.vcf.gz
     >>>
 
