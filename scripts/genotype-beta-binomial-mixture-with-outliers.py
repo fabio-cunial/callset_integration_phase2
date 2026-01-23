@@ -272,7 +272,7 @@ def main():
     logger.info('\n' + str(pd.crosstab(delta_df['GT_OLD'], delta_df['GT'], rownames=['GT_OLD'], colnames=['GT'])))
 
     # create all plots
-    if print_graphs == 1:
+    if args.print_graphs == 1:
         logger.info('Creating plots...')
 
         # plot loss
