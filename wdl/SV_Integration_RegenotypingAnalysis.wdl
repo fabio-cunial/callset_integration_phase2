@@ -679,7 +679,7 @@ task Kanpig {
         # Pyro fitting
         if [ ~{run_pyro_beta_binomial} -eq 1 ]; then
             source activate pyro-kanpig
-            ${TIME_COMMAND} python3 ~{docker_dir}/genotype-beta-binomial-mixture.py ~{pyro_beta_binomial_args} --kanpig-vcf in.vcf.gz --output-prefix out
+            ${TIME_COMMAND} python3 ~{docker_dir}/genotype-beta-binomial-mixture-with-outliers.py ~{pyro_beta_binomial_args} --kanpig-vcf in.vcf.gz --output-prefix out
             ${TIME_COMMAND} bgzip out.delta.tsv; mv out.delta.tsv.gz ~{sample_id}_kanpig_delta.tsv.gz
             (bcftools view --header-only in.vcf.gz ; cat out.annot.tsv) | bgzip --compress-level 1 > annotations.vcf.gz
             tabix -f annotations.vcf.gz
