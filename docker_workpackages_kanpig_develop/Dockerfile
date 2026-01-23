@@ -133,7 +133,7 @@ RUN git clone https://github.com/ACEnglish/kanpig.git \
 
 # Beta-binomial
 COPY ./pyro-kanpig-environment.yml .
-COPY ./genotype-beta-binomial-mixture.py .
+COPY ./genotype-beta-binomial-mixture-with-outliers.py .
 RUN conda env create -f ./pyro-kanpig-environment.yml
 
 # VCFDIST
