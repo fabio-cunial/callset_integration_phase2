@@ -627,6 +627,8 @@ task Kanpig {
         
         String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
         String kanpig_docker = "fcunial/callset_integration_phase2_workpackages"
+        Int run_pyro_beta_binomial = 0
+        String pyro_beta_binomial_args = ""
         
         File reference_fa
         File reference_fai
@@ -673,6 +675,17 @@ task Kanpig {
         # Sorting
         ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z in.vcf > out.vcf.gz
         rm -f in.vcf ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        
+        # Pyro fitting
+        if [ ~{run_pyro_beta_binomial} -eq 1 ]; then
+            source activate pyro-kanpig
+            ${TIME_COMMAND} python3 ~{docker_dir}/genotype-beta-binomial-mixture.py ~{pyro_beta_binomial_args} --kanpig-vcf in.vcf.gz --output-prefix out
+            ${TIME_COMMAND} bgzip out.delta.tsv; mv out.delta.tsv.gz ~{sample_id}_kanpig_delta.tsv.gz
+            (bcftools view --header-only in.vcf.gz ; cat out.annot.tsv) | bgzip --compress-level 1 > annotations.vcf.gz
+            tabix -f annotations.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --columns CHROM,POS,REF,ALT,FORMAT/GT,FORMAT/GQ,FORMAT/SQ --annotations annotations.vcf.gz --output-type z in.vcf.gz > out.vcf.gz
+            rm -f in.vcf.gz ; mv out.vcf.gz in.vcf.gz ; tabix -f in.vcf.gz
+        fi
         
         mv in.vcf.gz ~{sample_id}_kanpig.vcf.gz
         mv in.vcf.gz.tbi ~{sample_id}_kanpig.vcf.gz.tbi

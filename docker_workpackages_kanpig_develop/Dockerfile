@@ -131,6 +131,11 @@ RUN git clone https://github.com/ACEnglish/kanpig.git \
     && mv kanpig-tmp kanpig \
     && ./kanpig --help
 
+# Beta-binomial
+COPY ./pyro-kanpig-environment.yml .
+COPY ./genotype-beta-binomial-mixture.py .
+RUN conda env create -f ./pyro-kanpig-environment.yml
+
 # VCFDIST
 ARG vcfdist_version=2.6.4
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
