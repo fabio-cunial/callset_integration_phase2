@@ -114,14 +114,36 @@ ARG truvari_version=5.4.0
 RUN pip install truvari==${truvari_version} \
     && truvari --help
 
+## KANPIG
+# ARG kanpig_version=1.1.0
+# RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+#     && tar xzf kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+#     && rm -f kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
+#     && mv ./kanpig-v${kanpig_version}-x86_64-unknown-linux-musl/kanpig . \
+#     && chmod +x ./kanpig \
+#     && ./kanpig --help
+
+# RUST
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > script.sh \
+    && chmod +x script.sh \
+    && ./script.sh -y
+
 # KANPIG
-ARG kanpig_version=1.1.0
-RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version}/kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && tar xzf kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && rm -f kanpig-v${kanpig_version}-x86_64-unknown-linux-musl.tar.gz \
-    && mv ./kanpig-v${kanpig_version}-x86_64-unknown-linux-musl/kanpig . \
-    && chmod +x ./kanpig \
+ARG commit_id=4be97a1
+RUN git clone https://github.com/ACEnglish/kanpig.git \
+    && cd kanpig \
+    && git checkout ${commit_id} \
+    && $HOME/.cargo/bin/cargo build --release \
+    && mv ./target/release/kanpig ../kanpig-tmp \
+    && cd .. \
+    && rm -rf kanpig/ \
+    && mv kanpig-tmp kanpig \
     && ./kanpig --help
+
+# Beta-binomial
+COPY ./pyro-kanpig-environment.yml .
+RUN conda env create -f ./pyro-kanpig-environment.yml
+COPY ./genotype-beta-binomial-mixture-with-outliers.py .
 
 # VCFDIST
 ARG vcfdist_version=2.6.4

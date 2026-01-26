@@ -31,7 +31,7 @@ public class RemoveRefAlt {
         boolean refIsDna, altIsDna;
         char c;
         int i;
-        int nRecords, nEdited, nDiscarded, pos, svlen;
+        int nRecords, nEdited, pos, svlen, nDiscarded;
         String str, ref, alt, info, svlenStr, endStr, chrom;
         BufferedReader br;
         String[] tokens;
@@ -63,6 +63,9 @@ public class RemoveRefAlt {
             c=alt.charAt(0);
             altIsDna = alt.length()>=1 && (c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n');
             
+            // Forcing QUAL
+            tokens[5]=FORCE_QUAL;
+            
             // Computing SVLEN
             svlen=-1;
             if (refIsDna && altIsDna) {
@@ -80,8 +83,10 @@ public class RemoveRefAlt {
                     endStr=getInfoField(info,"END");
                     if (endStr!=null) svlen=Integer.parseInt(endStr)-pos;
                     else {
-                        // Discarded: unknown SVLEN.
-                        nDiscarded++;
+                        // NOP: unknown SVLEN.
+                        System.out.print(tokens[0]);
+                        for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+                        System.out.println();
                         str=br.readLine();
                         continue;
                     }
@@ -90,7 +95,7 @@ public class RemoveRefAlt {
             
             // Compressing the record
             if (info.indexOf("SVTYPE=DEL")>=0) { 
-                if (info.indexOf("SVLEN=")<0) info+=";SVLEN="+(ref.length()-1);
+                if (info.indexOf("SVLEN=")<0) info+=";SVLEN="+svlen;
                 alt="<DEL-"+svlen+">";
                 ref="N";
                 nEdited++;
@@ -113,7 +118,7 @@ public class RemoveRefAlt {
                 ref="N";
                 nEdited++;
             }
-            tokens[3]=ref; tokens[4]=alt; tokens[5]=FORCE_QUAL;
+            tokens[3]=ref; tokens[4]=alt;
             
             // Outputting
             System.out.print(tokens[0]);

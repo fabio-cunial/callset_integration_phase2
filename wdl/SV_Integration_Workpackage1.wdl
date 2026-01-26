@@ -14,18 +14,27 @@ workflow SV_Integration_Workpackage1 {
         Int max_sv_length = 10000
         String kanpig_params_singlesample = "--neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
         
+        File training_resource_vcf_gz
+        File training_resource_tbi
+        File training_resource_bed
+        
         File reference_fa
         File reference_fai
         File standard_chromosomes_bed
+        File autosomes_bed
         File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
+        
+        String docker_image = "fcunial/callset_integration_phase2_workpackages:v3"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
         region: "Only consider VCF records in this genomic region. Set to 'all' to disable."
-        max_sv_length: "Calls above this length are deemed 'ultralong', are not given to kanpig re-genotyping, and are processed separately."
         remote_outdir: "Without final slash. Where the output of intra-sample truvari and kanpig is stored for each sample."
+        max_sv_length: "Calls above this length are deemed 'ultralong', are not given to kanpig re-genotyping, and are processed separately."
+        training_resource_vcf_gz: "We assume that the training resource VCF has already been subset to the correct length range upstream."
+        training_resource_bed: "Training resource calls can belong only to these regions. Typically a high-confidence dipcall BED, or a BED derived from intersecting multiple dipcall BEDs."
     }
     
     call Impl {
@@ -38,12 +47,19 @@ workflow SV_Integration_Workpackage1 {
             max_sv_length = max_sv_length,
             kanpig_params_singlesample = kanpig_params_singlesample,
             
+            training_resource_vcf_gz = training_resource_vcf_gz,
+            training_resource_tbi = training_resource_tbi,
+            training_resource_bed = training_resource_bed,
+            
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             standard_chromosomes_bed = standard_chromosomes_bed,
+            autosomes_bed = autosomes_bed,
             reference_agp = reference_agp,
             ploidy_bed_female = ploidy_bed_female,
-            ploidy_bed_male = ploidy_bed_male
+            ploidy_bed_male = ploidy_bed_male,
+            
+            docker_image = docker_image
     }
     
     output {
@@ -80,13 +96,19 @@ task Impl {
         Int max_sv_length
         String kanpig_params_singlesample
         
+        File training_resource_vcf_gz
+        File training_resource_tbi
+        File training_resource_bed
+        
         File reference_fa
         File reference_fai
         File standard_chromosomes_bed
+        File autosomes_bed
         File reference_agp
         File ploidy_bed_female
         File ploidy_bed_male
         
+        String docker_image
         Int n_cpu = 6
         Int ram_size_gb = 8
         Int disk_size_gb = 256
@@ -165,6 +187,15 @@ task Impl {
                     TEST=$(gsutil -m cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PAV_TBI}>. Trying again..."
+                        sleep ${GSUTIL_DELAY_S}
+                    else
+                        break
+                    fi
+                done
+                while : ; do
+                    TEST=$(gsutil -m cp ${PAV_BED} ./${SAMPLE_ID}_pav.bed && echo 0 || echo 1)
+                    if [ ${TEST} -eq 1 ]; then
+                        echo "Error downloading file <${PAV_BED}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
                     else
                         break
@@ -259,7 +290,7 @@ task Impl {
             
             # QUAL is used by truvari collapse to select a representation. We
             # assign values based on which representations we observed to be
-            # more accurate in a few examples.
+            # more accurate in a few test examples.
             if [ ${CALLER_ID} = 'pav' ]; then
                 QUAL="4"
             elif [ ${CALLER_ID} = 'pbsv' ]; then
@@ -274,60 +305,68 @@ task Impl {
             # Subsetting to standard chromosomes, or to a given region if any.
             if [ ~{region} != "all" ]; then
                 ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{region} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             else
                 ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            fi
+            
+            # Removing records in reference gaps
+            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            
+            # Keeping only records in the confident BED, if any.
+            if [ ${CALLER_ID} = 'pav' ]; then
+                ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}_pav.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
             
             # Ensuring that SVLEN has the correct type for bcftools norm
             bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > ${SAMPLE_ID}_${CALLER_ID}_header.txt
             ${TIME_COMMAND} bcftools reheader --header ${SAMPLE_ID}_${CALLER_ID}_header.txt --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Splitting multiallelic records into biallelic records
             ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Removing SNVs, if any.
             if [ ${CALLER_ID} = 'pav' ]; then
                 ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV"' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
             
-            # Removing records in reference gaps
-            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            
             # Making sure SVLEN and SVTYPE are consistently annotated
-            truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            ${TIME_COMMAND} truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} FixTruvariAnnoSvlen ${SAMPLE_ID}_${CALLER_ID}_in.vcf | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Isolating BNDs
             ${TIME_COMMAND} bcftools filter --include 'SVTYPE="BND"' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
-            tabix -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
+            tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
             ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="BND"' --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Isolating ultra-long records and discarding short records
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>'${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
-            tabix -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
+            tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1. Main VCF ------------------------------------------------------
             
             # 1.1 Sorting
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.2 Fixing symbolic records
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx5G FixSymbolicRecords ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ~{reference_fa} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.3 Fixing REF
             ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.4 Cleaning REF, ALT, QUAL, FILTER. 
             # - REF and ALT must be uppercase for XGBoost scoring downstream to
@@ -338,16 +377,16 @@ task Impl {
             # - We force every record to PASS, to rule out any filter-dependent
             #   effect in downstream tools.
             ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.5 Removing END, since its values may be inconsistent and make
             # GATK crash downstream.
             ${TIME_COMMAND} bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 1.6 Removing duplicated records
             ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz.tbi
@@ -356,7 +395,7 @@ task Impl {
             
             # 2.1 Sorting 
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Remark: we do not run the following command, since it seems to
             # destroy BNDs ALTs (example: N]chr5:181473415] ->
@@ -367,7 +406,7 @@ task Impl {
             
             # 2.2 Removing duplicated records
             ${TIME_COMMAND} bcftools norm --rm-dup exact --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz.tbi
@@ -376,16 +415,16 @@ task Impl {
             
             # 3.1 Sorting
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 3.2 Removing sequence (lossless).
             # QUAL is used by truvari collapse to select a representation.
             ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ~{reference_fai} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # 3.3 Removing duplicated records
             ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz.tbi
@@ -401,23 +440,23 @@ task Impl {
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_in.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             # Ensuring that every record has a unique ID, to enable joining by
             # CHROM,POS,ID in downstream calls to `bcftools annotate`. Using
             # CHROM,POS,REF,ALT can make `bcftools annotate` segfault, and the
             # speed of joining by CHROM,POS,ID is independent of SVLEN.
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz ; bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz            
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz            
             bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_sv.vcf.gz
@@ -429,8 +468,9 @@ task Impl {
         # creating an output file `SAMPLEID_ultralong.vcf.gz`.
         #
         # Remark: `truvari collapse` is run without taking sequence similarity
-        # into account, so different INS sequences of similar length at similar
-        # POS may be wrongly collapsed. We tolerate this for speed reasons.
+        # into account, so different INS/DUP/CNV sequences of similar length at
+        # similar POS may be wrongly collapsed. We tolerate this for speed
+        # reasons.
         #
         function IntrasampleMerge_ultralong() {
             local SAMPLE_ID=$1
@@ -438,10 +478,10 @@ task Impl {
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_ultralong.vcf.gz ${SAMPLE_ID}_pbsv_ultralong.vcf.gz ${SAMPLE_ID}_sniffles_ultralong.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_*_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_*_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             # Removing SVLEN from symbolic ALTs, in order not to interfere with
             # `truvari collapse`.
@@ -453,46 +493,50 @@ task Impl {
                 printf("\n"); \
             }' >> ${SAMPLE_ID}_out.vcf
             ${TIME_COMMAND} bgzip --threads ${N_THREADS} ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             # Adding SVLEN back into symbolic ALTs, to avoid overcollapse in the
             # cohort-level bcftools merge downstream.
             ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_ultralong.vcf.gz.tbi
         }
         
         
-        # Merges all files `SAMPLEID_CALLERID_bnd.vcf.gz`, creating an output
-        # file `SAMPLEID_bnd.vcf.gz`. 
-        #
-        # Remark: BNDs are not collapsed with truvari, since `truvari collapse`
-        # does not work on BNDs.
+        # Collapses with truvari all files `SAMPLEID_CALLERID_bnd.vcf.gz`,
+        # creating an output file `SAMPLEID_bnd.vcf.gz`.
         #
         function IntrasampleMerge_bnd() {
             local SAMPLE_ID=$1
             
             # Remark: the order of the callers in `bcftools merge` affects the
-            # value of the SAMPLE column emitted by `CollapseSamples.java`.
+            # value of the SAMPLE column emitted by `truvari collapse --intra`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_bnd.vcf.gz ${SAMPLE_ID}_pbsv_bnd.vcf.gz ${SAMPLE_ID}_sniffles_bnd.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_*_bnd.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_*_bnd.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} java -cp ~{docker_dir} CollapseSamples ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --rm-dup exact --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            # Remark: BNDs are not collapsed with truvari, since `truvari
+            # collapse` does not work on BNDs.
+            #${TIME_COMMAND} java -cp ~{docker_dir} CollapseSamples ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
+            #rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            #${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --rm-dup exact --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            #rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_bnd.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_bnd.vcf.gz.tbi
@@ -500,7 +544,7 @@ task Impl {
         
         
         # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
-        # necessary since kanpig overwrites the SAMPLE field.
+        # necessary, since kanpig overwrites the SAMPLE field.
         #
         function CopySuppToInfo() {
             local SAMPLE_ID=$1
@@ -520,14 +564,14 @@ task Impl {
                 else if ($6=="7") printf("\t1\t1\t1");
                 printf("\n"); \
             }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
-            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by sniffles">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
             ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_VCF_GZ}
-            tabix -f ${OUTPUT_VCF_GZ}
+            tabix -@ ${N_THREADS} -f ${OUTPUT_VCF_GZ}
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF_GZ}*
         }
         
@@ -550,18 +594,123 @@ task Impl {
             
             # Sorting
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             # Discarding records that are not marked as present by kanpig
-            N_RECORDS_BEFORE=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
+            N_RECORDS_BEFORE_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             ${TIME_COMMAND} bcftools filter --include 'COUNT(GT="alt")>0' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
-            N_RECORDS_AFTER=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
-            PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER} / ${N_RECORDS_BEFORE}" | bc )
-            echo "Number of records that are marked as present by kanpig: ${N_RECORDS_AFTER}/${N_RECORDS_BEFORE} (${PERCENT}%)"
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            N_RECORDS_AFTER_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
+            
+            # Printing debug information
+            PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_KANPIG} / ${N_RECORDS_BEFORE_KANPIG}" | bc )
+            echo "${N_RECORDS_AFTER},${N_RECORDS_BEFORE},${PERCENT},Number of records that are marked as ALT by kanpig" > ${SAMPLE_ID}_kanpig.csv
+            N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
+            echo "${N_HETS_IN_AUTOSOMES},${N_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
+            ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
+        }
+        
+        
+        # Copies the following kanpig fields from SAMPLE to INFO:
+        #
+        # KS_1, KS_2, SQ, GQ, DP, AD_NON_ALT, AD_ALL
+        #
+        # This is necessary, since XGBoost downstream uses only INFO fields.
+        #
+        function CopyKanpigFieldsToInfo() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            # Creating new header lines
+            touch ${SAMPLE_ID}_header.txt
+            for FIELD in SQ GQ DP
+            do
+                bcftools view --header-only ${INPUT_VCF_GZ} | grep ID="${FIELD}," | sed -e 's/FORMAT/INFO/g' >> ${SAMPLE_ID}_header.txt
+            done
+            echo '##INFO=<ID=AD_NON_ALT,Number=1,Type=Integer,Description="Coverage for non-alternate alleles">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=AD_ALL,Number=1,Type=Integer,Description="Coverage for all alleles">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=KS_1,Number=1,Type=Integer,Description="Kanpig score 1">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=KS_2,Number=1,Type=Integer,Description="Kanpig score 2">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="GT converted to an integer in {0,1,2}.">' >> ${SAMPLE_ID}_header.txt
+            
+            # Copying fields from FORMAT to INFO. Every record is assumed to
+            # have a distinct ID, which is enforced by the steps of the
+            # pipeline upstream.
+            bcftools query -f '%CHROM\t%POS\t%ID\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                KS_1=-1; KS_2=-1; \
+                p=0; \
+                for (i=1; i<=length($4); i++) { \
+                    if (substr($4,i,1)==",") { p=i; break; } \
+                } \
+                if (p==0) { KS_1=$4; KS_2=$4; } \
+                else { KS_1=substr($4,1,p-1); KS_2=substr($4,p+1); } \
+                if (KS_1==".") KS_1=-1; \
+                if (KS_2==".") KS_2=-1; \
+                \
+                SQ=$5; \
+                if (SQ==".") SQ=-1; \
+                \
+                GQ=$6; \
+                if (GQ==".") GQ=-1; \
+                \
+                DP=$7; \
+                if (DP==".") DP=-1; \
+                \
+                AD_NON_ALT=-1; AD_ALL=1; \
+                p=0; \
+                for (i=1; i<=length($8); i++) { \
+                    if (substr($8,i,1)==",") { p=i; break; } \
+                } \
+                if (p==0) { AD_NON_ALT=$8; AD_ALL=$8; } \
+                else { AD_NON_ALT=substr($8,1,p-1); AD_ALL=substr($8,p+1); } \
+                if (AD_NON_ALT==".") AD_NON_ALT=-1; \
+                if (AD_ALL==".") AD_ALL=-1; \
+                \
+                GT_COUNT=-1; \
+                if ($9=="0/0" || $9=="0|0" || $9=="./."  || $9==".|." || $9=="./0" || $9==".|0" || $9=="0/." || $9=="0|." || $9=="0" || $9==".") GT_COUNT=0; \
+                else if ($9=="0/1" || $9=="0|1" || $9=="1/0" || $9=="1|0" || $9=="./1" || $9==".|1" || $9=="1/." || $9=="1|." || $9=="1") GT_COUNT=1; \
+                else if ($9=="1/1" || $9=="1|1") GT_COUNT=2; \
+                \
+                printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,$10,$11,$12); \
+            }' | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
+            tabix -@ ${N_THREADS} -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            
+            rm -f ${INPUT_VCF_GZ}*
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
+            
+            # Removing temporary files
+            rm -f ${SAMPLE_ID}_header.txt ${SAMPLE_ID}_format.tsv.gz 
+        }
+        
+        
+        # Extracts every record that has a stringent `truvari bench` match with
+        # some records in the resource.
+        #
+        # Remark: we use `--pick single` to force every resource record to be
+        # matched with at most one sample record, which is hopefully the
+        # most similar to it. This is because we assume that using a
+        # contaminated training set in XGBoost downstream is worse than using a
+        # slightly smaller training set.
+        #
+        function GetTrainingRecords() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            ${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ~{training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari/
+            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_training.vcf.gz
+            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz.tbi ${SAMPLE_ID}_training.vcf.gz.tbi
+            
+            # Removing temporary files
+            rm -rf ./${SAMPLE_ID}_truvari/
         }
         
         
@@ -571,6 +720,9 @@ task Impl {
         
         export RUST_BACKTRACE="full"
         INFINITY="1000000000"
+        truvari --help
+        ~{docker_dir}/kanpig --version
+        
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
@@ -598,9 +750,19 @@ task Impl {
             LocalizeSample ${SAMPLE_ID} 2 ${LINE}
             CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz ${SAMPLE_ID}_sv_supp.vcf.gz
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
+            CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
-            # Uploading
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_ultralong.vcf.'gz*' ${SAMPLE_ID}_bnd.vcf.'gz*' ~{remote_outdir}/
+            # Marking training records
+            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
+            
+            # Converting to BCF and uploading            
+            bcftools view --output-type b ${SAMPLE_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_ultralong.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_ultralong.bcf
+            rm -f ${SAMPLE_ID}_ultralong.vcf.'gz*'
+            bcftools view --output-type b ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_bnd.bcf
+            rm -f ${SAMPLE_ID}_bnd.vcf.'gz*'
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
@@ -609,7 +771,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"

@@ -4,12 +4,14 @@ import java.io.*;
 
 
 /**
- * Uses the NE field printed by kanpig to build a BED of kanpig regions.
+ * Uses the NE field printed by kanpig to build a BED of kanpig windows.
+ * The output BED contains two additional fields: NE, and number of records with
+ * that NE value.
  */
-public class GetKanpigRegionsSimple {
+public class GetKanpigWindows {
     
     /**
-     * @param args 0 a VCF with at least one sample and whose FORMAT field is:
+     * @param args 0 a single-sample VCF whose FORMAT field is:
      *
      * GT:FT:SQ:GQ:PS:NE:DP:AD:KS
      */
@@ -54,7 +56,7 @@ public class GetKanpigRegionsSimple {
                 end=pos+(refLength-1)-1;
             }
             if (region!=currentRegion) {
-                if (currentRegion!=-1) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+total);
+                if (currentRegion!=-1) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+currentRegion+"\t"+total);
                 currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end; total=1;
             }
             else {
@@ -63,7 +65,7 @@ public class GetKanpigRegionsSimple {
             }
             str=br.readLine();
         }
-        System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+total);
+        System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+currentRegion+"\t"+total);
         br.close();
     }
     

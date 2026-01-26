@@ -11,7 +11,8 @@ TAG="$1"
 
 cp ../scripts/*.java .
 cp ../scripts/*.r .
+cp ../scripts/*.py .
 docker build --progress=plain -t fcunial/callset_integration_phase2_workpackages .
 docker tag fcunial/callset_integration_phase2_workpackages fcunial/callset_integration_phase2_workpackages:${TAG}
 docker push fcunial/callset_integration_phase2_workpackages:${TAG}
-rm -f *.java *.class *.r
+rm -f *.java *.class *.r *.py
