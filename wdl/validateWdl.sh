@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BuildTrainingResource.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage1.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_RegenotypingAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_PlotHwe_SNVs.wdl
@@ -24,7 +25,6 @@ java -jar ${WOMTOOL_PATH} validate -l PhabRegenotypedCohort.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage8.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage6.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage5_Bnd.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BuildTrainingResource.wdl
 java -jar ${WOMTOOL_PATH} validate -l BenchCohortSamples_PersonalizedCohortVcf.wdl
 java -jar ${WOMTOOL_PATH} validate -l HGSVC3Dipcall2BAMs.wdl
 java -jar ${WOMTOOL_PATH} validate -l GetCompositeSvs.wdl

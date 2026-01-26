@@ -2,7 +2,7 @@ version 1.0
 
 
 # Builds a resource of high-confidence true calls for XGBoost training, by
-# simply merging dipcall VCFs.
+# canonizing and trivially merging multiple dipcall VCFs.
 #
 workflow SV_Integration_BuildTrainingResource {
     input {
@@ -16,6 +16,8 @@ workflow SV_Integration_BuildTrainingResource {
         File reference_agp
         
         String remote_outdir
+        
+        String docker_image = "fcunial/callset_integration_phase2_workpackages:v3"
     }
     parameter_meta {
         dipcall_tsv: "Format of each row: ID, DIPCALL_BED, DIPCALL_VCF. We assume that every VCF is sorted and sequence-resolved."
@@ -25,12 +27,17 @@ workflow SV_Integration_BuildTrainingResource {
     call Impl {
         input:
             dipcall_tsv = dipcall_tsv,
+            
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length,
+            
             reference_fai = reference_fai,
             standard_chromosomes_bed = standard_chromosomes_bed,
             reference_agp = reference_agp,
-            remote_outdir = remote_outdir
+            
+            remote_outdir = remote_outdir,
+            
+            docker_image = docker_image
     }
     
     output {
@@ -52,6 +59,7 @@ task Impl {
         
         String remote_outdir
         
+        String docker_image
         Int n_cpu = 8
         Int ram_size_gb = 32
         Int disk_size_gb = 100
@@ -71,6 +79,7 @@ task Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         
         
@@ -135,6 +144,23 @@ task Impl {
         
         # Puts in canonical form a raw VCF from dipcall.
         #
+        # Remark: we only keep INS and DEL records, since dipcall's replacement
+        # records have no SVTYPE, they would be assigned SVTYPE=UNK by `truvari
+        # anno`, and they would not be matched to any record in an intra-sample
+        # VCF since `truvari bench` uses type as a matching criterion. This
+        # means that e.g. INVs are never part of the training resource: this is
+        # probably fine, since the resource does not need to be comprehensive.
+        #
+        # Remark: dipcall's replacement records can be strange. E.g.:
+        #
+        # REF: CAAAAAAAAAAAAAAAAAAAAAA
+        # ALT: C
+        # ALT: CAAAAAAAAAAAAAAAAAAAAAAAAAA
+        #
+        # REF: CGGTGGTCCTCCTTGCCGGTGGTCCTCCTTCCTGGTGGTTCTCCTTCCTGGTGGTCCTCCTTCCT
+        # ALT: C
+        # ALT: TGGTGGTCCTCCTTGCCGGTGGTCCTCCTTCCTGGTGGTTCTCCTTCCTGGTGGTCCTCCTTCCT
+        #
         function CanonizeDipcallVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -148,15 +174,6 @@ task Impl {
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
-            # Splitting multiallelic records into biallelic records
-            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
-            
-            # Removing SNVs, records that are not marked as present, records
-            # with a FILTER, and records with unresolved REF/ALT.
-            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || COUNT(GT="alt")=0 || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
-            
             # Keeping only records in the standard chromosomes
             ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
@@ -169,12 +186,22 @@ task Impl {
             ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
+            # Splitting multiallelic records into biallelic records
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Removing SNVs, replacement records, records that are not marked
+            # as ALT, records with a FILTER, and records with unresolved
+            # REF/ALT.
+            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (STRLEN(REF)>1 && STRLEN(ALT)>1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
+            
             # Making sure SVLEN and SVTYPE are consistently annotated
             truvari anno svinfo --minsize 1 ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the given length range
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            # Keeping only INS and DEL in the given length range
+            ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -f ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
@@ -202,30 +229,17 @@ task Impl {
             local FILE_LIST_TXT=$1
             
             # Merging
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v > out.vcf
+            date
+            bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 | bcftools reheader --samples-list SAMPLE > out.vcf
+            date
             mv out.vcf in.vcf
             
-            # Enforcing a single sample column with artificial GTs
-            bcftools view --header-only in.vcf > header.txt
-            N_ROWS=$(wc -l < header.txt)
-            head -n $(( ${N_ROWS} - 1 )) header.txt > out.vcf
-            tail -n 1 header.txt | awk '{ FS="\t"; OFS="\t"; \
-                printf("%s",$1); \
-                for (i=2; i<=9; i++) printf("\t%s",$i); \
-                printf("\tSAMPLE\n"); \
-            }' >> out.vcf
-            rm -f header.txt
-            bcftools view --no-header in.vcf | awk '{ FS="\t"; OFS="\t"; \
-                printf("%s",$1); \
-                for (i=2; i<=8; i++) printf("\t%s",$i); \
-                printf("\tGT\t0/1\n"); \
-            }' >> out.vcf
-            rm -f in.vcf
-            bgzip --threads ${N_THREADS} out.vcf
-            tabix -f out.vcf.gz
+            # Enforcing artificial GTs on the single sample column
+            ${TIME_COMMAND} bcftools +setGT --output-type z in.vcf -- --target-gt a --new-gt c:0/1 > out.vcf.gz
+            rm -f in.vcf ; mv out.vcf.gz in.vcf.gz ; tabix -@ ${N_THREADS} in.vcf.gz
             
-            mv out.vcf.gz training_resource.vcf.gz
-            mv out.vcf.gz.tbi training_resource.vcf.gz.tbi
+            mv in.vcf.gz training_resource.vcf.gz
+            mv in.vcf.gz.tbi training_resource.vcf.gz.tbi
         }
         
         
@@ -235,7 +249,7 @@ task Impl {
         
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         
-        # Downloading and canonizing the single-sample dipcall VCFs
+        # Downloading and canonizing the single-sample dipcall VCFs in parallel
         touch list.txt
         cat ~{dipcall_tsv} | tr '\t' ',' > samples.csv
         N_ROWS=$(wc -l < samples.csv)
@@ -261,7 +275,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
