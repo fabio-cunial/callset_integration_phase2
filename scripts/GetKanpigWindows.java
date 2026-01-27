@@ -4,16 +4,16 @@ import java.io.*;
 
 
 /**
- * Uses the NE field printed by kanpig to build a BED of kanpig windows.
- * The output BED contains two additional fields: NE, and number of records with
- * that NE value.
+ * Uses the PS field printed by kanpig to build a BED of kanpig windows.
+ * The output BED contains two additional fields: PS, and number of records with
+ * that PS value.
  */
 public class GetKanpigWindows {
     
     /**
      * @param args 0 a single-sample VCF whose FORMAT field is:
      *
-     * GT:FT:SQ:GQ:PS:NE:DP:AD:KS
+     * GT:FT:SQ:GQ:PS:DP:AD:KS
      */
     public static void main(String[] args) throws IOException {
         final String KANPIG_VCF_GZ = args[0];
@@ -35,7 +35,7 @@ public class GetKanpigWindows {
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records...");
             tokens=str.split("\t");
             tokensPrime=tokens[9].split(":");
-            region=Integer.parseInt(tokensPrime[5]);
+            region=Integer.parseInt(tokensPrime[4]);
             chr=tokens[0];
             pos=Integer.parseInt(tokens[1]);
             refLength=tokens[3].length();
