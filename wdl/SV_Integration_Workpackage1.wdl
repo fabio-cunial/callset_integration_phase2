@@ -193,15 +193,6 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${PAV_BED} ./${SAMPLE_ID}_pav.bed && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${PAV_BED}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
                     TEST=$(gsutil -m cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PBSV_VCF_GZ}>. Trying again..."
@@ -314,12 +305,6 @@ task Impl {
             # Removing records in reference gaps
             ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            
-            # Keeping only records in the confident BED, if any.
-            if [ ${CALLER_ID} = 'pav' ]; then
-                ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}_pav.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
-            fi
             
             # Ensuring that SVLEN has the correct type for bcftools norm
             bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | sed 's/ID=SVLEN,Number=.,/ID=SVLEN,Number=A,/g' > ${SAMPLE_ID}_${CALLER_ID}_header.txt
