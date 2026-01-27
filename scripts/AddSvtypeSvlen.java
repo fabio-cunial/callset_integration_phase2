@@ -40,11 +40,11 @@ public class AddSvtypeSvlen {
             if (str.charAt(0)=='#') {
                 if (str.substring(0,6).equals("#CHROM")) {
                     if (!svtypeFound) System.out.println("##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">");
-                    if (!svlenFound) System.out.println("#INFO=<ID=SVLEN,Number=A,Type=Integer,Description=\"Length of the structural variant\">");
+                    if (!svlenFound) System.out.println("##INFO=<ID=SVLEN,Number=A,Type=Integer,Description=\"Length of the structural variant\">");
                 }
                 else {
-                    if (str.indexOf("SVTYPE")>=0) svtypeFound=true;
-                    if (str.indexOf("SVLEN")>=0) svlenFound=true;
+                    if (str.indexOf("INFO=<ID=SVTYPE,")>=0) svtypeFound=true;
+                    if (str.indexOf("INFO=<ID=SVLEN,")>=0) svlenFound=true;
                 }
                 System.out.println(str);
                 str=br.readLine();
