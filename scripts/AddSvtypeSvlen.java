@@ -27,7 +27,7 @@ public class AddSvtypeSvlen {
         
         final int QUANTUM = 5000;  // Arbitrary
         
-        boolean edited;
+        boolean svtypeFound, svlenFound, edited;
         int i, p;
         int nRecords, refType, altType, svlen, pos, value;
         String str, ref, alt, info, svtype;
@@ -35,9 +35,17 @@ public class AddSvtypeSvlen {
         String[] tokens;
         
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
-        str=br.readLine(); nRecords=0;
+        str=br.readLine(); nRecords=0; svtypeFound=false; svlenFound=false;
         while (str!=null) {
             if (str.charAt(0)=='#') {
+                if (str.substring(0,6).equals("#CHROM")) {
+                    if (!svtypeFound) System.out.println("##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">");
+                    if (!svlenFound) System.out.println("#INFO=<ID=SVLEN,Number=A,Type=Integer,Description=\"Length of the structural variant\">");
+                }
+                else {
+                    if (str.indexOf("SVTYPE")>=0) svtypeFound=true;
+                    if (str.indexOf("SVLEN")>=0) svlenFound=true;
+                }
                 System.out.println(str);
                 str=br.readLine();
                 continue;

@@ -493,6 +493,11 @@ task Impl {
             ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
+            # Ensuring that every record has a unique ID
+            (bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz ; bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz            
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_ultralong.vcf.gz.tbi
         }
@@ -524,6 +529,11 @@ task Impl {
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            
+            # Ensuring that every record has a unique ID
+            (bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz ; bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz            
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_bnd.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_bnd.vcf.gz.tbi
@@ -733,22 +743,28 @@ task Impl {
             IntrasampleMerge_ultralong ${SAMPLE_ID}
             IntrasampleMerge_bnd ${SAMPLE_ID}
             
-            # Genotyping
+            # Genotyping and marking training records
             LocalizeSample ${SAMPLE_ID} 2 ${LINE}
             CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz ${SAMPLE_ID}_sv_supp.vcf.gz
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
             CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
-            
-            # Marking training records
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
-            # Converting to BCF and uploading            
-            bcftools view --output-type b ${SAMPLE_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_ultralong.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_ultralong.bcf
-            rm -f ${SAMPLE_ID}_ultralong.vcf.'gz*'
+            # Copying SUPP fields to INFO in the BND and ultralong VCFs as well
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_bnd.vcf.gz ${SAMPLE_ID}_bnd_supp.vcf.gz
+            mv ${SAMPLE_ID}_bnd_supp.vcf.gz ${SAMPLE_ID}_bnd.vcf.gz
+            mv ${SAMPLE_ID}_bnd_supp.vcf.gz.tbi ${SAMPLE_ID}_bnd.vcf.gz.tbi
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_ultralong.vcf.gz ${SAMPLE_ID}_ultralong_supp.vcf.gz
+            mv ${SAMPLE_ID}_ultralong_supp.vcf.gz ${SAMPLE_ID}_ultralong.vcf.gz
+            mv ${SAMPLE_ID}_ultralong_supp.vcf.gz.tbi ${SAMPLE_ID}_ultralong.vcf.gz.tbi
+            
+            # Converting BND and ultralong to BCF and uploading            
             bcftools view --output-type b ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd.bcf
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_bnd.bcf
             rm -f ${SAMPLE_ID}_bnd.vcf.'gz*'
+            bcftools view --output-type b ${SAMPLE_ID}_ultralong.vcf.gz > ${SAMPLE_ID}_ultralong.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_ultralong.bcf
+            rm -f ${SAMPLE_ID}_ultralong.vcf.'gz*'
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht

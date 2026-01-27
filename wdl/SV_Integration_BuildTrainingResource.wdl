@@ -145,11 +145,12 @@ task Impl {
         # Puts in canonical form a raw VCF from dipcall.
         #
         # Remark: we only keep INS and DEL records, since dipcall's replacement
-        # records have no SVTYPE, they would be assigned SVTYPE=UNK by `truvari
-        # anno`, and they would not be matched to any record in an intra-sample
-        # VCF since `truvari bench` uses type as a matching criterion. This
-        # means that e.g. INVs are never part of the training resource: this is
-        # probably fine, since the resource does not need to be comprehensive.
+        # records have no SVTYPE, they would be assigned SVTYPE=SUB by our
+        # annotation script, and they would not be matched to any record in an
+        # intra-sample VCF since `truvari bench` uses type as a matching
+        # criterion. This means that e.g. INVs are never part of the training
+        # resource: this is probably fine, since the resource does not need to
+        # be comprehensive.
         #
         # Remark: dipcall's replacement records can be strange. E.g.:
         #
