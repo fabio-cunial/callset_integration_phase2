@@ -596,7 +596,7 @@ task Impl {
             
             # Printing debug information
             PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_KANPIG} / ${N_RECORDS_BEFORE_KANPIG}" | bc )
-            echo "${N_RECORDS_AFTER},${N_RECORDS_BEFORE},${PERCENT},Number of records that are marked as ALT by kanpig" > ${SAMPLE_ID}_kanpig.csv
+            echo "${N_RECORDS_AFTER_KANPIG},${N_RECORDS_BEFORE_KANPIG},${PERCENT},Number of records that are marked as ALT by kanpig" > ${SAMPLE_ID}_kanpig.csv
             N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
