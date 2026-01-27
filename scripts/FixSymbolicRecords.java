@@ -72,21 +72,15 @@ public class FixSymbolicRecords {
             // Computing SVLEN
             info=tokens[7];
             svlenStr=getInfoField(info,"SVLEN");
-            if (svlenStr!=null) {
-                svlen=Integer.parseInt(svlenStr);
-                if (svlen<0) svlen=-svlen;
+            if (svlenStr==null) {
+                // Discarded: not enough information.
+                // We assume that SVLEN has already been annotated correctly 
+                // upstream.
+                nDiscarded++;
+                str=br.readLine();
+                continue;
             }
-            else {
-                // 1-based, last base in REF.
-                endStr=getInfoField(info,"END");
-                if (endStr!=null) svlen=Integer.parseInt(endStr)-pos;
-                else {
-                    // Discarded: not enough information.
-                    nDiscarded++;
-                    str=br.readLine();
-                    continue;
-                }
-            }
+            svlen=Integer.parseInt(svlenStr);
             
             // Fixing the symbolic record
             ref=tokens[3];

@@ -69,31 +69,19 @@ public class RemoveRefAlt {
             tokens[6]="PASS";
             
             // Computing SVLEN
-            svlen=-1;
-            if (refIsDna && altIsDna) {
-                svlen=alt.length()-ref.length();
-                if (svlen<0) svlen=-svlen;
+            info=tokens[7];
+            svlenStr=getInfoField(info,"SVLEN");
+            if (svlenStr==null) {
+                // NOP: unknown SVLEN.
+                // We assume that SVLEN has already been annotated correctly 
+                // upstream.
+                System.out.print(tokens[0]);
+                for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
+                System.out.println();
+                str=br.readLine();
+                continue;
             }
-            else {
-                svlenStr=getInfoField(info,"SVLEN");
-                if (svlenStr!=null) {
-                    svlen=Integer.parseInt(svlenStr);
-                    if (svlen<0) svlen=-svlen;
-                }
-                else {
-                    // 1-based, last base in REF.
-                    endStr=getInfoField(info,"END");
-                    if (endStr!=null) svlen=Integer.parseInt(endStr)-pos;
-                    else {
-                        // NOP: unknown SVLEN.
-                        System.out.print(tokens[0]);
-                        for (i=1; i<tokens.length; i++) { System.out.print('\t'); System.out.print(tokens[i]); }
-                        System.out.println();
-                        str=br.readLine();
-                        continue;
-                    }
-                }
-            }
+            svlen=Integer.parseInt(svlenStr);
             
             // Compressing the record
             if (info.indexOf("SVTYPE=DEL")>=0) { 

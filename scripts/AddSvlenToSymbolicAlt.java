@@ -4,7 +4,7 @@ import java.io.*;
 
 
 /**
- * Assumes that every symbolic record has SVLEN in INFO.
+ * Symbolic records without SVLEN in INFO are kept unchanged.
  */
 public class AddSvlenToSymbolicAlt {
     
@@ -18,7 +18,7 @@ public class AddSvlenToSymbolicAlt {
         
         int i;
         int nRecords, nEdited, svlen;
-        String str, alt, info;
+        String str, alt, info, svlenStr;
         BufferedReader br;
         String[] tokens;
         
@@ -39,25 +39,27 @@ public class AddSvlenToSymbolicAlt {
                 str=br.readLine();
                 continue;
             }
-            svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
-            if (svlen<0) svlen=-svlen;
-            if (info.indexOf("SVTYPE=DEL")>=0) { 
-                alt="<DEL-"+svlen+">";
-                nEdited++;
+            svlenStr=getInfoField(info,"SVLEN");
+            if (svlenStr!=null) {
+                svlen=Integer.parseInt(svlenStr);
+                if (info.indexOf("SVTYPE=DEL")>=0) { 
+                    alt="<DEL-"+svlen+">";
+                    nEdited++;
+                }
+                else if (info.indexOf("SVTYPE=INV")>=0) { 
+                    alt="<INV-"+svlen+">";
+                    nEdited++;
+                }
+                else if (info.indexOf("SVTYPE=DUP")>=0) { 
+                    alt="<DUP-"+svlen+">";
+                    nEdited++;
+                }
+                else if (info.indexOf("SVTYPE=CNV")>=0) {
+                    alt="<CNV-"+svlen+">";
+                    nEdited++;
+                }
+                tokens[4]=alt;
             }
-            else if (info.indexOf("SVTYPE=INV")>=0) { 
-                alt="<INV-"+svlen+">";
-                nEdited++;
-            }
-            else if (info.indexOf("SVTYPE=DUP")>=0) { 
-                alt="<DUP-"+svlen+">";
-                nEdited++;
-            }
-            else if (info.indexOf("SVTYPE=CNV")>=0) {
-                alt="<CNV-"+svlen+">";
-                nEdited++;
-            }
-            tokens[4]=alt;
             
             // Outputting
             System.out.print(tokens[0]);
