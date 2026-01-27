@@ -7,7 +7,8 @@ import java.io.*;
 /**
  * Removes all the REF sequences that can be reconstructed from INFO, and stores
  * their length in the symbolic ALT to prevent overcollapse by `bcftools merge` 
- * downstream. Forces a QUAL value on every record.
+ * downstream. Forces a QUAL value on every record and overwrites FILTER with 
+ * PASS.
  *
  * This program is typically used to compress a VCF that contains only ultralong
  * calls.
@@ -65,6 +66,7 @@ public class RemoveRefAlt {
             
             // Forcing QUAL
             tokens[5]=FORCE_QUAL;
+            tokens[6]="PASS";
             
             // Computing SVLEN
             svlen=-1;
