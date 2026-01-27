@@ -230,8 +230,13 @@ task Impl {
             
             # Merging
             date
-            bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 | bcftools reheader --samples-list SAMPLE > out.vcf
+            bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 > out.vcf
             date
+            mv out.vcf in.vcf
+            
+            # Setting sample name
+            echo "MERGED" > samples.txt
+            bcftools reheader --samples samples.txt in.vcf > out.vcf
             mv out.vcf in.vcf
             
             # Enforcing artificial GTs on the single sample column
