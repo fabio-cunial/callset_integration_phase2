@@ -322,9 +322,7 @@ task Impl {
             fi
             
             # Making sure SVLEN and SVTYPE are consistently annotated
-            ${TIME_COMMAND} truvari anno svinfo --minsize 1 ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
-            ${TIME_COMMAND} java -cp ~{docker_dir} FixTruvariAnnoSvlen ${SAMPLE_ID}_${CALLER_ID}_in.vcf | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvtypeSvlen ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             # Isolating BNDs
