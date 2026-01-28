@@ -21,21 +21,21 @@ public class GetKanpigWindows {
         final int QUANTUM = 10000;  // Arbitrary
         
         int p, q;
-        int pos, region, refLength, altLength, start, end, currentRegion, currentStart, currentEnd, nRecords, total;
-        String str, chr, currentChr;
+        int pos, refLength, altLength, start, end, currentStart, currentEnd, nRecords, total;
+        String str, chr, currentChr, region, currentRegion;
         BufferedReader br;
         String[] tokens, tokensPrime;
         
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(KANPIG_VCF_GZ))));
         str=br.readLine(); nRecords=0; 
-        currentRegion=-1; currentChr=""; currentStart=-1; currentEnd=-1; total=0;
+        currentRegion=""; currentChr=""; currentStart=-1; currentEnd=-1; total=0;
         while (str!=null) { 
             if (str.charAt(0)=='#') { str=br.readLine(); continue; }
             nRecords++;
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records...");
             tokens=str.split("\t");
             tokensPrime=tokens[9].split(":");
-            region=Integer.parseInt(tokensPrime[4]);
+            region=tokensPrime[4];
             chr=tokens[0];
             pos=Integer.parseInt(tokens[1]);
             refLength=tokens[3].length();
@@ -55,8 +55,8 @@ public class GetKanpigWindows {
                 start=(pos+1)-1;
                 end=pos+(refLength-1)-1;
             }
-            if (region!=currentRegion) {
-                if (currentRegion!=-1) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+currentRegion+"\t"+total);
+            if (!region.equals(currentRegion)) {
+                if (currentRegion.length()!=0) System.out.println(currentChr+"\t"+currentStart+"\t"+(currentEnd+1)+"\t"+currentRegion+"\t"+total);
                 currentRegion=region; currentChr=chr; currentStart=start; currentEnd=end; total=1;
             }
             else {
