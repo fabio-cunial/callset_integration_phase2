@@ -96,8 +96,8 @@ workflow SV_Integration_Workpackage1 {
 #
 ## Truvari collapse ultralong:
 #
-# --pctseq 0                   1 s
-# --pctseq 0.90             ?????????
+# --pctseq 0                   2 s
+# --pctseq 0.90                2 s to >=1 h
 #
 task Impl {
     input {
