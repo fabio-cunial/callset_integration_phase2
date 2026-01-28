@@ -283,7 +283,8 @@ task Impl {
         #               sequence where possible to save space;
         # bnd: BND records, in their original form.
         #
-        # Remark: the funtion outputs a `.vcf`.
+        # Remark: the funtion outputs indexed `.vcf.gz` files, since they are
+        # needed by `bcftools merge`.
         #
         function CanonizeVcf() {
             local INPUT_VCF_GZ=$1
@@ -382,10 +383,11 @@ task Impl {
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             
             # 1.6 Removing duplicated records
-            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+            ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${SAMPLE_ID}_${CALLER_ID}_sv.vcf
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_sv.vcf.gz.tbi
             
             # 2. BND VCF -------------------------------------------------------
             
@@ -406,10 +408,11 @@ task Impl {
             
             # 2.3 Forcing every record to PASS and adding QUAL, since it is
             # used by `truvari collapse` to select a representation.
-            ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz.tbi
             
             # 3. Ultralong VCF -------------------------------------------------
             
@@ -425,35 +428,38 @@ task Impl {
             # and setting QUAL, since it is used by `truvari collapse` to select
             # a representation.
             if [ ~{ultralong_collapse_mode} -eq 0 ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} ~{reference_fai} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+                ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             elif [ ~{ultralong_collapse_mode} -eq 1 ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+                ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             fi
             
-            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
+            mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz.tbi
         }
         
         
         # Collapses with truvari all files `SAMPLEID_CALLERID_sv.vcf.gz`,
         # creating an output file `SAMPLEID_sv.vcf.gz`.
         #
-        # Remark: the funtion outputs a `.vcf`.
+        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
+        # downstream.
         #
         function IntrasampleMerge_sv() {
             local SAMPLE_ID=$1
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf ${SAMPLE_ID}_pbsv_sv.vcf ${SAMPLE_ID}_sniffles_sv.vcf > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_*_sv.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -462,11 +468,12 @@ task Impl {
             # CHROM,POS,ID in downstream calls to `bcftools annotate`. Using
             # CHROM,POS,REF,ALT can make `bcftools annotate` segfault, and the
             # speed of joining by CHROM,POS,ID is independent of SVLEN.
-            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') > ${SAMPLE_ID}_out.vcf
-            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf | head -n 5 || echo "0"
+            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
-            mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_sv.vcf
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_sv.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_sv.vcf.gz.tbi
         }
         
         
@@ -478,15 +485,17 @@ task Impl {
         # length at similar POS may be wrongly collapsed. We tolerate this for
         # speed reasons.
         #
-        # Remark: the funtion outputs a `.vcf`.
+        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
+        # downstream.
         #
         function IntrasampleMerge_ultralong() {
             local SAMPLE_ID=$1
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_ultralong.vcf ${SAMPLE_ID}_pbsv_ultralong.vcf ${SAMPLE_ID}_sniffles_ultralong.vcf > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_*_ultralong.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_ultralong.vcf.gz ${SAMPLE_ID}_pbsv_ultralong.vcf.gz ${SAMPLE_ID}_sniffles_ultralong.vcf.gz > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_*_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -507,8 +516,9 @@ task Impl {
                 PCTSEQ_VALUE="0.90"
             fi
             
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf --intra --keep maxqual --refdist 500 --pctseq ${PCTSEQ_VALUE} --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            bgzip --compress-level 1 ${SAMPLE_ID}_in.vcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq ${PCTSEQ_VALUE} --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -521,55 +531,61 @@ task Impl {
             fi
             
             # Ensuring that every record has a unique ID
-            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') > ${SAMPLE_ID}_out.vcf
-            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf | head -n 5 || echo "0"
+            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_in.vcf.gz
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
-            mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_ultralong.vcf
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_ultralong.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_ultralong.vcf.gz.tbi
         }
         
         
         # Collapses with truvari all files `SAMPLEID_CALLERID_bnd.vcf.gz`,
         # creating an output file `SAMPLEID_bnd.vcf.gz`.
         #
-        # Remark: the funtion outputs a `.vcf`.
+        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
+        # downstream.
         #
         function IntrasampleMerge_bnd() {
             local SAMPLE_ID=$1
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_bnd.vcf ${SAMPLE_ID}_pbsv_bnd.vcf ${SAMPLE_ID}_sniffles_bnd.vcf > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_*_bnd.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_bnd.vcf.gz ${SAMPLE_ID}_pbsv_bnd.vcf.gz ${SAMPLE_ID}_sniffles_bnd.vcf.gz > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_*_bnd.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # Ensuring that every record has a unique ID
-            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') > ${SAMPLE_ID}_out.vcf
-            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf | head -n 5 || echo "0"
+            (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_in.vcf.gz
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
             
-            mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_bnd.vcf
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_bnd.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_bnd.vcf.gz.tbi
         }
         
         
         # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
         # necessary, since kanpig overwrites the SAMPLE field.
         #
-        # Remark: the funtion requires an indexed `.vcf.gz` in input, but it
-        # outputs a `.vcf`.
+        # Remark: the funtion requires an indexed `.vcf.gz` in input, and it
+        # outputs an indexed `.vcf.gz` of `bcf`, depending on `OUTPUT_FORMAT`
+        # (`z` or `b`).
         #
         function CopySuppToInfo() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-            local OUTPUT_VCF=$3
+            local OUTPUT_FORMAT=$3
+            local OUTPUT_VCF_GZ=$4
             
             bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
@@ -590,7 +606,9 @@ task Impl {
             echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
-            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type z ${INPUT_VCF_GZ} > ${OUTPUT_VCF}
+            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} > ${OUTPUT_VCF_GZ}
+            bcftools index --threads ${N_THREADS} ${OUTPUT_VCF_GZ}
+            
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF_GZ}*
         }
            
@@ -726,8 +744,8 @@ task Impl {
         # contaminated training set in XGBoost downstream is worse than using a
         # slightly smaller training set.
         #
-        # Remark: both the inputs and the output of the funtion are indexed
-        # `.vcf.gz`.
+        # Remark: both the inputs and the output of the function are indexed
+        # `.vcf.gz`, sine they are needed by `truvari bench`.
         #
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
@@ -776,27 +794,20 @@ task Impl {
             
             # Genotyping and marking training records
             LocalizeSample ${SAMPLE_ID} 2 ${LINE}
-            bgzip --compress-level 1 ${SAMPLE_ID}_sv.vcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_sv.vcf.gz
-            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz ${SAMPLE_ID}_sv_supp.vcf
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz z ${SAMPLE_ID}_sv_supp.vcf.gz
             Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
             CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
             # Copying SUPP fields to INFO in the BND and ultralong VCFs as well
-            bgzip --compress-level 1 ${SAMPLE_ID}_bnd.vcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_bnd.vcf.gz
-            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_bnd.vcf.gz ${SAMPLE_ID}_bnd_supp.vcf
-            mv ${SAMPLE_ID}_bnd_supp.vcf ${SAMPLE_ID}_bnd.vcf
-            bgzip --compress-level 1 ${SAMPLE_ID}_ultralong.vcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_ultralong.vcf.gz
-            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_ultralong.vcf.gz ${SAMPLE_ID}_ultralong_supp.vcf
-            mv ${SAMPLE_ID}_ultralong_supp.vcf ${SAMPLE_ID}_ultralong.vcf
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_bnd.vcf.gz b ${SAMPLE_ID}_bnd_supp.bcf
+            mv ${SAMPLE_ID}_bnd_supp.bcf ${SAMPLE_ID}_bnd.bcf.csi
+            mv ${SAMPLE_ID}_bnd_supp.bcf.csi ${SAMPLE_ID}_bnd.bcf.csi
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_ultralong.vcf.gz b ${SAMPLE_ID}_ultralong_supp.bcf
+            mv ${SAMPLE_ID}_ultralong_supp.bcf ${SAMPLE_ID}_ultralong.bcf
+            mv ${SAMPLE_ID}_ultralong_supp.bcf.csi ${SAMPLE_ID}_ultralong.bcf.csi
             
-            # Compressing and uploading            
-            bcftools view --output-type b ${SAMPLE_ID}_bnd.vcf > ${SAMPLE_ID}_bnd.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_bnd.bcf
-            rm -f ${SAMPLE_ID}_bnd.vcf
-            bcftools view --output-type b ${SAMPLE_ID}_ultralong.vcf > ${SAMPLE_ID}_ultralong.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_ultralong.bcf
-            rm -f ${SAMPLE_ID}_ultralong.vcf
+            # Uploading
             gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
