@@ -212,13 +212,14 @@ public class AddSvtypeSvlen {
 	private static final String addOrReplaceInfoField(String info, String field, String newValue) {
 		final int FIELD_LENGTH = field.length()+1;
         int p, q;
-    
+        
+        if (info.equals(".")) return field+"="+newValue;
         p=-FIELD_LENGTH;
         do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
         while (p>0 && info.charAt(p-1)!=';');
 		if (p<0) return info+";"+field+"="+newValue;
 		q=info.indexOf(";",p+FIELD_LENGTH);
-		return info.substring(0,p+FIELD_LENGTH)+newValue+info.substring(q);
+        return info.substring(0,p+FIELD_LENGTH)+newValue+(q>=0?info.substring(q):"");
 	}
 
 }
