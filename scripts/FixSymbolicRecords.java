@@ -37,7 +37,7 @@ public class FixSymbolicRecords {
         System.err.println(" done in "+((System.currentTimeMillis()-time)/1000)+"s");
         
         buffer = new StringBuilder();
-        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
+        br = new BufferedReader( new InputStreamReader( INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz") ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
         str=br.readLine(); nRecords=0; nSymbolicRecords=0; nDiscarded=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {

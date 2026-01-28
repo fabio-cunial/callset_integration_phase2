@@ -16,7 +16,7 @@ public class GetKanpigWindows {
      * GT:FT:SQ:GQ:PS:DP:AD:KS
      */
     public static void main(String[] args) throws IOException {
-        final String KANPIG_VCF_GZ = args[0];
+        final String INPUT_VCF_GZ = args[0];
         
         final int QUANTUM = 10000;  // Arbitrary
         
@@ -26,7 +26,7 @@ public class GetKanpigWindows {
         BufferedReader br;
         String[] tokens, tokensPrime;
         
-        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(KANPIG_VCF_GZ))));
+        br = new BufferedReader( new InputStreamReader( INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz") ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
         str=br.readLine(); nRecords=0; 
         currentRegion=""; currentChr=""; currentStart=-1; currentEnd=-1; total=0;
         while (str!=null) { 

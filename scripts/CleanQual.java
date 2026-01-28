@@ -23,7 +23,7 @@ public class CleanQual {
         BufferedReader br;
         String[] tokens;
         
-        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
+        br = new BufferedReader( new InputStreamReader( INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz") ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
         str=br.readLine(); nRecords=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
