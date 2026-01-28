@@ -148,11 +148,11 @@ task Impl {
         # records have no SVTYPE, they would be assigned SVTYPE=SUB by our
         # annotation script, and they would not be matched to any record in an
         # intra-sample VCF since `truvari bench` uses type as a matching
-        # criterion. This means that e.g. INVs are never part of the training
-        # resource: this is probably fine, since the resource does not need to
-        # be comprehensive.
+        # criterion.
         #
-        # Remark: dipcall's replacement records can be strange. E.g.:
+        # Alternatively, we could keep all records and run `truvari bench`
+        # without considering SVTYPE, but dipcall's replacement records can be
+        # strange, e.g.:
         #
         # REF: CAAAAAAAAAAAAAAAAAAAAAA
         # ALT: C
@@ -161,6 +161,10 @@ task Impl {
         # REF: CGGTGGTCCTCCTTGCCGGTGGTCCTCCTTCCTGGTGGTTCTCCTTCCTGGTGGTCCTCCTTCCT
         # ALT: C
         # ALT: TGGTGGTCCTCCTTGCCGGTGGTCCTCCTTCCTGGTGGTTCTCCTTCCTGGTGGTCCTCCTTCCT
+        #
+        # This means that e.g. INVs are never part of the training resource:
+        # this is probably fine, since the resource does not need to be
+        # comprehensive.
         #
         function CanonizeDipcallVcf() {
             local SAMPLE_ID=$1

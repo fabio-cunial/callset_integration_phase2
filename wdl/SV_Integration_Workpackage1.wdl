@@ -13,6 +13,7 @@ workflow SV_Integration_Workpackage1 {
         Int min_sv_length = 20
         Int max_sv_length = 10000
         String kanpig_params_singlesample = "--neighdist 1000 --gpenalty 0.02 --hapsim 0.9999 --sizesim 0.90 --seqsim 0.85 --maxpaths 10000"
+        Int ultralong_collapse_mode = 0
         
         File training_resource_vcf_gz
         File training_resource_tbi
@@ -33,6 +34,7 @@ workflow SV_Integration_Workpackage1 {
         region: "Only consider VCF records in this genomic region. Set to 'all' to disable."
         remote_outdir: "Without final slash. Where the output of intra-sample truvari and kanpig is stored for each sample."
         max_sv_length: "Calls above this length are deemed 'ultralong', are not given to kanpig re-genotyping, and are processed separately."
+        ultralong_collapse_mode: "0=do not use sequence similarity in truvari collapse; 1=use sequence similarity in truvari collapse."
         training_resource_vcf_gz: "We assume that the training resource VCF has already been subset to the correct length range upstream."
         training_resource_bed: "Training resource calls can belong only to these regions. Typically a high-confidence dipcall BED, or a BED derived from intersecting multiple dipcall BEDs."
     }
@@ -46,6 +48,7 @@ workflow SV_Integration_Workpackage1 {
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length,
             kanpig_params_singlesample = kanpig_params_singlesample,
+            ultralong_collapse_mode = ultralong_collapse_mode,
             
             training_resource_vcf_gz = training_resource_vcf_gz,
             training_resource_tbi = training_resource_tbi,
@@ -67,7 +70,7 @@ workflow SV_Integration_Workpackage1 {
 }
 
 
-# Memory bottlenecks (measured on a 32GB VM):
+## Memory bottlenecks (measured on a 32GB VM):
 #
 # FixSymbolicRecords           5 GB
 # CleanRefAltQual            250 MB
@@ -75,16 +78,26 @@ workflow SV_Integration_Workpackage1 {
 # truvari collapse           100 MB
 # kanpig                     400 MB
 #
-# Multicore bottlenecks (measured on a 16-CPU VM):
+## Multicore bottlenecks (measured on a 16-CPU VM):
 # 
 # bcftools merge             300 %
 # bgzip                      500 %
 # kanpig                     900 %
 #
-# Kanpig runtimes:
+## Kanpig runtimes:
 #
-# genome, 16 CPUs, 32GB       2 m
-# chr6, 6 CPUs, 8GB          20 s
+# genome, 16 CPUs, 32GB        2 m
+# genome, 6 CPUs, 8GB          4 m
+# chr6, 6 CPUs, 8GB           20 s
+#
+## BAM downloading:
+#
+# 6 CPUs, 8GB                  8 m
+#
+## Truvari collapse ultralong:
+#
+# --pctseq 0                   1 s
+# --pctseq 0.90             ?????????
 #
 task Impl {
     input {
@@ -95,6 +108,7 @@ task Impl {
         Int min_sv_length
         Int max_sv_length
         String kanpig_params_singlesample
+        Int ultralong_collapse_mode
         
         File training_resource_vcf_gz
         File training_resource_tbi
@@ -391,7 +405,8 @@ task Impl {
             ${TIME_COMMAND} bcftools norm --rm-dup exact --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            # 2.3 Adding QUAL and forcing every record to PASS
+            # 2.3 Forcing every record to PASS and adding QUAL, since it is
+            # used by `truvari collapse` to select a representation.
             ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
@@ -408,10 +423,16 @@ task Impl {
             ${TIME_COMMAND} bcftools norm --remove-duplicates --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
-            # 3.3 Removing sequence (lossless).
-            # QUAL is used by truvari collapse to select a representation.
-            ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ~{reference_fai} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            # 3.3 Removing sequence (lossless), forcing every record to PASS,
+            # and setting QUAL, since it is used by `truvari collapse` to select
+            # a representation.
+            if [ ~{ultralong_collapse_mode} -eq 0 ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} ~{reference_fai} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            elif [ ~{ultralong_collapse_mode} -eq 1 ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${QUAL} | bgzip > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+            fi
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz.tbi
@@ -472,17 +493,22 @@ task Impl {
             
             # Removing SVLEN from symbolic ALTs, in order not to interfere with
             # `truvari collapse`.
-            bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf
-            ${TIME_COMMAND} bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' >> ${SAMPLE_ID}_out.vcf
-            ${TIME_COMMAND} bgzip --threads ${N_THREADS} ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            if [ ~{ultralong_collapse_mode} -eq 0 ]; then
+                bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf
+                ${TIME_COMMAND} bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                    if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                    printf("%s",$1); \
+                    for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                    printf("\n"); \
+                }' >> ${SAMPLE_ID}_out.vcf
+                ${TIME_COMMAND} bgzip --threads ${N_THREADS} ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+                PCTSEQ_VALUE="0"
+            elif [ ~{ultralong_collapse_mode} -eq 1 ]; then
+                PCTSEQ_VALUE="0.90"
+            fi
             
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq ${PCTSEQ_VALUE} --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
@@ -490,8 +516,10 @@ task Impl {
             
             # Adding SVLEN back into symbolic ALTs, to avoid overcollapse in the
             # cohort-level bcftools merge downstream.
-            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            if [ ~{ultralong_collapse_mode} -eq 0 ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
+            fi
             
             # Ensuring that every record has a unique ID
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf.gz ; bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
@@ -519,13 +547,6 @@ task Impl {
             
             ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            
-            # Remark: BNDs are not collapsed with truvari, since `truvari
-            # collapse` does not work on BNDs.
-            #${TIME_COMMAND} java -cp ~{docker_dir} CollapseSamples ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
-            #rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
-            #${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --rm-dup exact --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            #rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
