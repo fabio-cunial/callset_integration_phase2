@@ -607,9 +607,9 @@ task Impl {
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
             ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} > ${OUTPUT_VCF_GZ}
-            if [ ${OUTPUT_FORMAT} = z ];
+            if [ ${OUTPUT_FORMAT} = z ]; then
                 bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
-            else
+            elif [ ${OUTPUT_FORMAT} = b ]; then
                 bcftools index --threads ${N_THREADS} -f -c ${OUTPUT_VCF_GZ}
             fi
             
