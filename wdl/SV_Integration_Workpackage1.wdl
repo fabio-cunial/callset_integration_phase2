@@ -285,7 +285,7 @@ task Impl {
                 fi
                 rm -f ${ID}.bed
             done < not_gaps.bed
-            ls -lht *.bed
+            ls -lht *.bed 1>&2
             
             # Removing temporary files
             rm -f gaps_unsorted.bed training_resource_sorted.bed
@@ -769,8 +769,8 @@ task Impl {
         # VCF (probably not good) and vice versa (good).
         #
         # Remark: multiple instances of `truvari bench` are run in parallel,
-        # since a full-genome run takes ~10m. Single-sample `truvari collapse`
-        # instead takes <1m even on the full genome.
+        # since a full-genome run takes ~10m (single-sample `truvari collapse`
+        # instead takes <1m even on the full genome).
         #
         # Remark: both the inputs and the output of the function are indexed
         # `.vcf.gz`, since they are needed by `truvari bench`.
@@ -780,13 +780,13 @@ task Impl {
             local INPUT_VCF_GZ=$2
             
             # Running in parallel
-            echo "#!/bin/bash" > ${SAMPLE_ID}_script.sh
-            echo "SAMPLE_ID=$1" >> ${SAMPLE_ID}_script.sh
-            echo "INPUT_VCF_GZ=$2" >> ${SAMPLE_ID}_script.sh
-            echo "CHUNK_ID=$3" >> ${SAMPLE_ID}_script.sh
-            echo "INCLUDE_BED=$4" >> ${SAMPLE_ID}_script.sh
-            echo "${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/" >> ${SAMPLE_ID}_script.sh
-            cat ${SAMPLE_ID}_script.sh
+            echo '#!/bin/bash' > ${SAMPLE_ID}_script.sh
+            echo 'SAMPLE_ID=$1' >> ${SAMPLE_ID}_script.sh
+            echo 'INPUT_VCF_GZ=$2' >> ${SAMPLE_ID}_script.sh
+            echo 'CHUNK_ID=$3' >> ${SAMPLE_ID}_script.sh
+            echo 'INCLUDE_BED=$4' >> ${SAMPLE_ID}_script.sh
+            echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
+            cat ${SAMPLE_ID}_script.sh 1>&2
             chmod +x ${SAMPLE_ID}_script.sh
             ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
             
