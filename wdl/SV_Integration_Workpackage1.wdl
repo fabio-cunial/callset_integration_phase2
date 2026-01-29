@@ -769,8 +769,9 @@ task Impl {
         # VCF (probably not good) and vice versa (good).
         #
         # Remark: multiple instances of `truvari bench` are run in parallel,
-        # since a full-genome run takes ~10m (single-sample `truvari collapse`
-        # instead takes <1m even on the full genome).
+        # since a full-genome run takes ~10m, which can be reduced to e.g. ~5m
+        # with 3 physical cores (6 hyperthreading cores). Note that single-
+        # sample `truvari collapse` takes instead <1m even on the full genome.
         #
         # Remark: both the inputs and the output of the function are indexed
         # `.vcf.gz`, since they are needed by `truvari bench`.
@@ -788,7 +789,7 @@ task Impl {
             echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
             cat ${SAMPLE_ID}_script.sh 1>&2
             chmod +x ${SAMPLE_ID}_script.sh
-            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
+            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=0 ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
             
             # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
