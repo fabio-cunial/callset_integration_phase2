@@ -778,7 +778,6 @@ task Impl {
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-            local NOT_GAPS_BED=$3
             
             rm -f ${SAMPLE_ID}_outputs.txt
             while read ROW; do
