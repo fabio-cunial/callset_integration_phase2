@@ -781,7 +781,7 @@ task Impl {
             
             rm -f ${SAMPLE_ID}_outputs.txt
             while read ROW; do
-                ID=$(echo ${ROW} | cut -w -f 1)
+                ID=$(echo ${ROW} | cut -d ' ' -f 1)
                 echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
             done < training_not_gaps_beds.wsv
             ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} GetTrainingRecordsImpl ${SAMPLE_ID} ${INPUT_VCF_GZ}
