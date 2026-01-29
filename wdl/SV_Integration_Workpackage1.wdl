@@ -779,17 +779,28 @@ task Impl {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             
+            # Running in parallel
+            echo "#!/bin/bash" > ${SAMPLE_ID}_script.sh
+            echo "SAMPLE_ID=$1" >> ${SAMPLE_ID}_script.sh
+            echo "INPUT_VCF_GZ=$2" >> ${SAMPLE_ID}_script.sh
+            echo "CHUNK_ID=$3" >> ${SAMPLE_ID}_script.sh
+            echo "INCLUDE_BED=$4" >> ${SAMPLE_ID}_script.sh
+            echo "${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/" >> ${SAMPLE_ID}_script.sh
+            cat ${SAMPLE_ID}_script.sh
+            chmod +x ${SAMPLE_ID}_script.sh
+            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
+            
+            # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
             while read ROW; do
                 ID=$(echo ${ROW} | cut -d ' ' -f 1)
                 echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
             done < training_not_gaps_beds.wsv
-            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} GetTrainingRecordsImpl ${SAMPLE_ID} ${INPUT_VCF_GZ}
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list ${SAMPLE_ID}_outputs.txt --output-type z > ${SAMPLE_ID}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
             
             # Removing temporary files
-            rm -rf ${SAMPLE_ID}_outputs.txt ./${SAMPLE_ID}_truvari_*/
+            rm -rf ${SAMPLE_ID}_script.sh ${SAMPLE_ID}_outputs.txt ./${SAMPLE_ID}_truvari_*/
         }
         
         function GetTrainingRecordsImpl() {
