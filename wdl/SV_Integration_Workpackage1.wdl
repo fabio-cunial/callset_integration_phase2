@@ -754,13 +754,33 @@ task Impl {
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
+            local NOT_GAPS_BED=$3
             
-            ${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ~{training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_training.vcf.gz
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz.tbi ${SAMPLE_ID}_training.vcf.gz.tbi
+            ID="0"
+            rm -f ${SAMPLE_ID}_inputs.txt ${SAMPLE_ID}_outputs.txt
+            while read ${ROW}; do
+                ID=$(( ${ID} + 1 ))
+                echo ${ID} >> ${SAMPLE_ID}_inputs.txt
+                echo ${ROW} > ${ID}.bed
+                echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
+            done < ${NOT_GAPS_BED}
+            date
+            xargs --arg-file=${SAMPLE_ID}_inputs.txt --max-lines=1 --max-procs=${N_THREADS} GetTrainingRecordsImpl ${SAMPLE_ID} ${INPUT_VCF_GZ}
+            date
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list ${SAMPLE_ID}_outputs.txt --output-type z > ${SAMPLE_ID}_training.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
             
             # Removing temporary files
-            rm -rf ./${SAMPLE_ID}_truvari/
+            rm -rf ${SAMPLE_ID}_inputs.txt ${SAMPLE_ID}_outputs.txt ./${SAMPLE_ID}_truvari_*/
+        }
+        
+        
+        function GetTrainingRecordsImpl() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local CHUNK_ID=$3
+            
+            ${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ${CHUNK_ID}.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
         }
         
         
