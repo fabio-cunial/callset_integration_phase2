@@ -255,8 +255,8 @@ task Impl {
         }
         
         
-        # Builds a BED file that excludes every gap from the AGP file of the
-        # reference.
+        # Builds a BED file that excludes every gap from the AGP file of
+        # the reference.
         #
         function GetReferenceGaps() {
             # Computing non-gap regions
@@ -268,15 +268,15 @@ task Impl {
                        ) print $0 \
                  }' ~{reference_agp} > gaps_unsorted.bed
             bedtools sort -i gaps_unsorted.bed -faidx ~{reference_fai} > gaps.bed
-            bedtools complement -i gaps.bed -g ~{reference_fai} > not_gaps.bed
+            bedtools complement -L -i gaps.bed -g ~{reference_fai} > not_gaps.bed
             
             # Intersecting non-gap regions with the training BED
-            ${TIME_COMMAND} bedtools sort -i ~{training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
+            bedtools sort -i ~{training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
             rm -f training_not_gaps_beds.wsv
             ID="0"
             while read ROW; do
                 ID=$(( ${ID} + 1 ))
-                echo ${ROW} > ${ID}.bed
+                echo "${ROW}" > ${ID}.bed
                 bedtools intersect -a ${ID}.bed -b training_resource_sorted.bed -sorted -g ~{reference_fai} > training_not_gaps_${ID}.bed
                 if [ -s training_not_gaps_${ID}.bed ]; then
                     echo "${ID} training_not_gaps_${ID}.bed" >> training_not_gaps_beds.wsv
@@ -285,7 +285,7 @@ task Impl {
                 fi
                 rm -f ${ID}.bed
             done < not_gaps.bed
-            ls -lht
+            ls -lht *.bed
             
             # Removing temporary files
             rm -f gaps_unsorted.bed training_resource_sorted.bed
@@ -769,7 +769,8 @@ task Impl {
         # VCF (probably not good) and vice versa (good).
         #
         # Remark: multiple instances of `truvari bench` are run in parallel,
-        # since a full-genome run takes ~10m.
+        # since a full-genome run takes ~10m. Single-sample `truvari collapse`
+        # instead takes <1m even on the full genome.
         #
         # Remark: both the inputs and the output of the function are indexed
         # `.vcf.gz`, since they are needed by `truvari bench`.
