@@ -1,8 +1,11 @@
 version 1.0
 
 
-# Runs `PAV2SVs.wdl`, `Resolve.wdl`, `TruvariIntrasample.wdl`, `Kanpig.wdl` in
-# the same VM for multiple samples.
+# From raw single-sample calls to an intra-sample merged and re-genotyped
+# callset, plus a subset of records marked for XGBoost training.
+#
+# Remark: this workflow is designed to process multiple samples in the same VM
+# and to be robust to preemption.
 #
 workflow SV_Integration_Workpackage1 {
     input {
@@ -27,7 +30,7 @@ workflow SV_Integration_Workpackage1 {
         File ploidy_bed_female
         File ploidy_bed_male
         
-        String docker_image = "fcunial/callset_integration_phase2_workpackages:v3"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."

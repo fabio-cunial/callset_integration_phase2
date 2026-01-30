@@ -12,7 +12,7 @@ TAG="$1"
 cp ../scripts/*.java .
 cp ../scripts/*.r .
 cp ../scripts/*.py .
-podman build -t fcunial/callset_integration_phase2_workpackages .
-podman tag fcunial/callset_integration_phase2_workpackages fcunial/callset_integration_phase2_workpackages:${TAG}
-podman push fcunial/callset_integration_phase2_workpackages:${TAG}
+podman build -t us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages .
+podman tag us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:${TAG}
+podman push us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:${TAG}
 rm -f *.java *.class *.r *.py
