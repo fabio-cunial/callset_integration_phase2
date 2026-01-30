@@ -789,7 +789,7 @@ task Impl {
             echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick multi -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
             cat ${SAMPLE_ID}_script.sh 1>&2
             chmod +x ${SAMPLE_ID}_script.sh
-            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=0 ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
+            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
             
             # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
