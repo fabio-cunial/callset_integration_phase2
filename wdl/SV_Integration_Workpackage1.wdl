@@ -173,7 +173,7 @@ task Impl {
             
             if [ ${MODE} -eq 2 ]; then
                 while : ; do
-                    TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -182,7 +182,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -192,7 +192,7 @@ task Impl {
                 done
             else
                 while : ; do
-                    TEST=$(gsutil -m cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PAV_VCF_GZ}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -201,7 +201,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PAV_TBI}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -210,7 +210,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PBSV_VCF_GZ}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -219,7 +219,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${PBSV_TBI}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -228,7 +228,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${SNIFFLES_VCF_GZ}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -237,7 +237,7 @@ task Impl {
                     fi
                 done
                 while : ; do
-                    TEST=$(gsutil -m cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi && echo 0 || echo 1)
+                    TEST=$(gcloud storage cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi && echo 0 || echo 1)
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${SNIFFLES_TBI}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
@@ -654,10 +654,6 @@ task Impl {
             fi
             
             # Remark: kanpig needs --sizemin >= --kmer
-            export GCS_OAUTH_TOKEN=$(gcloud auth print-access-token)
-            samtools view ${ALIGNMENTS_BAM} | head -n 1 || echo "1"
-            export HTS_ALLOW_INSECURE=1
-            samtools view ${ALIGNMENTS_BAM} | head -n 1 || echo "1"
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
             rm -f ${INPUT_VCF} ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
@@ -840,9 +836,9 @@ task Impl {
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
             # Skipping the sample if it has already been processed
-            TEST1=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
-            TEST2=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.vcf.gz || echo "0" )
-            TEST3=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}_bnd.vcf.gz || echo "0" )
+            TEST1=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
+            TEST2=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.vcf.gz || echo "0" )
+            TEST3=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_bnd.vcf.gz || echo "0" )
             if [ ${TEST1} != "0" -a ${TEST2} != "0" -a ${TEST3} != "0" ]; then
                 continue
             fi
@@ -857,8 +853,9 @@ task Impl {
             IntrasampleMerge_bnd ${SAMPLE_ID}
             
             # Genotyping and marking training records
+            LocalizeSample ${SAMPLE_ID} 2 ${LINE}
             CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz z ${SAMPLE_ID}_sv_supp.vcf.gz
-            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${ALIGNED_BAM}
+            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
             CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
@@ -871,7 +868,7 @@ task Impl {
             mv ${SAMPLE_ID}_ultralong_supp.bcf.csi ${SAMPLE_ID}_ultralong.bcf.csi
             
             # Uploading
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
