@@ -773,6 +773,9 @@ task Impl {
         # with 3 physical cores (6 hyperthreading cores). Note that single-
         # sample `truvari collapse` takes instead <1m even on the full genome.
         #
+        # Remark: in few anecdotal tests, `--pick multi` seems a bit faster than
+        # `--pick single` (4m vs 5m with 6 hyperthreading cores).
+        #
         # Remark: both the inputs and the output of the function are indexed
         # `.vcf.gz`, since they are needed by `truvari bench`.
         #
@@ -786,7 +789,7 @@ task Impl {
             echo 'INPUT_VCF_GZ=$2' >> ${SAMPLE_ID}_script.sh
             echo 'CHUNK_ID=$3' >> ${SAMPLE_ID}_script.sh
             echo 'INCLUDE_BED=$4' >> ${SAMPLE_ID}_script.sh
-            echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick multi -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
+            echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
             cat ${SAMPLE_ID}_script.sh 1>&2
             chmod +x ${SAMPLE_ID}_script.sh
             ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
