@@ -146,6 +146,7 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_DELAY_S="600"
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         
         
@@ -431,7 +432,12 @@ task Impl {
             
             # 2.3 Forcing every record to PASS and adding QUAL, since it is
             # used by `truvari collapse` to select a representation.
-            ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+            
+            # 2.4 Setting to 0/1 every 0/0 record, otherwise the corresponding
+            # truvari collapse SUPP field becomes zero.
+            ${TIME_COMMAND} bcftools +setGT --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf -- --target-gt q --include 'GT="ref"' --new-gt c:0/1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf.gz
@@ -451,12 +457,17 @@ task Impl {
             # and setting QUAL, since it is used by `truvari collapse` to select
             # a representation.
             if [ ~{ultralong_collapse_mode} -eq 0 ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+                ${TIME_COMMAND} java -cp ~{docker_dir} RemoveRefAlt ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} ~{reference_fai} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             elif [ ~{ultralong_collapse_mode} -eq 1 ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} | bgzip --compress-level 1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
+                ${TIME_COMMAND} java -cp ~{docker_dir} CleanQual ${SAMPLE_ID}_${CALLER_ID}_in.vcf ${QUAL} > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             fi
+            
+            # 3.4 Setting to 0/1 every 0/0 record, otherwise the corresponding
+            # truvari collapse SUPP field becomes zero.
+            ${TIME_COMMAND} bcftools +setGT --output-type z ${SAMPLE_ID}_${CALLER_ID}_in.vcf -- --target-gt q --include 'GT="ref"' --new-gt c:0/1 > ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf.gz.tbi
