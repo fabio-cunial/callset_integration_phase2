@@ -96,12 +96,17 @@ workflow SV_Integration_Workpackage1 {
 ## BAM downloading (measured on a 6 CPUs, 8GB VM):
 #
 # gsutil -m cp                 8 m
-# gcloud storage cp            ?????????
+# gcloud storage cp            4 m
 #
 ## Truvari collapse ultralong:
 #
 # --pctseq 0                   2 s
 # --pctseq 0.90                2 s to >=1 h
+#
+# Truvari bench (measured on a 6 CPUs, 8GB VM):
+#
+# Sequential                  10 m
+# Parallel                     5 m
 #
 task Impl {
     input {
@@ -784,10 +789,8 @@ task Impl {
         # the sample VCF might be matched to the same record in the resource 
         # VCF (probably not good) and vice versa (good).
         #
-        # Remark: multiple instances of `truvari bench` are run in parallel,
-        # since a full-genome run takes ~10m, which can be reduced to e.g. ~5m
-        # with 3 physical cores (6 hyperthreading cores). Note that single-
-        # sample `truvari collapse` takes instead <1m even on the full genome.
+        # Remark: multiple instances of `truvari bench` are run in parallel
+        # using `not_gaps.bed`.
         #
         # Remark: in few anecdotal tests, `--pick multi` seems a bit faster than
         # `--pick single` (4m vs 5m with 6 hyperthreading cores).
@@ -850,8 +853,8 @@ task Impl {
             
             # Skipping the sample if it has already been processed
             TEST1=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
-            TEST2=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.vcf.gz || echo "0" )
-            TEST3=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_bnd.vcf.gz || echo "0" )
+            TEST2=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.bcf || echo "0" )
+            TEST3=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_bnd.bcf || echo "0" )
             if [ ${TEST1} != "0" -a ${TEST2} != "0" -a ${TEST3} != "0" ]; then
                 continue
             fi
