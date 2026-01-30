@@ -826,15 +826,6 @@ task Impl {
             rm -rf ${SAMPLE_ID}_script.sh ${SAMPLE_ID}_outputs.txt ./${SAMPLE_ID}_truvari_*/
         }
         
-        function GetTrainingRecordsImpl() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF_GZ=$2
-            local CHUNK_ID=$3
-            local INCLUDE_BED=$4
-            
-            ${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
-        }
-        
         
         
         
