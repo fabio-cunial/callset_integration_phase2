@@ -655,6 +655,9 @@ task Impl {
             
             # Remark: kanpig needs --sizemin >= --kmer
             export GCS_OAUTH_TOKEN=$(gcloud auth print-access-token)
+            samtools view ${INPUT_VCF} | head -n 1
+            export HTS_ALLOW_INSECURE=1
+            samtools view ${INPUT_VCF} | head -n 1
             ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input ${INPUT_VCF} --reads ${ALIGNMENTS_BAM} --out ${SAMPLE_ID}_out.vcf
             rm -f ${INPUT_VCF} ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
