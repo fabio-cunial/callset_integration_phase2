@@ -93,9 +93,10 @@ workflow SV_Integration_Workpackage1 {
 # genome, 6 CPUs, 8GB          4 m
 # chr6, 6 CPUs, 8GB           20 s
 #
-## BAM downloading:
+## BAM downloading (measured on a 6 CPUs, 8GB VM):
 #
-# 6 CPUs, 8GB                  8 m
+# gsutil -m cp                 8 m
+# gcloud storage cp            ?????????
 #
 ## Truvari collapse ultralong:
 #
@@ -144,7 +145,6 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
         
@@ -173,7 +173,9 @@ task Impl {
             
             if [ ${MODE} -eq 2 ]; then
                 while : ; do
+                    date 1>&2
                     TEST=$(gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
+                    date 1>&2
                     if [ ${TEST} -eq 1 ]; then
                         echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
                         sleep ${GSUTIL_DELAY_S}
