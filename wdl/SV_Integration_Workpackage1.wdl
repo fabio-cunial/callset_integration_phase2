@@ -853,9 +853,8 @@ task Impl {
             IntrasampleMerge_bnd ${SAMPLE_ID}
             
             # Genotyping and marking training records
-            LocalizeSample ${SAMPLE_ID} 2 ${LINE}
             CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_sv.vcf.gz z ${SAMPLE_ID}_sv_supp.vcf.gz
-            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${SAMPLE_ID}_aligned.bam
+            Kanpig ${SAMPLE_ID} ${SEX} ${SAMPLE_ID}_sv_supp.vcf.gz ${ALIGNED_BAM}
             CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
