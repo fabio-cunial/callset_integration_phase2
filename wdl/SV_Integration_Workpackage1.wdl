@@ -159,6 +159,10 @@ task Impl {
         
         # ----------------------- Steps of the pipeline ------------------------
         
+        # Remark: localizing the BAM could be avoided by running kanpig on the
+        # remote BAM (likely only on the windows it considers). This does not
+        # work on Google Cloud yet.
+        #
         # @param 
         # $2 1=Localizes everything except the BAM. 2=Localizes just the BAM.
         # $3 A row of `sv_integration_chunk_tsv`.
