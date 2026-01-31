@@ -152,6 +152,7 @@ task Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_DELAY_S="600"
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        export RUST_BACKTRACE="full"
         
         
         
@@ -384,7 +385,7 @@ task Impl {
             # 1. Main VCF ------------------------------------------------------
             
             # 1.1 Sorting
-            ${TIME_COMMAND} bcftools sort --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             
             # 1.2 Fixing symbolic records
@@ -421,7 +422,7 @@ task Impl {
             # 2. BND VCF -------------------------------------------------------
             
             # 2.1 Sorting 
-            ${TIME_COMMAND} bcftools sort --output-type v ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_bnd.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             
             # Remark: we do not run the following command, since it seems to
@@ -451,7 +452,7 @@ task Impl {
             # 3. Ultralong VCF -------------------------------------------------
             
             # 3.1 Sorting
-            ${TIME_COMMAND} bcftools sort --output-type v ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf > ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_ultralong.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             
             # 3.2 Removing duplicated records
@@ -509,7 +510,7 @@ task Impl {
             # speed of joining by CHROM,POS,ID is independent of SVLEN.
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            (bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 1 || echo "0") 1>&2
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_sv.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_sv.vcf.gz.tbi
@@ -572,7 +573,7 @@ task Impl {
             # Ensuring that every record has a unique ID
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            (bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 1 || echo "0") 1>&2
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_ultralong.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_ultralong.vcf.gz.tbi
@@ -606,7 +607,7 @@ task Impl {
             # Ensuring that every record has a unique ID
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            (bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 1 || echo "0") 1>&2
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_bnd.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_bnd.vcf.gz.tbi
@@ -767,7 +768,7 @@ task Impl {
             tabix -@ ${N_THREADS} -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_out.vcf.gz
             mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 5 || echo "0"
+            (bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 1 || echo "0") 1>&2
             
             rm -f ${INPUT_VCF_GZ}*
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
@@ -831,7 +832,6 @@ task Impl {
         
         # ---------------------------- Main program ----------------------------
         
-        export RUST_BACKTRACE="full"
         INFINITY="1000000000"
         truvari --help 1>&2
         ~{docker_dir}/kanpig --version 1>&2

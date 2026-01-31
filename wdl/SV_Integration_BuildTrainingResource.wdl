@@ -76,7 +76,6 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
@@ -93,7 +92,7 @@ task Impl {
             DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
             DIPCALL_VCF_GZ=$(echo ${LINE} | cut -d , -f 3)
             while : ; do
-                TEST=$(gsutil -m cp ${DIPCALL_BED} ./${SAMPLE_ID}.bed && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}.bed && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${DIPCALL_BED}>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -102,7 +101,7 @@ task Impl {
                 fi
             done
             while : ; do
-                TEST=$(gsutil -m cp ${DIPCALL_VCF_GZ} ./${SAMPLE_ID}.vcf.gz && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${DIPCALL_VCF_GZ} ./${SAMPLE_ID}.vcf.gz && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${DIPCALL_VCF_GZ}>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -279,7 +278,7 @@ task Impl {
         Merge list.txt
         
         # Uploading
-        gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv training_resource.vcf.'gz*' ~{remote_outdir}/
+        gcloud storage mv training_resource.vcf.'gz*' ~{remote_outdir}/
     >>>
 
     output {

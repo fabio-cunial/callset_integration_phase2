@@ -66,9 +66,10 @@ task Impl {
         File scoring_python_script
         File hyperparameters_json
         
-        Int n_cpu = 4
-        Int ram_size_gb = 12
+        Int n_cpu = 1
+        Int ram_size_gb = 4
         Int disk_size_gb = 20
+        Int preemptible_number = 4
     }
     parameter_meta {
     }
@@ -84,6 +85,7 @@ task Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
+        export GATK_LOCAL_JAR="/root/gatk.jar"
         
         
         
@@ -153,8 +155,10 @@ task Impl {
         }
         
         
-        # Copies crucial fields from INFO to FORMAT, so that they are preserved
-        # by the inter-sample merge downstream.
+        # Copies the following fields from INFO to FORMAT, so that they are
+        # preserved by the inter-sample merge downstream:
+        #
+        # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
         #
         # @param 2 A VCF where all IDs are distinct. This is guaranteed by
         # workpackages upstream.
@@ -169,17 +173,17 @@ task Impl {
             echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' > ${SAMPLE_ID}_header.txt
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' > ${SAMPLE_ID}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
-            tabix -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
             bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.vcf.gz
             bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_scored.vcf.gz
-            bcftools view --no-header ${SAMPLE_ID}_scored.vcf.gz | head -n 5 || echo "0"
+            (bcftools view --no-header ${SAMPLE_ID}_scored.vcf.gz | head -n 1 || echo "0") 1>&2
             
             # Removing temporary files
             rm -f ${SAMPLE_ID}_header.txt ${SAMPLE_ID}_format.tsv.gz*
         }
         
         
-        # Filters and chunks using one command
+        # Filters, chunks, uploads.
         # 
         function ChunkVcf() {
             local SAMPLE_ID=$1
@@ -189,15 +193,15 @@ task Impl {
             while read INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 if [ ~{filter_string} != "none" ]; then
-                    ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include ~{filter_string} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                    bcftools view --threads ${N_THREADS} --include ~{filter_string} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 else
-                    ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                    bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 fi
-                tabix -f ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
             while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -212,10 +216,18 @@ task Impl {
         
         # ---------------------------- Main program ----------------------------
         
-        export GATK_LOCAL_JAR="/root/gatk.jar"
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
+        N_OUTPUT_CHUNKS=$(wc -l < ~{split_for_bcftools_merge_csv})
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+            
+            # Skipping the sample if it has already been processed
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_chunk_'*.vcf.gz' | wc -l || echo "0" )
+            if [ ${TEST} -lt ${N_OUTPUT_CHUNKS} ]; then
+                continue
+            fi
+            
+            # Filtering
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
@@ -232,6 +244,7 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
