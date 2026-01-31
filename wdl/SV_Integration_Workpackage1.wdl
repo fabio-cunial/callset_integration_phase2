@@ -149,7 +149,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         GSUTIL_DELAY_S="600"
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         export RUST_BACKTRACE="full"
