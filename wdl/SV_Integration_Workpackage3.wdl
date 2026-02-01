@@ -207,7 +207,7 @@ task Impl {
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
             while : ; do
-                TEST=$(gcloud storage cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+                TEST=$(gcloud storage cp -m ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
