@@ -26,7 +26,7 @@ workflow SV_Integration_Workpackage3 {
         filter_string: "Use `none` to apply no filter."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
-        training_resource_bed: "The same BED used in `SV_Integration_Workpackage2`."
+        training_resource_bed: "The same BED used in `SV_Integration_Workpackage1`."
         hyperparameters_json: "Parameters for `gatk TrainVariantAnnotationsModel`."
     }
     
@@ -66,7 +66,7 @@ task Impl {
         File scoring_python_script
         File hyperparameters_json
         
-        Int n_cpu = 1
+        Int n_cpu = 2
         Int ram_size_gb = 4
         Int disk_size_gb = 20
         Int preemptible_number = 4
@@ -83,7 +83,6 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
@@ -209,6 +208,8 @@ task Impl {
                     break
                 fi
             done
+            touch ${SAMPLE_ID}.done
+            gcloud storage cp ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
 
         
@@ -222,8 +223,8 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
-            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_chunk_'*.vcf.gz' | wc -l || echo "0" )
-            if [ ${TEST} -lt ${N_OUTPUT_CHUNKS} ]; then
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
                 continue
             fi
             
