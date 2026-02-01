@@ -196,10 +196,12 @@ task Impl {
             i="0"
             while read INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
-                if [ ~{filter_string} != "none" ]; then
-                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                if [ "~{filter_string}" != "none" ]; then
+                    # Remark: we use `targets` rather than `regions` because
+                    # the former considers just the POS coordinate for overlaps.
+                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --targets-file ${SAMPLE_ID}.bed --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 else
-                    bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                    bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 fi
                 bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_chunk_${i}.vcf.gz
                 i=$(( ${i} + 1 ))
