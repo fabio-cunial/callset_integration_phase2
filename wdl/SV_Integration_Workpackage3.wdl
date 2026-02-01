@@ -88,6 +88,7 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
+        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
@@ -207,7 +208,7 @@ task Impl {
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
             while : ; do
-                TEST=$(gcloud storage cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ --recursive && echo 0 || echo 1)
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ --recursive && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
