@@ -217,7 +217,7 @@ task Impl {
                 fi
             done
             touch ${SAMPLE_ID}.done
-            gcloud storage cp ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
+            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
 
         
