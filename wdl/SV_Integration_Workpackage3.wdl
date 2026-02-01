@@ -96,9 +96,9 @@ task Impl {
             local REMOTE_DIR=$2
             
             while : ; do
-                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_preprocessed.vcf.gz>. Trying again..."
+                    echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
                 else
                     break
@@ -230,7 +230,7 @@ task Impl {
             
             # Filtering
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
-            JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_preprocessed.vcf.gz ${SAMPLE_ID}_training.vcf.gz
+            JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
             ChunkVcf ${SAMPLE_ID} ${SAMPLE_ID}_scored.vcf.gz
             DelocalizeSample ${SAMPLE_ID}
