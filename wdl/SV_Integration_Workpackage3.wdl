@@ -49,6 +49,10 @@ workflow SV_Integration_Workpackage3 {
 }
 
 
+# Remark: we use gsutil instead of gcloud since we found the latter to have
+# issues in practice (maybe the gcloud version in the docker is not up to
+# date?). 
+#
 # Memory bottlenecks (measured on a 4GB VM):
 #
 # ExtractVariantAnnotations           900 MB
@@ -102,7 +106,7 @@ task Impl {
             local REMOTE_DIR=$2
             
             while : ; do
-                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -111,7 +115,7 @@ task Impl {
                 fi
             done
             while : ; do
-                TEST=$(gcloud storage cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
+                TEST=$(gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.gz>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -217,7 +221,7 @@ task Impl {
                 fi
             done
             touch ${SAMPLE_ID}.done
-            gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
+            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
 
         
@@ -231,7 +235,7 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
-            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
                 continue
             fi
