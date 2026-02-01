@@ -49,6 +49,11 @@ workflow SV_Integration_Workpackage3 {
 }
 
 
+# Memory bottlenecks (measured on a 4GB VM):
+#
+# ExtractVariantAnnotations           900 MB
+# TrainVariantAnnotationsModel        200 MB
+# ScoreVariantAnnotations               1 GB
 #
 task Impl {
     input {
@@ -67,7 +72,7 @@ task Impl {
         File hyperparameters_json
         
         Int n_cpu = 2
-        Int ram_size_gb = 4
+        Int ram_size_gb = 3
         Int disk_size_gb = 20
         Int preemptible_number = 4
     }
@@ -172,7 +177,7 @@ task Impl {
             echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' > ${SAMPLE_ID}_header.txt
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' > ${SAMPLE_ID}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
+            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
             bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.vcf.gz
             bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_scored.vcf.gz
             (bcftools view --no-header ${SAMPLE_ID}_scored.vcf.gz | head -n 1 || echo "0") 1>&2
