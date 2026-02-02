@@ -196,11 +196,9 @@ task Impl {
         }
         
         
-        # Filters, chunks, uploads.
-        #
         # Remark: the procedure's input and output are indexed `.bcf`.
         # 
-        function ChunkVcf() {
+        function FilterChunkUpload() {
             local SAMPLE_ID=$1
             local INPUT_BCF=$2
             
@@ -215,17 +213,10 @@ task Impl {
                     bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} > ${SAMPLE_ID}_chunk_${i}.bcf
                 fi
                 bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
+                gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf
+                gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
-            while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.bcf ~{remote_outdir}/ && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
             touch ${SAMPLE_ID}.done
             gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
@@ -250,7 +241,7 @@ task Impl {
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
-            ChunkVcf ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
+            FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv

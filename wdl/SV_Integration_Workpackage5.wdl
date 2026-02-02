@@ -68,7 +68,8 @@ workflow SV_Integration_Workpackage5 {
 # Performance on 12'680 samples, 15x, GRCh38, first 30 MB chunk of chr1:
 #
 # TOOL                          CPU     RAM     TIME
-# Download                      XXX%    XXXG    XXXs
+# gcloud storage ls             XXX%    XXXG    XXXs
+# gcloud storage cp             XXX%    XXXG    XXXs
 # bcftools merge level 1        XXX%    XXXG    XXXs          // 100 files
 # bcftools norm level 1         XXX%    XXXG    XXXs
 # bcftools merge level 2        XXX%    XXXG    XXXs          // 127 files
@@ -134,7 +135,7 @@ task Impl {
             # Ensuring that every input dataset has the expected number of
             # samples in the chunk.
             if [ ~{n_expected_samples_bi} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bi_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bi_files.txt
                 N_FILES=$(wc -l < bi_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
@@ -145,7 +146,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_ha} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > ha_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > ha_files.txt
                 N_FILES=$(wc -l < ha_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
@@ -156,7 +157,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_bcm} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bcm_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bcm_files.txt
                 N_FILES=$(wc -l < bcm_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
@@ -167,7 +168,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
                 N_FILES=$(wc -l < uw_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
@@ -178,7 +179,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_controls_15x} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
                 N_FILES=$(wc -l < control_15x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
@@ -189,7 +190,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_controls_30x} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
+                ${TIME_COMMAND} gcloud storage ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
                 N_FILES=$(wc -l < control_30x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
