@@ -65,12 +65,13 @@ workflow SV_Integration_Workpackage5 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, one 10 MB chunk of chr1:
+# Performance on 12'680 samples, 15x, GRCh38, first 30 MB chunk of chr1:
 #
 # TOOL                          CPU     RAM     TIME
-# bcftools merge level 1        XXX%    XXXG    XXXs          // XXX files
+# Download                      XXX%    XXXG    XXXs
+# bcftools merge level 1        XXX%    XXXG    XXXs          // 100 files
 # bcftools norm level 1         XXX%    XXXG    XXXs
-# bcftools merge level 2        XXX%    XXXG    XXXs          // XXX files
+# bcftools merge level 2        XXX%    XXXG    XXXs          // 127 files
 # bcftools norm level 2         XXX%    XXXG    XXXs
 #
 # Peak disk usage (all input files of chunk 0): XXX GB
@@ -215,12 +216,13 @@ task Impl {
         
             # - Localizing all the samples for the given chunk.
             # - Handling samples that occur in multiple input datasets.
+            date 1>&2
             mkdir ./input_files/
             if [ ~{n_expected_samples_bi} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
             if [ ~{n_expected_samples_ha} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
             if [ ~{n_expected_samples_bi} -gt 0 -a ~{n_expected_samples_ha} -gt 0 ]; then
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
@@ -232,17 +234,18 @@ task Impl {
                 xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ./input_files/
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
             if [ ~{n_expected_samples_bcm} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
             if [ ~{n_expected_samples_controls_15x} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
             if [ ~{n_expected_samples_controls_30x} -gt 0 ]; then
-                gcloud storage cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
             fi
+            date 1>&2
             N_DOWNLOADED_SAMPLES=$(ls ./input_files/*_chunk_~{chunk_id}.${EXTENSION} | wc -l)
             N_SAMPLES=$(cat ~{sample_ids} | wc -l)
             if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
@@ -253,7 +256,7 @@ task Impl {
         }
         
         
-        # Trivial "hierarchical" merging with just two steps.
+        # Trivial "hierarchical" merge with just two steps.
         #
         function MergeChunkFiles() {
             local EXTENSION=$1
