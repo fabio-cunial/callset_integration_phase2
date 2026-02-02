@@ -847,10 +847,8 @@ task Impl {
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
             # Skipping the sample if it has already been processed
-            TEST1=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_kanpig.vcf.gz || echo "0" )
-            TEST2=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_ultralong.bcf || echo "0" )
-            TEST3=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}_bnd.bcf || echo "0" )
-            if [ ${TEST1} != "0" -a ${TEST2} != "0" -a ${TEST3} != "0" ]; then
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
                 continue
             fi
             
@@ -880,6 +878,8 @@ task Impl {
             
             # Uploading
             gcloud storage mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
+            touch ${SAMPLE_ID}.done
+            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
