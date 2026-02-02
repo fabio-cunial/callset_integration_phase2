@@ -8,7 +8,6 @@ workflow SV_Integration_Workpackage5 {
         Int chunk_id
         File sample_ids
         Array[String] bi_samples_to_prefer_over_ha
-        String input_extension = "vcf.gz"
         
         String remote_indir_bi
         String remote_indir_ha
@@ -39,7 +38,6 @@ workflow SV_Integration_Workpackage5 {
             chunk_id = chunk_id,
             sample_ids = sample_ids,
             bi_samples_to_prefer_over_ha = bi_samples_to_prefer_over_ha,
-            input_extension = input_extension,
             
             remote_indir_bi = remote_indir_bi,
             remote_indir_ha = remote_indir_ha,
@@ -82,7 +80,6 @@ task Impl {
         Int chunk_id
         File sample_ids
         Array[String] bi_samples_to_prefer_over_ha
-        String input_extension
         
         String remote_indir_bi
         String remote_indir_ha
@@ -127,16 +124,13 @@ task Impl {
         
         #
         function LocalizeChunkFiles() {
-            local EXTENSION=$1
-            local INDEX_EXTENSION=$2
-            
             touch all_remote_files.txt
             
             # Ensuring that every input dataset has the expected number of
             # samples in the chunk.
             date 1>&2
             if [ ~{n_expected_samples_bi} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_bi}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bi_files.txt
+                gcloud storage ls -l ~{remote_indir_bi}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > bi_files.txt
                 N_FILES=$(wc -l < bi_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_bi} ]; then
@@ -147,7 +141,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_ha} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_ha}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > ha_files.txt
+                gcloud storage ls -l ~{remote_indir_ha}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > ha_files.txt
                 N_FILES=$(wc -l < ha_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_ha} ]; then
@@ -158,7 +152,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_bcm} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_bcm}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > bcm_files.txt
+                gcloud storage ls -l ~{remote_indir_bcm}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > bcm_files.txt
                 N_FILES=$(wc -l < bcm_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_bcm} ]; then
@@ -169,7 +163,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_uw}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
+                gcloud storage ls -l ~{remote_indir_uw}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > uw_files.txt
                 N_FILES=$(wc -l < uw_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_uw} ]; then
@@ -180,7 +174,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_controls_15x} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_controls_15x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
+                gcloud storage ls -l ~{remote_indir_controls_15x}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
                 N_FILES=$(wc -l < control_15x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
@@ -191,7 +185,7 @@ task Impl {
             fi
         
             if [ ~{n_expected_samples_controls_30x} -gt 0 ]; then
-                gcloud storage ls -l ~{remote_indir_controls_30x}/'*_chunk_'~{chunk_id}.${EXTENSION} | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
+                gcloud storage ls -l ~{remote_indir_controls_30x}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
                 N_FILES=$(wc -l < control_30x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
                 if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
@@ -222,31 +216,31 @@ task Impl {
             date 1>&2
             mkdir ./input_files/
             if [ ~{n_expected_samples_bi} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bi}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bi}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             if [ ~{n_expected_samples_ha} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_ha}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_ha}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             if [ ~{n_expected_samples_bi} -gt 0 -a ~{n_expected_samples_ha} -gt 0 ]; then
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
                 rm -f list.txt
                 while read SAMPLE_ID; do
-                    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.${EXTENSION}" >> list.txt
-                    echo "~{remote_indir_bi}/${SAMPLE_ID}_chunk_~{chunk_id}.${EXTENSION}.${INDEX_EXTENSION}" >> list.txt
+                    echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf" >> list.txt
+                    echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf.csi" >> list.txt
                 done < bi_samples_to_prefer_over_ha.txt
                 xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ./input_files/
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_uw}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_uw}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             if [ ~{n_expected_samples_bcm} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bcm}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_bcm}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             if [ ~{n_expected_samples_controls_15x} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_15x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_15x}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             if [ ~{n_expected_samples_controls_30x} -gt 0 ]; then
-                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/'*'_chunk_~{chunk_id}.${EXTENSION}'*' ./input_files/
+                ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             date 1>&2
             N_DOWNLOADED_SAMPLES=$(ls ./input_files/*_chunk_~{chunk_id}.${EXTENSION} | wc -l)
@@ -262,12 +256,10 @@ task Impl {
         # Trivial "hierarchical" merge with just two steps.
         #
         function MergeChunkFiles() {
-            local EXTENSION=$1
-            
             # Step 1
             rm -f list.txt
             while read SAMPLE_ID; do
-                echo ./input_files/${SAMPLE_ID}_chunk_~{chunk_id}.${EXTENSION} >> list.txt
+                echo ./input_files/${SAMPLE_ID}.bcf >> list.txt
             done < ~{sample_ids}
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_
             N_LIST_FILES=$(ls list_* | wc -l)
@@ -298,15 +290,8 @@ task Impl {
         
         # ---------------------------- Main program ----------------------------
         
-        if [ ~{input_extension} = "vcf.gz" ]; then
-            EXTENSION="vcf.gz"
-            INDEX_EXTENSION="tbi"
-        else
-            EXTENSION="bcf"
-            INDEX_EXTENSION="csi"
-        fi
-        LocalizeChunkFiles ${EXTENSION} ${INDEX_EXTENSION}
-        MergeChunkFiles ${EXTENSION}
+        LocalizeChunkFiles
+        MergeChunkFiles
         gcloud storage mv ~{chunk_id}_normed.bcf ~{remote_outdir}/chunk_~{chunk_id}.bcf
         gcloud storage mv ~{chunk_id}_normed.bcf.csi ~{remote_outdir}/chunk_~{chunk_id}.bcf.csi
     >>>
