@@ -135,6 +135,8 @@ task Impl {
         }
         
         
+        # Remark: the procedure's input and output are indexed `.vcf.gz`.
+        #
         function JointVcfFiltering() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -169,6 +171,8 @@ task Impl {
         #
         # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
         #
+        # Remark: the procedure outputs an indexed `.bcf`.
+        #
         # @param 2 A VCF where all IDs are distinct. This is guaranteed by
         # workpackages upstream.
         #
@@ -183,9 +187,9 @@ task Impl {
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' >> ${SAMPLE_ID}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.vcf.gz
-            bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_scored.vcf.gz
-            (bcftools view --no-header ${SAMPLE_ID}_scored.vcf.gz | head -n 1 || echo "0") 1>&2
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_scored.bcf
+            (bcftools view --no-header ${SAMPLE_ID}_scored.bcf | head -n 1 || echo "0") 1>&2
             
             # Removing temporary files
             rm -f ${SAMPLE_ID}_header.txt ${SAMPLE_ID}_format.tsv.gz*
@@ -193,10 +197,12 @@ task Impl {
         
         
         # Filters, chunks, uploads.
+        #
+        # Remark: the procedure's input and output are indexed `.bcf`.
         # 
         function ChunkVcf() {
             local SAMPLE_ID=$1
-            local INPUT_VCF_GZ=$2
+            local INPUT_BCF=$2
             
             i="0"
             while read INTERVAL; do
@@ -204,15 +210,15 @@ task Impl {
                 if [ "~{filter_string}" != "none" ]; then
                     # Remark: we use `targets` rather than `regions` because
                     # the former considers just the POS coordinate for overlaps.
-                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --targets-file ${SAMPLE_ID}.bed --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} > ${SAMPLE_ID}_chunk_${i}.bcf
                 else
-                    bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                    bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} > ${SAMPLE_ID}_chunk_${i}.bcf
                 fi
-                bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_chunk_${i}.vcf.gz
+                bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
             while : ; do
-                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
+                TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*'.bcf ~{remote_outdir}/ && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -244,7 +250,7 @@ task Impl {
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
-            ChunkVcf ${SAMPLE_ID} ${SAMPLE_ID}_scored.vcf.gz
+            ChunkVcf ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
