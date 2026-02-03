@@ -63,7 +63,7 @@ workflow SV_Integration_Workpackage5 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, first 30 MB chunk of chr1:
+# Performance on 12'680 samples, 15x, GRCh38, first 30 MB chunk of chr6:
 #
 # TOOL                          CPU     RAM     TIME
 # gcloud storage ls             XXX%    XXXG    XXXs
@@ -177,9 +177,11 @@ task Impl {
                 gcloud storage ls -l ~{remote_indir_controls_15x}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > control_15x_files.txt
                 N_FILES=$(wc -l < control_15x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
-                if [ ${N_FILES} -ne ~{n_expected_samples_controls_15x} ]; then
-                    echo "ERROR: CONTROLS_15X has ${N_FILES} files != ~{n_expected_samples_controls_15x}"
+                if [ ${N_FILES} -lt ~{n_expected_samples_controls_15x} ]; then
+                    echo "ERROR: CONTROLS_15X has ${N_FILES} files < ~{n_expected_samples_controls_15x}"
                     exit 1
+                elif [ ${N_FILES} -gt ~{n_expected_samples_controls_15x} ]; then
+                    echo "WARNING: CONTROLS_15X has ${N_FILES} files > ~{n_expected_samples_controls_15x}"
                 fi
                 head -n ${N_FILES} control_15x_files.txt >> all_remote_files.txt
             fi
@@ -188,9 +190,11 @@ task Impl {
                 gcloud storage ls -l ~{remote_indir_controls_30x}/chunk_~{chunk_id}/'*.bcf' | tr -s ' ' | sed 's/^[ ]*//' > control_30x_files.txt
                 N_FILES=$(wc -l < control_30x_files.txt)
                 N_FILES=$(( ${N_FILES} - 1 ))
-                if [ ${N_FILES} -ne ~{n_expected_samples_controls_30x} ]; then
-                    echo "ERROR: CONTROLS_30X has ${N_FILES} files != ~{n_expected_samples_controls_30x}"
+                if [ ${N_FILES} -lt ~{n_expected_samples_controls_30x} ]; then
+                    echo "ERROR: CONTROLS_30X has ${N_FILES} files < ~{n_expected_samples_controls_30x}"
                     exit 1
+                elif [ ${N_FILES} -gt ~{n_expected_samples_controls_30x} ]; then
+                    echo "WARNING: CONTROLS_30X has ${N_FILES} files > ~{n_expected_samples_controls_30x}"
                 fi
                 head -n ${N_FILES} control_30x_files.txt >> all_remote_files.txt
             fi
