@@ -93,14 +93,21 @@ task Impl {
             echo chunk_${CHUNK}.bcf >> file_list.txt
         done
         ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
+        df -h
         rm -f uri_list.txt
         
-        # Concatenating all the bcftools merge chunks
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z > ~{chromosome_id}.vcf.gz
+        # Concatenating all the bcftools merge chunks to build a whole-
+        # chromosome VCF. This is necessary, since a truvari collapse chunks may
+        # straddle different bcftools merge chunks.
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
         bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.vcf.gz
+        df -h
         rm -f chunk_*.bcf* file_list.txt
         
-        # Chunking the chromosome for truvari collapse
+        # Chunking the chromosome for truvari collapse.
+        # Remark: `truvari divide` chunks the VCF directly (i.e. it does not
+        # just compute chunk boundaries), so we need to feed it the full
+        # bcftools merge VCF with all genotypes.
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
         ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ~{truvari_chunk_min_records} --buffer ~{truvari_collapse_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
         i="0"
