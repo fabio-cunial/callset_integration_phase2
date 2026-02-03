@@ -66,8 +66,8 @@ workflow SV_Integration_Workpackage5 {
 # Performance on 12'680 samples, 15x, GRCh38, first 30 MB chunk of chr6:
 #
 # TOOL                          CPU     RAM     TIME
-# gcloud storage ls             XXX%    XXXG    XXXs
-# gcloud storage cp             XXX%    XXXG    XXXs
+# gcloud storage ls                             30 s
+# gcloud storage cp             280%    100 MB   1 m
 # bcftools merge level 1        XXX%    XXXG    XXXs          // 100 files
 # bcftools norm level 1         XXX%    XXXG    XXXs
 # bcftools merge level 2        XXX%    XXXG    XXXs          // 127 files
@@ -247,10 +247,10 @@ task Impl {
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             date 1>&2
-            N_DOWNLOADED_SAMPLES=$(ls ./input_files/*_chunk_~{chunk_id}.${EXTENSION} | wc -l)
+            N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
             N_SAMPLES=$(cat ~{sample_ids} | wc -l)
             if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
-                echo "Error: the number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
+                echo "ERROR: The number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
                 exit 1
             fi
             df -h
