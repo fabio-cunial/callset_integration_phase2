@@ -100,7 +100,7 @@ task Impl {
         # chromosome VCF. This is necessary, since a truvari collapse chunks may
         # straddle different bcftools merge chunks.
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
-        bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ~{chromosome_id}.vcf.gz
         df -h
         rm -f chunk_*.bcf* file_list.txt
         
