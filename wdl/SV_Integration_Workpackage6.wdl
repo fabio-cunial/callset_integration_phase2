@@ -1,7 +1,7 @@
 version 1.0
 
 
-# Computes truvari collapse chunks from all the bcftools merge chunks of a
+# Computes `truvari collapse` chunks from all the `bcftools merge` chunks of a
 # chromosome.
 #
 workflow SV_Integration_Workpackage6 {
@@ -83,59 +83,44 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
         
         
         # Localizing all the bcftools merge chunks of the chromosome
+        rm -f uri_list.txt file_list.txt
         for CHUNK in $(echo ~{bcftools_chunks} | tr ',' ' '); do
-            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz >> uri_list.txt
-            echo ~{remote_indir}/chunk_${CHUNK}.vcf.gz.tbi >> uri_list.txt
-            echo chunk_${CHUNK}.vcf.gz >> file_list.txt
+            echo ~{remote_indir}/chunk_${CHUNK}.bcf >> uri_list.txt
+            echo ~{remote_indir}/chunk_${CHUNK}.bcf.csi >> uri_list.txt
+            echo chunk_${CHUNK}.bcf >> file_list.txt
         done
-        while : ; do
-            TEST=$(cat uri_list.txt | gsutil -m cp -I . && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error downloading bcftools merge chunks. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
+        rm -f uri_list.txt
         
         # Concatenating all the bcftools merge chunks
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z > ~{chromosome_id}.vcf.gz
-        tabix -f ~{chromosome_id}.vcf.gz
-        rm -f chunk_*.vcf.gz*
+        bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.vcf.gz
+        rm -f chunk_*.bcf* file_list.txt
         
-        # Creating truvari collapse chunks
+        # Chunking the chromosome for truvari collapse
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
         ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ~{truvari_chunk_min_records} --buffer ~{truvari_collapse_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
         i="0"
         N_RECORDS_CHUNKED="0"
         for FILE in $(ls ./truvari_chunks/*.vcf.gz | sort -V); do
-            mv ${FILE} ~{chromosome_id}_chunk_${i}.vcf.gz
-            mv ${FILE}.tbi ~{chromosome_id}_chunk_${i}.vcf.gz.tbi
-            N=$( bcftools index --nrecords ~{chromosome_id}_chunk_${i}.vcf.gz.tbi )
+            mv ${FILE} chunk_${i}.vcf.gz
+            mv ${FILE}.tbi chunk_${i}.vcf.gz.tbi
+            N=$( bcftools index --nrecords chunk_${i}.vcf.gz.tbi )
             N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
             i=$(( ${i} + 1 ))
         done
         if [ ${N_RECORDS_CHUNKED} -ne ${N_RECORDS} ]; then
-            echo "ERROR: the truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
+            echo "ERROR: The truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
             exit 1
         fi
         
         # Uploading
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}_chunk_'*'.vcf.'gz*' ~{remote_outdir}/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading truvari collapse chunks. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        ls chunk_*.vcf.gz* > file_list.txt
+        xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
+        rm -f file_list.txt
     >>>
     
     output {

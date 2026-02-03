@@ -67,13 +67,13 @@ workflow SV_Integration_Workpackage5 {
 #
 # TOOL                          CPU     RAM     TIME
 # gcloud storage ls                             30 s
-# gcloud storage cp             280%    100 MB   1 m
-# bcftools merge level 1        XXX%    XXXG    XXXs          // 100 files
-# bcftools norm level 1         XXX%    XXXG    XXXs
-# bcftools merge level 2        XXX%    XXXG    XXXs          // 127 files
-# bcftools norm level 2         XXX%    XXXG    XXXs
+# gcloud storage cp             280%    100 M    1 m
+# bcftools merge level 1        100%    300 M    3 s          // 100 files
+# bcftools norm level 1         300%     50 M    1 s
+# bcftools merge level 2        170%      1 G   20 m          // 127 files
+# bcftools norm level 2         300%     11 G    6 m
 #
-# Peak disk usage (all input files of chunk 0): XXX GB
+# Peak disk usage (all input files of chunk 0): 2 GB
 #
 task Impl {
     input {
@@ -100,8 +100,8 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 100
+        Int ram_size_gb = 16
+        Int disk_size_gb = 50
         Int preemptible_number = 4
     }
     parameter_meta {
