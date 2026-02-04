@@ -123,7 +123,7 @@ task Impl {
         df -h
         rm -f ~{chromosome_id}.vcf.gz
         for FILE in $(ls ./truvari_chunks/*.zip); do
-            mv ${FILE} $(basename ${FILE} .zip).gz
+            mv ${FILE} ./truvari_chunks/$(basename ${FILE} .zip).gz
         done
         
         # Converting chunks from GZ to BGZ.
@@ -139,7 +139,7 @@ task Impl {
         echo 'bgzip ${BASE}' >> script.sh
         echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
         chmod +x script.sh
-        ls ./truvari_chunks/*.vcf.zip > file_list.txt
+        ls ./truvari_chunks/*.gz > file_list.txt
         ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
         
         # Basic consistency checks
