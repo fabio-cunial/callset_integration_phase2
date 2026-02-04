@@ -67,8 +67,8 @@ task Impl {
         String remote_indir
         String remote_outdir
         
-        Int n_cpu = 4
-        Int ram_size_gb = 16
+        Int n_cpu = 8
+        Int ram_size_gb = 8
         Int disk_size_gb = 50
     }
     parameter_meta {
@@ -83,6 +83,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         
         
         # Localizing all the bcftools merge chunks of the chromosome
@@ -105,19 +106,27 @@ task Impl {
         rm -f chunk_*.bcf* file_list.txt
         
         # Chunking the chromosome for truvari collapse.
-        # Remark: `truvari divide` chunks the VCF directly (i.e. it does not
-        # just compute chunk boundaries), so we need to feed it the full
-        # bcftools merge VCF with all genotypes.
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
-        ${TIME_COMMAND} truvari divide --threads ${N_THREADS} --min ~{truvari_chunk_min_records} --buffer ~{truvari_collapse_refdist} ~{chromosome_id}.vcf.gz ./truvari_chunks/
-        i="0"
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz ./truvari_chunks/ ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
+        df -h
+        rm -f ~{chromosome_id}.vcf.gz
+        
+        # Converting chunks to .vcf.gz
+        echo '#!/bin/bash' > script.sh
+        echo 'INPUT_FILE=$1' >> script.sh
+        echo 'OUTPUT_FILE="$(basename ${INPUT_FILE} .zip).gz"' >> script.sh
+        echo 'gunzip -c ${INPUT_FILE} | bgzip > ${OUTPUT_FILE}' >> script.sh
+        echo 'bcftools index -f -t ${OUTPUT_FILE}' >> script.sh
+        echo 'rm -f ${INPUT_FILE}' >> script.sh
+        chmod +x script.sh
+        ls ./truvari_chunks/*.vcf.zip > file_list.txt
+        ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} ./script.sh
+        
+        # Basic consistency checks
         N_RECORDS_CHUNKED="0"
-        for FILE in $(ls ./truvari_chunks/*.vcf.gz | sort -V); do
-            mv ${FILE} chunk_${i}.vcf.gz
-            mv ${FILE}.tbi chunk_${i}.vcf.gz.tbi
-            N=$( bcftools index --nrecords chunk_${i}.vcf.gz.tbi )
+        for FILE in $(ls chunk_*.vcf.gz.tbi); do
+            N=$( bcftools index --nrecords ${FILE} )
             N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
-            i=$(( ${i} + 1 ))
         done
         if [ ${N_RECORDS_CHUNKED} -ne ${N_RECORDS} ]; then
             echo "ERROR: The truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
@@ -127,7 +136,6 @@ task Impl {
         # Uploading
         ls chunk_*.vcf.gz* > file_list.txt
         xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
-        rm -f file_list.txt
     >>>
     
     output {
