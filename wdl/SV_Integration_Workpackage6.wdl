@@ -124,25 +124,7 @@ task Impl {
         rm -f ~{chromosome_id}.vcf.gz
         for FILE in $(ls chunk_*.zip); do
             mv ${FILE} ./$(basename ${FILE} .zip).gz
-        done
-        
-        
-        
-        
-        gunzip chunk_1.vcf.gz
-        bcftools view --header-only chunk_1.vcf || echo "0"
-        bcftools view --no-header chunk_1.vcf | head -n 3  || echo "0"
-        bcftools view --no-header chunk_1.vcf | tail -n 3  || echo "0"
-        
-        
-        
-        gunzip chunk_0.vcf.gz || echo "0"
-        bcftools view --header-only chunk_0.vcf || echo "0"
-        bcftools view --no-header chunk_0.vcf | head -n 3 || echo "0"
-        bcftools view --no-header chunk_0.vcf | tail -n 3 || echo "0"
-        
-        
-        
+        done        
         
         # Converting chunks from GZ to BGZ.
         # Remark: we use the disk rather than pipes, since the latter give the

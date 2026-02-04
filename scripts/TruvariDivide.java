@@ -45,7 +45,8 @@ public class TruvariDivide {
         
         // Splitting
         chunkID=0;
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.zip"))));
+        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.z"))));
+        bw.write(headerStr);
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; first=0; last=0; maxLast=0;
         while (str!=null) {
@@ -81,7 +82,7 @@ public class TruvariDivide {
                 bw.close();
                 System.err.println("chunk="+chunkID+" nRecords="+nRecords);
                 chunkID++;
-                bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.zip"))));
+                bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.z"))));
                 bw.write(headerStr);
                 bw.write(str); bw.newLine();
                 nRecords=1;
