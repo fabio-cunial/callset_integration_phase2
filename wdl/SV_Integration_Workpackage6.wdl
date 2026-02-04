@@ -109,8 +109,8 @@ task Impl {
         rm -f uri_list.txt
         
         # Concatenating all the bcftools merge chunks to build a whole-
-        # chromosome VCF. A truvari collapse chunk may straddle multiple
-        # bcftools merge chunks.
+        # chromosome VCF. This is because a truvari collapse chunk may straddle
+        # multiple bcftools merge chunks.
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
         bcftools index --threads ${N_THREADS} -f -t ~{chromosome_id}.vcf.gz
         df -h
@@ -122,11 +122,19 @@ task Impl {
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz ./truvari_chunks/ ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
         df -h
         rm -f ~{chromosome_id}.vcf.gz
+        for FILE in $(ls ./truvari_chunks/*.zip); do
+            mv ${FILE} $(basename ${FILE} .zip).gz
+        done
         
-        # Converting chunks to .vcf.gz
+        # Converting chunks from GZ to BGZ.
+        # Remark: we use the disk rather than pipes, since the latter give the
+        # following error during indexing:
+        #
+        # index: "chunk_0.vcf.gz" is in a format that cannot be usefully
+        # indexed
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
-        echo 'BASE=$(basename ${INPUT_FILE} .zip)' >> script.sh
+        echo 'BASE=$(basename ${INPUT_FILE} .gz)' >> script.sh
         echo 'gunzip ${INPUT_FILE}' >> script.sh
         echo 'bgzip ${BASE}' >> script.sh
         echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
