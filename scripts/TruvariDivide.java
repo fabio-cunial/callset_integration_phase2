@@ -46,7 +46,7 @@ public class TruvariDivide {
         // Splitting
         chunkID=0;
         bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.zip"))));
-        br = new BufferedReader(new FileReader(INPUT_VCF_GZ));
+        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; first=0; last=0; maxLast=0;
         while (str!=null) {
             if (str.charAt(0)=='#') { str=br.readLine(); continue; }

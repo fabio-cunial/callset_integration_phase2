@@ -122,12 +122,12 @@ task Impl {
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
         echo 'OUTPUT_FILE="$(basename ${INPUT_FILE} .zip).gz"' >> script.sh
-        echo 'gunzip -c ${INPUT_FILE} | bgzip -c > ${OUTPUT_FILE}' >> script.sh
+        echo 'zcat ${INPUT_FILE} | bgzip -c > ${OUTPUT_FILE}' >> script.sh
         echo 'bcftools index -f -t ${OUTPUT_FILE}' >> script.sh
         echo 'rm -f ${INPUT_FILE}' >> script.sh
         chmod +x script.sh
         ls ./truvari_chunks/*.vcf.zip > file_list.txt
-        ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} ./script.sh
+        ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
         
         # Basic consistency checks
         N_RECORDS_CHUNKED="0"
