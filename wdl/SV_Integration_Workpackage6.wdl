@@ -59,6 +59,11 @@ workflow SV_Integration_Workpackage6 {
 # max      19218.000000
 #
 # Remark: truvari divide --min 88468 goes out of RAM with 256GB.
+#
+# Remark: this could be implemented in much faster ways. E.g. we could create
+# truvari collapse chunks from each bcftools merge chunk in parallel, and then
+# merge the first/last truvari collapse chunks of consecutive bcftools merge
+# chunks: we don't implement this just for simplicity/laziness.
 # 
 task Impl {
     input {
@@ -104,8 +109,8 @@ task Impl {
         rm -f uri_list.txt
         
         # Concatenating all the bcftools merge chunks to build a whole-
-        # chromosome VCF. This is necessary, since a truvari collapse chunks may
-        # straddle different bcftools merge chunks.
+        # chromosome VCF. A truvari collapse chunk may straddle multiple
+        # bcftools merge chunks.
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
         bcftools index --threads ${N_THREADS} -f -t ~{chromosome_id}.vcf.gz
         df -h
@@ -121,13 +126,13 @@ task Impl {
         # Converting chunks to .vcf.gz
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
-        echo 'OUTPUT_FILE="$(basename ${INPUT_FILE} .zip).gz"' >> script.sh
-        echo 'bgzip --decompress --stdout ${INPUT_FILE} | bgzip > ${OUTPUT_FILE}' >> script.sh
-        echo 'bcftools index -f -t ${OUTPUT_FILE}' >> script.sh
+        echo 'BASE=$(basename ${INPUT_FILE} .zip)' >> script.sh
+        echo 'gunzip ${INPUT_FILE}' >> script.sh
+        echo 'bgzip ${BASE}' >> script.sh
+        echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
         chmod +x script.sh
         ls ./truvari_chunks/*.vcf.zip > file_list.txt
         ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
-        rm -f *.vcf.zip
         
         # Basic consistency checks
         N_RECORDS_CHUNKED="0"
@@ -151,7 +156,7 @@ task Impl {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
         zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
