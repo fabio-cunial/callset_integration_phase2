@@ -126,6 +126,24 @@ task Impl {
             mv ${FILE} ./$(basename ${FILE} .zip).gz
         done
         
+        
+        
+        
+        gunzip chunk_1.vcf.gz
+        bcftools view --header-only chunk_1.vcf
+        bcftools view --no-header chunk_1.vcf | head -n 3
+        bcftools view --no-header chunk_1.vcf | tail -n 3
+        
+        
+        
+        gunzip chunk_0.vcf.gz
+        bcftools view --header-only chunk_0.vcf
+        bcftools view --no-header chunk_0.vcf | head -n 3
+        bcftools view --no-header chunk_0.vcf | tail -n 3
+        
+        
+        
+        
         # Converting chunks from GZ to BGZ.
         # Remark: we use the disk rather than pipes, since the latter give the
         # following error during indexing:
