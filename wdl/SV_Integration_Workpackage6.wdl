@@ -127,7 +127,7 @@ task Impl {
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
         echo 'BASE=$(basename ${INPUT_FILE} .vcf.gz)' >> script.sh
-        echo 'gunzip -c ${INPUT_FILE} | bgzip > ${BASE}_prime.vcf.gz' >> script.sh
+        echo 'bgzip -d -c ${INPUT_FILE} | bgzip -c > ${BASE}_prime.vcf.gz' >> script.sh
         echo 'rm -f ${INPUT_FILE}' >> script.sh
         echo 'mv ${BASE}_prime.vcf.gz ${BASE}.vcf.gz' >> script.sh
         echo 'bcftools index -f -t ${BASE}.vcf.gz' >> script.sh
