@@ -122,7 +122,7 @@ task Impl {
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
         echo 'OUTPUT_FILE="$(basename ${INPUT_FILE} .zip).gz"' >> script.sh
-        echo 'zcat ${INPUT_FILE} | bgzip -c > ${OUTPUT_FILE}' >> script.sh
+        echo 'bgzip -d ${INPUT_FILE} | bgzip > ${OUTPUT_FILE}' >> script.sh
         echo 'bcftools index -f -t ${OUTPUT_FILE}' >> script.sh
         chmod +x script.sh
         ls ./truvari_chunks/*.vcf.zip > file_list.txt
