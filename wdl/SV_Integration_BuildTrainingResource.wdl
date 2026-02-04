@@ -232,9 +232,9 @@ task Impl {
             local FILE_LIST_TXT=$1
             
             # Merging
-            date
+            date 1>&2
             bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 > out.vcf
-            date
+            date 1>&2
             mv out.vcf in.vcf
             
             # Setting sample name

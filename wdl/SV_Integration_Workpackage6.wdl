@@ -105,7 +105,7 @@ task Impl {
             echo chunk_${CHUNK}.bcf >> file_list.txt
         done
         ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
-        df -h
+        df -h 1>&2
         rm -f uri_list.txt
         
         # Concatenating all the bcftools merge chunks to build a whole-
@@ -113,36 +113,26 @@ task Impl {
         # multiple bcftools merge chunks.
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
         bcftools index --threads ${N_THREADS} -f -t ~{chromosome_id}.vcf.gz
-        df -h
+        df -h 1>&2
         rm -f chunk_*.bcf* file_list.txt
         
         # Chunking the chromosome for truvari collapse.
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz . ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
-        ls -laht
-        df -h
+        ls -laht 1>&2
+        df -h  1>&2
         rm -f ~{chromosome_id}.vcf.gz
-        for FILE in $(ls chunk_*.zip); do
-            mv ${FILE} ./$(basename ${FILE} .zip).gz
-        done        
         
-        # Converting chunks from GZ to BGZ.
-        # Remark: we use the disk rather than pipes, since the latter give the
-        # following error during indexing:
-        #
-        # index: "chunk_0.vcf.gz" is in a format that cannot be usefully
-        # indexed
+        # Converting chunks from GZ to BGZ
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
-        echo 'BASE=$(basename ${INPUT_FILE} .gz)' >> script.sh
-        echo 'gunzip ${INPUT_FILE}' >> script.sh
-        echo 'bgzip ${BASE}' >> script.sh
-        echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
+        echo 'BASE=$(basename ${INPUT_FILE} .vcf.gz)' >> script.sh
+        echo 'gunzip -c ${INPUT_FILE} | bgzip > ${BASE}_prime.vcf.gz' >> script.sh
+        echo 'rm -f ${INPUT_FILE}' >> script.sh
+        echo 'mv ${BASE}_prime.vcf.gz ${BASE}.vcf.gz' >> script.sh
+        echo 'bcftools index -f -t ${BASE}.vcf.gz' >> script.sh
         chmod +x script.sh
         ls chunk_*.gz > file_list.txt
-        bcftools view --header-only chunk_0.vcf.gz | tail -n 3
-        bcftools view --no-header chunk_0.vcf.gz | head -n 3
-        bcftools view --no-header chunk_0.vcf.gz | tail -n 3
         ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
         
         # Basic consistency checks

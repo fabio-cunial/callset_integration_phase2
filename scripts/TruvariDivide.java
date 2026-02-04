@@ -8,8 +8,8 @@ import java.io.*;
  * the input VCF contains only one chromosome, is sorted, and has sequence-
  * resolved REF/ALT.
  *
- * Remark: the outputs are GZIP-compressed VCFs, so they should be converted to 
- * BGZIP downstream.
+ * Remark: the outputs are GZIP-compressed (not BGZIP-compressed) VCFs, so they 
+ * should be converted to BGZIP by the user.
  *
  * Remark: this could be made much faster, but it is fast enough for now.
  */
@@ -45,7 +45,7 @@ public class TruvariDivide {
         
         // Splitting
         chunkID=0;
-        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.z"))));
+        bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.gz"))));
         bw.write(headerStr);
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ))));
         str=br.readLine(); nRecords=0; first=0; last=0; maxLast=0;
@@ -82,7 +82,7 @@ public class TruvariDivide {
                 bw.close();
                 System.err.println("chunk="+chunkID+" nRecords="+nRecords);
                 chunkID++;
-                bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.z"))));
+                bw = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(OUTPUT_DIR+"/chunk_"+chunkID+".vcf.gz"))));
                 bw.write(headerStr);
                 bw.write(str); bw.newLine();
                 nRecords=1;
