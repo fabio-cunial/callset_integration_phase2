@@ -118,12 +118,12 @@ task Impl {
         
         # Chunking the chromosome for truvari collapse.
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
-        mkdir -p ./truvari_chunks/
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz ./truvari_chunks/ ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz . ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
+        ls -laht
         df -h
         rm -f ~{chromosome_id}.vcf.gz
-        for FILE in $(ls ./truvari_chunks/*.zip); do
-            mv ${FILE} ./truvari_chunks/$(basename ${FILE} .zip).gz
+        for FILE in $(ls chunk_*.zip); do
+            mv ${FILE} ./$(basename ${FILE} .zip).gz
         done
         
         # Converting chunks from GZ to BGZ.
@@ -139,7 +139,7 @@ task Impl {
         echo 'bgzip ${BASE}' >> script.sh
         echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
         chmod +x script.sh
-        ls ./truvari_chunks/*.gz > file_list.txt
+        ls chunk_*.gz > file_list.txt
         ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
         
         # Basic consistency checks
