@@ -130,16 +130,16 @@ task Impl {
         
         
         gunzip chunk_1.vcf.gz
-        bcftools view --header-only chunk_1.vcf
-        bcftools view --no-header chunk_1.vcf | head -n 3
-        bcftools view --no-header chunk_1.vcf | tail -n 3
+        bcftools view --header-only chunk_1.vcf || echo "0"
+        bcftools view --no-header chunk_1.vcf | head -n 3  || echo "0"
+        bcftools view --no-header chunk_1.vcf | tail -n 3  || echo "0"
         
         
         
-        gunzip chunk_0.vcf.gz
-        bcftools view --header-only chunk_0.vcf
-        bcftools view --no-header chunk_0.vcf | head -n 3
-        bcftools view --no-header chunk_0.vcf | tail -n 3
+        gunzip chunk_0.vcf.gz || echo "0"
+        bcftools view --header-only chunk_0.vcf || echo "0"
+        bcftools view --no-header chunk_0.vcf | head -n 3 || echo "0"
+        bcftools view --no-header chunk_0.vcf | tail -n 3 || echo "0"
         
         
         
