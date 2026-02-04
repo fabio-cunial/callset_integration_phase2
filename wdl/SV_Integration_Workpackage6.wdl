@@ -14,6 +14,8 @@ workflow SV_Integration_Workpackage6 {
         
         String remote_indir
         String remote_outdir
+        
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         bcftools_chunks: "Comma-separated and sorted integers. Chunks are assumed to be sorted by POS."
@@ -30,7 +32,8 @@ workflow SV_Integration_Workpackage6 {
             truvari_chunk_min_records = truvari_chunk_min_records,
             truvari_collapse_refdist = truvari_collapse_refdist,
             remote_indir = remote_indir,
-            remote_outdir = remote_outdir
+            remote_outdir = remote_outdir,
+            docker_image = docker_image
     }
     
     output {
@@ -40,9 +43,10 @@ workflow SV_Integration_Workpackage6 {
 
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
-# TOOL                          CPU     RAM     TIME
-# bcftools concat               12%     20M     1h
-# truvari divide --min 1769     100%    12G     6h         // Outputs 562 chunks
+# TOOL                                        CPU     RAM     TIME
+# bcftools concat                             12%     20M     1h
+# truvari divide --buffer 500 --min 1769     100%     12G     6h   // 562 chunks
+# TruvariDivide 1000 2000                    
 #
 # Output of truvari divide (each chunk is ~5 MB):
 # count      562.000000
@@ -71,7 +75,7 @@ task Impl {
         Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number = 4
-        String docker_image = "fcunial/callset_integration_phase2_workpackages:latest"
+        String docker_image
     }
     parameter_meta {
     }
@@ -109,6 +113,7 @@ task Impl {
         
         # Chunking the chromosome for truvari collapse.
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
+        mkdir -p ./truvari_chunks/
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz ./truvari_chunks/ ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
         df -h
         rm -f ~{chromosome_id}.vcf.gz
@@ -117,7 +122,7 @@ task Impl {
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_FILE=$1' >> script.sh
         echo 'OUTPUT_FILE="$(basename ${INPUT_FILE} .zip).gz"' >> script.sh
-        echo 'gunzip -c ${INPUT_FILE} | bgzip > ${OUTPUT_FILE}' >> script.sh
+        echo 'gunzip -c ${INPUT_FILE} | bgzip -c > ${OUTPUT_FILE}' >> script.sh
         echo 'bcftools index -f -t ${OUTPUT_FILE}' >> script.sh
         echo 'rm -f ${INPUT_FILE}' >> script.sh
         chmod +x script.sh

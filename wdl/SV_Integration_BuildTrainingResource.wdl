@@ -17,7 +17,7 @@ workflow SV_Integration_BuildTrainingResource {
         
         String remote_outdir
         
-        String docker_image = "fcunial/callset_integration_phase2_workpackages:v3"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         dipcall_tsv: "Format of each row: ID, DIPCALL_BED, DIPCALL_VCF. We assume that every VCF is sorted and sequence-resolved."
