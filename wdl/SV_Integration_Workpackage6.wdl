@@ -140,6 +140,9 @@ task Impl {
         echo 'bcftools index -f -t ${BASE}.gz' >> script.sh
         chmod +x script.sh
         ls chunk_*.gz > file_list.txt
+        bcftools view --header-only chunk_0.vcf.gz | tail -n 3
+        bcftools view --no-header chunk_0.vcf.gz | head -n 3
+        bcftools view --no-header chunk_0.vcf.gz | tail -n 3
         ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
         
         # Basic consistency checks
