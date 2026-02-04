@@ -10,7 +10,7 @@ workflow SV_Integration_Workpackage6 {
         String bcftools_chunks
         
         Int truvari_chunk_min_records = 2000
-        Int truvari_collapse_refdist = 500
+        Int truvari_collapse_refdist = 1000
         
         String remote_indir
         String remote_outdir
@@ -71,6 +71,7 @@ task Impl {
         Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number = 4
+        String docker_image = "fcunial/callset_integration_phase2_workpackages:latest"
     }
     parameter_meta {
     }
@@ -142,7 +143,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
