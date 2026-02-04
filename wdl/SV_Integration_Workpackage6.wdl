@@ -70,6 +70,7 @@ task Impl {
         Int n_cpu = 8
         Int ram_size_gb = 8
         Int disk_size_gb = 50
+        Int preemptible_number = 4
     }
     parameter_meta {
     }
@@ -145,6 +146,7 @@ task Impl {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
