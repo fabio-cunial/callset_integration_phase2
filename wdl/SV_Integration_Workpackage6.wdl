@@ -44,9 +44,15 @@ workflow SV_Integration_Workpackage6 {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                                        CPU     RAM     TIME
-# bcftools concat                             12%     20M     1h
-# truvari divide --buffer 500 --min 1769     100%     12G     6h   // 562 chunks
-# TruvariDivide 1000 2000                    
+# bcftools concat                             12%    20 M     1h
+#
+# truvari divide --buffer 500 --min 1769     100%    12 G     6h   // 562 chunks
+#
+# TruvariDivide 1000 2000                    100%   600 M     2h
+# recompression                              800%    10 M    16m
+#
+# bcftools query
+# TruvariDivide2 1000 2000
 #
 # Output of truvari divide (each chunk is ~5 MB):
 # count      562.000000
@@ -116,6 +122,10 @@ task Impl {
         bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
         df -h 1>&2
         rm -f chunk_*.bcf* file_list.txt
+        if [ ~{consistency_checks} -eq 1 ]; then
+            N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
+            ${TIME_COMMAND} bcftools query --format '%ID\n' ~{chromosome_id}.bcf > ids_truth.txt
+        fi
         
         # Chunking the chromosome for truvari collapse
         ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
@@ -126,15 +136,15 @@ task Impl {
         echo 'REGION=$2' >> script.sh
         echo 'CHUNK_ID=$3' >> script.sh
         echo 'bcftools view --output-type z ${INPUT_BCF} ${REGION} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
-        echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz'
+        echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         chmod +x script.sh
         ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
         ls -laht 1>&2
         df -h  1>&2
+        rm -f ~{chromosome_id}.bcf* regions.txt
         
         # Simple consistency checks
         if [ ~{consistency_checks} -eq 1 ]; then
-            N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
             N_RECORDS_CHUNKED="0"
             for FILE in $(ls chunk_*.vcf.gz.tbi); do
                 N=$( bcftools index --nrecords ${FILE} )
@@ -144,7 +154,6 @@ task Impl {
                 echo "ERROR: The truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
                 exit 1
             fi
-            ${TIME_COMMAND} bcftools query --format '%ID\n' ~{chromosome_id}.bcf > ids_truth.txt
             rm -f ids_test.txt
             for FILE in $(ls chunk_*.vcf.gz | sort -V); do
                 bcftools query --format '%ID\n' ${FILE} >> ids_test.txt
