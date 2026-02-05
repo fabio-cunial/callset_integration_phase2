@@ -44,15 +44,16 @@ workflow SV_Integration_Workpackage6 {
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999:
 #
 # TOOL                                        CPU     RAM     TIME
-# bcftools concat                             12%    20 M     1h
+# bcftools concat                             12%     20M     1h
 #
-# truvari divide --buffer 500 --min 1769     100%    12 G     6h   // 562 chunks
+# truvari divide --buffer 500 --min 1769     100%     12G     6h   // 562 chunks
 #
-# TruvariDivide 1000 2000                    100%   600 M     2h
-# recompression                              800%    10 M    16m
+# TruvariDivide 1000 2000                    100%    600M     2h
+# Conversion GZ->BGZ                         800%     10M    16m
 #
-# bcftools query
-# TruvariDivide2 1000 2000
+# bcftools query                             100%      6G     7m
+# TruvariDivide2 1000 2000                   100%    300M     5s
+# bcftools view
 #
 # Output of truvari divide (each chunk is ~5 MB):
 # count      562.000000
@@ -84,7 +85,7 @@ task Impl {
         Int consistency_checks = 0
         
         Int n_cpu = 8
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
         Int disk_size_gb = 50
         Int preemptible_number = 4
         String docker_image
@@ -137,6 +138,8 @@ task Impl {
         echo 'CHUNK_ID=$3' >> script.sh
         echo 'bcftools view --output-type z ${INPUT_BCF} ${REGION} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz' >> script.sh
+        echo 'df -h 1>&2' >> script.sh
+        echo 'ls -laht 1>&2' >> script.sh
         chmod +x script.sh
         ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
         ls -laht 1>&2
