@@ -119,7 +119,7 @@ task Impl {
         
         # Chunking the chromosome for truvari collapse
         ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} > regions.txt
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} > regions.txt
         rm -f pos_ref_alt.tsv
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_BCF=$1' >> script.sh
