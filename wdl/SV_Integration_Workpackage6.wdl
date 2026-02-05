@@ -75,6 +75,7 @@ task Impl {
         
         String remote_indir
         String remote_outdir
+        Int consistency_checks = 0
         
         Int n_cpu = 8
         Int ram_size_gb = 8
@@ -104,51 +105,56 @@ task Impl {
             echo ~{remote_indir}/chunk_${CHUNK}.bcf.csi >> uri_list.txt
             echo chunk_${CHUNK}.bcf >> file_list.txt
         done
-        ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
+        ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
         df -h 1>&2
         rm -f uri_list.txt
         
         # Concatenating all the bcftools merge chunks to build a whole-
         # chromosome VCF. This is because a truvari collapse chunk may straddle
         # multiple bcftools merge chunks.
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --file-list file_list.txt --output-type z1 > ~{chromosome_id}.vcf.gz
-        bcftools index --threads ${N_THREADS} -f -t ~{chromosome_id}.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > ~{chromosome_id}.bcf
+        bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
         df -h 1>&2
         rm -f chunk_*.bcf* file_list.txt
         
-        # Chunking the chromosome for truvari collapse.
-        N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.vcf.gz.tbi)
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide ~{chromosome_id}.vcf.gz . ~{truvari_collapse_refdist} ~{truvari_chunk_min_records}
+        # Chunking the chromosome for truvari collapse
+        ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} > regions.txt
+        rm -f pos_ref_alt.tsv
+        echo '#!/bin/bash' > script.sh
+        echo 'INPUT_BCF=$1' >> script.sh
+        echo 'REGION=$2' >> script.sh
+        echo 'CHUNK_ID=$3' >> script.sh
+        echo 'bcftools view --output-type z ${INPUT_BCF} ${REGION} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
+        echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz'
+        chmod +x script.sh
+        ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
         ls -laht 1>&2
         df -h  1>&2
-        rm -f ~{chromosome_id}.vcf.gz
         
-        # Converting chunks from GZ to BGZ
-        echo '#!/bin/bash' > script.sh
-        echo 'INPUT_FILE=$1' >> script.sh
-        echo 'BASE=$(basename ${INPUT_FILE} .vcf.gz)' >> script.sh
-        echo 'bgzip -d -c ${INPUT_FILE} | bgzip -c > ${BASE}_prime.vcf.gz' >> script.sh
-        echo 'rm -f ${INPUT_FILE}' >> script.sh
-        echo 'mv ${BASE}_prime.vcf.gz ${BASE}.vcf.gz' >> script.sh
-        echo 'bcftools index -f -t ${BASE}.vcf.gz' >> script.sh
-        chmod +x script.sh
-        ls chunk_*.gz > file_list.txt
-        ${TIME_COMMAND} xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh
-        
-        # Basic consistency checks
-        N_RECORDS_CHUNKED="0"
-        for FILE in $(ls chunk_*.vcf.gz.tbi); do
-            N=$( bcftools index --nrecords ${FILE} )
-            N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
-        done
-        if [ ${N_RECORDS_CHUNKED} -ne ${N_RECORDS} ]; then
-            echo "ERROR: The truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
-            exit 1
+        # Simple consistency checks
+        if [ ~{consistency_checks} -eq 1 ]; then
+            N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
+            N_RECORDS_CHUNKED="0"
+            for FILE in $(ls chunk_*.vcf.gz.tbi); do
+                N=$( bcftools index --nrecords ${FILE} )
+                N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
+            done
+            if [ ${N_RECORDS_CHUNKED} -ne ${N_RECORDS} ]; then
+                echo "ERROR: The truvari collapse chunks contain ${N_RECORDS_CHUNKED} total records, but the chromosome VCF contains ${N_RECORDS} records."
+                exit 1
+            fi
+            ${TIME_COMMAND} bcftools query --format '%ID\n' ~{chromosome_id}.bcf > ids_truth.txt
+            rm -f ids_test.txt
+            for FILE in $(ls chunk_*.vcf.gz | sort -V); do
+                bcftools query --format '%ID\n' ${FILE} >> ids_test.txt
+            done
+            diff --brief ids_test.txt ids_truth.txt
         fi
         
         # Uploading
         ls chunk_*.vcf.gz* > file_list.txt
-        xargs --arg-file=file_list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
+        xargs --arg-file=file_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
     >>>
     
     output {
