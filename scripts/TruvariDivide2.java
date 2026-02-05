@@ -9,7 +9,7 @@ import java.io.*;
  *
  * POS, REF, ALT
  *
- * and it prints to STDOUT regions for `bcftools view`.
+ * and it prints to STDOUT instructions for running `bcftools view`.
  */
 public class TruvariDivide2 {
     /**
@@ -20,16 +20,17 @@ public class TruvariDivide2 {
         final int BUFFER = Integer.parseInt(args[1]);  // Assumed >> 10
         final int MIN_RECORDS_PER_VCF = Integer.parseInt(args[2]);
         final String CHROM = args[3];
+        final int EXPECTED_N_RECORDS_TOTAL = Integer.parseInt(args[4]);
         
         final int SLACK = 5;  // Arbitrary
         
         int i, p, q;
-        int chunkID, pos, refLength, altLength, nRecords;
+        int chunkID, pos, refLength, altLength, nRecords, nRecordsTotal;
         int first, last, minFirst, maxLast;  // One-based, inclusive.
         String str;
         BufferedReader br;
         
-        chunkID=0;
+        chunkID=0; nRecordsTotal=0;
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_TSV)));
         str=br.readLine(); nRecords=0; first=0; last=0; minFirst=0; maxLast=0;
         while (str!=null) {
@@ -59,6 +60,7 @@ public class TruvariDivide2 {
             }
             if (first>maxLast+BUFFER && nRecords>=MIN_RECORDS_PER_VCF) {
                 System.out.println(CHROM+":"+(minFirst-SLACK)+"-"+(maxLast+SLACK)+" "+chunkID);
+                nRecordsTotal+=nRecords;
                 System.err.println("chunk="+chunkID+" nRecords="+nRecords);
                 chunkID++;
                 nRecords=1;
@@ -74,8 +76,13 @@ public class TruvariDivide2 {
         }
         br.close();
         System.out.println(CHROM+":"+(minFirst-SLACK)+"-"+(maxLast+SLACK)+" "+chunkID);
+        nRecordsTotal+=nRecords;
         System.err.println("chunk="+chunkID+" nRecords="+nRecords);
-        System.err.println("Created "+(chunkID+1)+" truvari chunks");
+        if (nRecordsTotal!=EXPECTED_N_RECORDS_TOTAL) {
+            System.err.println("ERROR: Expected "+EXPECTED_N_RECORDS_TOTAL+" records but created "+nRecords+" records.");
+            System.exit(1);
+        }
+        else System.err.println("Created "+(chunkID+1)+" truvari chunks");
     }
     
 }

@@ -52,8 +52,8 @@ workflow SV_Integration_Workpackage6 {
 # Conversion GZ->BGZ                         800%     10M    16m
 #
 # bcftools query                             100%      6G     7m
-# TruvariDivide2 1000 2000                   100%    300M     5s
-# bcftools view
+# TruvariDivide2 1000 2000                   100%    300M     5s   // 522 chunks
+# bcftools view                              800%      4G    30m
 #
 # Output of truvari divide (each chunk is ~5 MB):
 # count      562.000000
@@ -123,20 +123,20 @@ task Impl {
         bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
         df -h 1>&2
         rm -f chunk_*.bcf* file_list.txt
+        N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
         if [ ~{consistency_checks} -eq 1 ]; then
-            N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
             ${TIME_COMMAND} bcftools query --format '%ID\n' ~{chromosome_id}.bcf > ids_truth.txt
         fi
         
         # Chunking the chromosome for truvari collapse
         ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} > regions.txt
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} ${N_RECORDS} > regions.txt
         rm -f pos_ref_alt.tsv
         echo '#!/bin/bash' > script.sh
         echo 'INPUT_BCF=$1' >> script.sh
         echo 'REGION=$2' >> script.sh
         echo 'CHUNK_ID=$3' >> script.sh
-        echo 'bcftools view --output-type z ${INPUT_BCF} ${REGION} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
+        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type z ${INPUT_BCF} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         echo 'df -h 1>&2' >> script.sh
         echo 'ls -laht 1>&2' >> script.sh
@@ -149,7 +149,7 @@ task Impl {
         # Simple consistency checks
         if [ ~{consistency_checks} -eq 1 ]; then
             N_RECORDS_CHUNKED="0"
-            for FILE in $(ls chunk_*.vcf.gz.tbi); do
+            for FILE in $(ls chunk_*.vcf.gz.tbi | sort -V); do
                 N=$( bcftools index --nrecords ${FILE} )
                 N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
             done
