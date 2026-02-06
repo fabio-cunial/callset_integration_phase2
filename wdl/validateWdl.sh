@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage7.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage6.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage5.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage3.wdl
@@ -17,7 +18,6 @@ java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage9.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage8_Prime.wdl
 java -jar ${WOMTOOL_PATH} validate -l CollapseHapsVcf.wdl
 java -jar ${WOMTOOL_PATH} validate -l Trgt2Kanpig.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage7.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage2.wdl
 java -jar ${WOMTOOL_PATH} validate -l RegenotypeKanpigHapsVcf.wdl
 java -jar ${WOMTOOL_PATH} validate -l BuildKanpigHapVcf.wdl

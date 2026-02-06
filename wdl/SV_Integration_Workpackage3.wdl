@@ -20,6 +20,8 @@ workflow SV_Integration_Workpackage3 {
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
+        
+        String docker_image = "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
     }
     parameter_meta {
         split_for_bcftools_merge_csv: "A partition that covers all chromosomes. Every line is a 0-based, half-open, consecutive chunk of a chromosome. Lines are assumed to be sorted."
@@ -41,7 +43,8 @@ workflow SV_Integration_Workpackage3 {
             annotations = annotations,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
-            hyperparameters_json = hyperparameters_json
+            hyperparameters_json = hyperparameters_json,
+            docker_image = docker_image
     }
     
     output {
@@ -75,6 +78,7 @@ task Impl {
         File scoring_python_script
         File hyperparameters_json
         
+        String docker_image
         Int n_cpu = 2
         Int ram_size_gb = 3
         Int disk_size_gb = 20
@@ -250,7 +254,7 @@ task Impl {
     output {
     }
     runtime {
-        docker: "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"

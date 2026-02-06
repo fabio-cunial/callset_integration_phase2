@@ -85,11 +85,11 @@ task Impl {
         String remote_outdir
         Int consistency_checks = 1
         
+        String docker_image
         Int n_cpu = 8
         Int ram_size_gb = 12
         Int disk_size_gb = 50
         Int preemptible_number = 4
-        String docker_image
     }
     parameter_meta {
     }
