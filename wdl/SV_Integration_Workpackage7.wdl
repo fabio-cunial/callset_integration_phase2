@@ -8,6 +8,7 @@ workflow SV_Integration_Workpackage7 {
     input {
         String remote_indir
         String chromosome_id
+        File chunks_ids
         String remote_outdir
         
         String truvari_matching_parameters = "--refdist 500 --pctseq 0.95 --pctsize 0.95 --pctovl 0.0"
@@ -25,6 +26,7 @@ workflow SV_Integration_Workpackage7 {
         input:
             remote_indir = remote_indir,
             chromosome_id = chromosome_id,
+            chunks_ids = chunks_ids,
             remote_outdir = remote_outdir,
             
             truvari_matching_parameters = truvari_matching_parameters,
@@ -49,6 +51,7 @@ task Impl {
     input {
         String remote_indir
         String chromosome_id
+        File chunks_ids
         String remote_outdir
         
         String truvari_matching_parameters
@@ -167,11 +170,7 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        gcloud storage ls ~{remote_indir}/~{chromosome_id}/'chunk_*.vcf.gz' | sort -V > chunk_uris.txt
-        while read CHUNK_URI; do
-            CHUNK_ID=$(basename ${CHUNK_URI} .vcf.gz)
-            CHUNK_ID=${CHUNK_ID#chunk_}
-        
+        while read CHUNK_ID; do
             # Skipping the chunk if it has already been processed
             TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
@@ -189,7 +188,7 @@ task Impl {
             gcloud storage mv chunk_${CHUNK_ID}.done ~{remote_outdir}/~{chromosome_id}/
             rm -rf chunk_${CHUNK_ID}*
             ls -laht 1>&2
-        done < chunk_uris.txt
+        done < ~{chunks_ids}
     >>>
     
     output {
