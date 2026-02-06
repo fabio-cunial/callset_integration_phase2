@@ -2,44 +2,40 @@ version 1.0
 
 
 # Runs `truvari collapse` on a small chunk of a bcftools merged cohort VCF.
-# Default arguments are optimal for 10k samples.
+# Default truvari parameters are optimal for 10k samples.
 #
 workflow SV_Integration_Workpackage7 {
     input {
+        String remote_indir
         String chromosome_id
-        File chunks_ids
+        String remote_outdir
+        
         String truvari_matching_parameters = "--refdist 500 --pctseq 0.95 --pctsize 0.95 --pctovl 0.0"
         Boolean use_bed
-        
-        String remote_indir
-        String remote_outdir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
-        chunks_ids: "One chunk ID per line"
-        truvari_matching_parameters: "Truvari's definition of a match. The default string contains truvari's defaults."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
+        truvari_matching_parameters: "Truvari's definition of a match. The default string contains truvari's defaults."
     }
     
     call Impl {
         input:
+            remote_indir = remote_indir,
             chromosome_id = chromosome_id,
-            chunks_ids = chunks_ids,
+            remote_outdir = remote_outdir,
+            
             truvari_matching_parameters = truvari_matching_parameters,
             use_bed = use_bed,
-            remote_indir = remote_indir,
-            remote_outdir = remote_outdir,
+            
             docker_image = docker_image
     }
     
     output {
     }
 }
-
-
-
 
 
 # Performance on 12'680 samples, 15x, GRCh38, one 5 MB chunk of chr6,
@@ -51,17 +47,16 @@ workflow SV_Integration_Workpackage7 {
 #
 task Impl {
     input {
+        String remote_indir
         String chromosome_id
-        File chunks_ids
+        String remote_outdir
+        
         String truvari_matching_parameters
         Boolean use_bed
         
-        String remote_indir
-        String remote_outdir
-        
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
         Int disk_size_gb = 50
         Int preemptible_number = 4
     }
@@ -175,9 +170,13 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        while read CHUNK_ID; do
+        gcloud storage ls ~{remote_indir}/~{chromosome_id}/'chunk_*.vcf.gz' > chunk_uris.txt
+        while read CHUNK_URI; do
+            CHUNK_ID=$(basename ${CHUNK_URI} .vcf.gz)
+            CHUNK_ID=${CHUNK_ID#chunk_}
+        
             # Skipping the chunk if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/${CHUNK_ID}.done || echo "0" )
+            TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
                 continue
             fi
@@ -189,11 +188,11 @@ task Impl {
             
             # Uploading
             gcloud storage mv chunk_${CHUNK_ID}_truvari.bcf'*' ~{remote_outdir}/~{chromosome_id}/
-            touch ${CHUNK_ID}.done
-            gcloud storage mv ${CHUNK_ID}.done ~{remote_outdir}/~{chromosome_id}/
-            rm -rf chunk_${CHUNK_ID}_*
+            touch chunk_${CHUNK_ID}.done
+            gcloud storage mv chunk_${CHUNK_ID}.done ~{remote_outdir}/~{chromosome_id}/
+            rm -rf chunk_${CHUNK_ID}*
             ls -laht 1>&2
-        done < ~{chunks_ids}
+        done < chunk_uris.txt
     >>>
     
     output {
