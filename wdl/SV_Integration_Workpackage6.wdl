@@ -47,12 +47,15 @@ workflow SV_Integration_Workpackage6 {
 # bcftools concat                             12%     20M     1h
 #
 # truvari divide --buffer 500 --min 1769     100%     12G     6h   // 562 chunks
+# truvari divide --min 88468                 100%  >=256G
 #
-# TruvariDivide 1000 2000                    100%    600M     2h
+# First speedup strategy:
+# TruvariDivide.java 2000                    100%    600M     2h   // 524 chunks
 # Conversion GZ->BGZ                         800%     10M    16m
 #
+# Second speedup strategy:
 # bcftools query                             100%      6G     7m
-# TruvariDivide2 1000 2000                   100%    300M     5s   // 522 chunks
+# TruvariDivide2.java 1000 2000              100%    300M     5s   // 524 chunks
 # bcftools view                              800%      4G    30m
 #
 # Output of truvari divide (each chunk is ~5 MB):
@@ -65,12 +68,10 @@ workflow SV_Integration_Workpackage6 {
 # 75%       3062.250000
 # max      19218.000000
 #
-# Remark: truvari divide --min 88468 goes out of RAM with 256GB.
-#
-# Remark: this could be implemented in much faster ways. E.g. we could create
-# truvari collapse chunks from each bcftools merge chunk in parallel, and then
-# merge the first/last truvari collapse chunks of consecutive bcftools merge
-# chunks: we don't implement this just for simplicity/laziness.
+# Remark: as a third speedup strategy, we could create truvari collapse chunks
+# from each bcftools merge chunk in parallel, and then merge the first/last
+# truvari collapse chunks of consecutive bcftools merge chunks. This might be
+# even faster.
 # 
 task Impl {
     input {
@@ -82,10 +83,10 @@ task Impl {
         
         String remote_indir
         String remote_outdir
-        Int consistency_checks = 0
+        Int consistency_checks = 1
         
         Int n_cpu = 8
-        Int ram_size_gb = 4
+        Int ram_size_gb = 12
         Int disk_size_gb = 50
         Int preemptible_number = 4
         String docker_image
@@ -139,12 +140,11 @@ task Impl {
         echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type z ${INPUT_BCF} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz' >> script.sh
         echo 'df -h 1>&2' >> script.sh
-        echo 'ls -laht 1>&2' >> script.sh
         chmod +x script.sh
         ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
         ls -laht 1>&2
         df -h  1>&2
-        rm -f ~{chromosome_id}.bcf* regions.txt
+        rm -f ~{chromosome_id}.bcf*
         
         # Simple consistency checks
         if [ ~{consistency_checks} -eq 1 ]; then
@@ -167,6 +167,7 @@ task Impl {
         # Uploading
         ls chunk_*.vcf.gz* > file_list.txt
         xargs --arg-file=file_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
+        gcloud storage cp regions.txt ~{remote_outdir}/~{chromosome_id}/
     >>>
     
     output {

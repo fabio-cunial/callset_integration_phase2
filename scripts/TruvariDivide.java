@@ -95,7 +95,9 @@ public class TruvariDivide {
             }
             str=br.readLine();
         }
-        br.close(); bw.close();
+        bw.close();
+        System.err.println("chunk="+chunkID+" nRecords="+nRecords);
+        br.close();
         System.err.println("Created "+(chunkID+1)+" truvari chunks");
     }
     
