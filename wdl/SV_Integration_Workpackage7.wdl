@@ -57,7 +57,7 @@ task Impl {
         String docker_image
         Int n_cpu = 2
         Int ram_size_gb = 4
-        Int disk_size_gb = 50
+        Int disk_size_gb = 10
         Int preemptible_number = 4
     }
     parameter_meta {
@@ -72,8 +72,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         
         
         
@@ -103,12 +102,10 @@ task Impl {
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index -f chunk_${CHUNK_ID}_in.bcf
         
             # Copying the number of samples to QUAL.
-            # Remark: joining annotations on REF and ALT in addition to ID is
-            # important at this stage, since the IDs in the output of bcftools
-            # merge are not necessarily all distinct.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%AC_Hom\t%AC_Het\n' chunk_${CHUNK_ID}_in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                printf("%s\t%s\t%s\t%s\t%s\t%d\n",$1,$2,$3,$4,$5,$6 / 2 + $7); \
-            }' | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+            # Remark: we cannot join annotations just by ID at this stage,
+            # since the IDs in the output of bcftools merge are not necessarily
+            # all distinct.
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.bcf > chunk_${CHUNK_ID}_out.vcf.gz
             rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index -f -t chunk_${CHUNK_ID}_in.vcf.gz
@@ -170,7 +167,7 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        gcloud storage ls ~{remote_indir}/~{chromosome_id}/'chunk_*.vcf.gz' > chunk_uris.txt
+        gcloud storage ls ~{remote_indir}/~{chromosome_id}/'chunk_*.vcf.gz' | sort -V > chunk_uris.txt
         while read CHUNK_URI; do
             CHUNK_ID=$(basename ${CHUNK_URI} .vcf.gz)
             CHUNK_ID=${CHUNK_ID#chunk_}
