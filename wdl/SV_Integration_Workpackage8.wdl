@@ -1,29 +1,52 @@
 version 1.0
 
 
-# Concatenates chunks of the truvari collapse output. Prepares the concatenated
-# file for kanpig, by dropping all genotypes and by assigning a unique integer
-# ID to every call (the original ID is copied to the INFO field): this is
-# necessary, otherwise kanpig may complain about duplicated IDs, which may arise
-# naturally from the previous steps of the pipeline.
+# Concatenates chunks of the `truvari collapse` output. Ensures that every
+# record in output has a globally unique ID (this is necessary for kanpig
+# downstream; duplicated IDs may arise naturally from the previous steps of the
+# pipeline), and an INFO field that counts the number of samples it was
+# discovered in. The original ID is copied to an INFO field.
+#
+# Partitions the result of the concatenation into the following files:
+# - Frequent: the subset of all records that were discovered in at least the
+#   specified fraction of all samples. This VCF has no FORMAT and SAMPLE
+#   columns.
+# - Infrequent: the subset of all records that were discovered in less than the
+#   specified fraction of all samples. This VCF has all the original SAMPLE
+#   columns.
 #
 workflow SV_Integration_Workpackage8 {
     input {
         Array[String] chromosomes = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY","chrM"]
         String remote_indir
         String remote_outdir
+        Float n_samples_fraction_frequent = 0.1
+        
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
+        chromosomes: "The order of the chromosomes becomes their order in the output VCF."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
-        chromosomes: "The order of the chromosomes becomes their order in the output VCF."
+        n_samples_fraction_frequent: "A record is considered frequent iff it was discovered in at least this fraction of the total number of samples."
     }
     
-    call Impl {
+    scatter (chr in chromosomes) {
+        call SingleChromosome {
+            input:
+                chromosome = chr,
+                remote_indir = remote_indir,
+                remote_outdir = remote_outdir,
+                n_samples_fraction_frequent = n_samples_fraction_frequent,
+                docker_image = docker_image
+        }
+    }
+    call AllChromosomes {
         input:
             chromosomes = chromosomes,
-            remote_indir = remote_indir,
-            remote_outdir = remote_outdir
+            out_txt = SingleChromosome.out_txt,
+            remote_outdir = remote_outdir,
+            docker_image = docker_image
     }
     
     output {
@@ -31,29 +54,28 @@ workflow SV_Integration_Workpackage8 {
 }
 
 
-# Performance on 10'070 samples, 15x, GRCh38, SSD:
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, HDD:
 #
-# CAL_SENS  TOOL                                CPU     RAM     TIME
-# <=0.7     bcftools concat                     50%     300M    2m
-# <=0.7     tabix                               100%    90M     20m
-# <=0.7     bgzip                               360%    10M     4m
+# TOOL                          CPU     RAM     TIME
+# download
+# bcftools concat               
+# bcftools query
+# bcftools annotate
+# bcftools view frequent
+# bcftools view infrequent
 #
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
-#
-# TOOL                CPU     RAM     TIME
-# bcftools concat     70%     90M     10s
-# tabix               100%    10M     3m
-# bcftools view | awk                 ~30m
-#
-task Impl {
+task SingleChromosome {
     input {
-        Array[String] chromosomes
+        String chromosome
         String remote_indir
         String remote_outdir
+        Float n_samples_fraction_frequent
         
+        String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 4
         Int disk_size_gb = 200
+        Int preemptible_number = 4
     }
     parameter_meta {
     }
@@ -67,78 +89,142 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
         
         
-        # Localizing all the chunks of all the chromosomes
-        CHROMOSOMES=~{sep=',' chromosomes}
-        echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
-        while read CHROMOSOME; do
-            while : ; do
-                TEST=$(gsutil -m cp ~{remote_indir}/${CHROMOSOME}_chunk_'*.vcf.gz*' . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading the chunks of ${CHROMOSOME}. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-        done < chr_list.txt
-        while read CHROMOSOME; do
-            ls ${CHROMOSOME}_chunk_*.vcf.gz | sort -V >> chunk_list.txt
-        done < chr_list.txt
+        # Localizing all chunks
+        TEST=$(gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' && echo 0 || echo 1)
+        if [ ${TEST} -eq 1 ]; then
+            echo "ERROR: ~{chromosome} has no truvari collapse chunks."
+            exit
+        fi
+        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
+        ls chunk_*.bcf | sort -V > chunk_list.txt
         cat chunk_list.txt
-        df -h
+        df -h 1>&2
         
-        # Concatenating all the chunks
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type z > truvari_collapsed.vcf.gz
-        ${TIME_COMMAND} tabix -f truvari_collapsed.vcf.gz
-        rm -rf *_chunk_*
-        df -h
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp 'truvari_collapsed.vcf.gz*' ~{remote_outdir}/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading concatenated VCFs. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        # Concatenating all chunks
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b > out.bcf
+        df -h 1>&2
+        rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
         
-        # Preparing the inter-sample VCF for kanpig
-        bcftools view --header-only truvari_collapsed.vcf.gz > header.txt
-        N_ROWS=$(wc -l < header.txt)
-        date
-        (  head -n $(( ${N_ROWS} - 1 )) header.txt ; \
-           echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' ; \
-           echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE" ; \
-           bcftools view --no-header truvari_collapsed.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { gsub(/;/,"_",$3); printf("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s;ORIGINAL_ID=%s\tGT\t0/1\n",$1,$2,++i,$4,$5,$6,$7,$8,$3); }' \
-        ) | bgzip --compress-level 1 > truvari_collapsed_for_kanpig.vcf.gz
-        date
-        ${TIME_COMMAND} tabix -f truvari_collapsed_for_kanpig.vcf.gz
-        df -h
+        # Enforcing a distinct ID in every record, and annotating every record
+        # with the number of samples it occurs in. Note that the latter is not
+        # equal to the QUAL field used by truvari collapse upstream, so we have
+        # to recompute this number.
+        CHR=~{chromosome}
+        CHR=${CHR#chr}
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
+        tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
+        echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+        echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from bcftools merge -> truvari collapse">' >> header.txt
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf > out.bcf
+        df -h 1>&2
+        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+        gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
+        gcloud storage cp in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
         
-        # Uploading
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp 'truvari_collapsed_for_kanpig.vcf.gz*' ~{remote_outdir}/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading concatenated VCFs. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        # Separating frequent and infrequent records
+        bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
+        N_SAMPLES=$(wc -l < samples.txt)
+        MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
+        MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf > infrequent.bcf &
+        wait
+        df -h 1>&2
+        ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f frequent.bcf &
+        ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f infrequent.bcf &
+        wait
+        gcloud storage mv frequent.'bcf*' infrequent.'bcf*' ~{remote_outdir}/~{chromosome}/
+        echo "~{chromosome}" > out.txt
     >>>
     
     output {
+        File out_txt = "out.txt"
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+#
+task AllChromosomes {
+    input {
+        Array[String] chromosomes
+        Array[File] out_txt
+        String remote_outdir
+        
+        String docker_image
+        Int n_cpu = 4
+        Int ram_size_gb = 4
+        Int disk_size_gb = 200
+        Int preemptible_number = 4
+    }
+    
+    parameter_meta {
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        # Localizing
+        CHROMOSOMES=~{sep=',' chromosomes}
+        echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
+        rm -f file_list1.txt file_list2.txt file_list3.txt
+        while read CHROMOSOME; do
+            TEST=$(gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf . && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
+                exit
+            fi
+            gcloud storage cp ~{remote_outdir}/${CHROMOSOME}/'*.bcf*' .
+            mv truvari_collapsed.bcf ${CHROMOSOME}_truvari_collapsed.bcf
+            mv truvari_collapsed.bcf.csi ${CHROMOSOME}_truvari_collapsed.bcf.csi
+            mv frequent.bcf ${CHROMOSOME}_frequent.bcf
+            mv frequent.bcf.csi ${CHROMOSOME}_frequent.bcf.csi
+            mv infrequent.bcf ${CHROMOSOME}_infrequent.bcf
+            mv infrequent.bcf.csi ${CHROMOSOME}_infrequent.bcf.csi
+            echo ${CHROMOSOME}_truvari_collapsed.bcf >> file_list1.txt
+            echo ${CHROMOSOME}_frequent.bcf >> file_list2.txt
+            echo ${CHROMOSOME}_infrequent.bcf >> file_list3.txt
+        done < chr_list.txt
+        
+        # Merging
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b > truvari_collapsed.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b > frequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b > infrequent.bcf &
+        wait
+        bcftools index --threads $(( ${N_THREADS} / 3 )) -f truvari_collapsed.bcf &
+        bcftools index --threads $(( ${N_THREADS} / 3 )) -f frequent.bcf &
+        bcftools index --threads $(( ${N_THREADS} / 3 )) -f infrequent.bcf &
+        wait
+        
+        # Uploading
+        gcloud storage mv truvari_collapsed.'bcf*' frequent.'bcf*' infrequent.'bcf*' ~{remote_outdir}/
+    >>>
+
+    output {
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
