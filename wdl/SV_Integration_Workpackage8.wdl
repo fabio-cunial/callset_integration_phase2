@@ -19,6 +19,7 @@ workflow SV_Integration_Workpackage8 {
     input {
         Array[String] chromosomes = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY","chrM"]
         String remote_indir
+        String remote_workpackages1_dir
         String remote_outdir
         Float n_samples_fraction_frequent = 0.1
         
@@ -27,6 +28,7 @@ workflow SV_Integration_Workpackage8 {
     parameter_meta {
         chromosomes: "The order of the chromosomes becomes their order in the output VCF."
         remote_indir: "Without final slash"
+        remote_workpackages1_dir: "Contains the TSV workpackage files used by Workpackage1.wdl, which contain the SAB of each sample in the second column. Without final slash."
         remote_outdir: "Without final slash"
         n_samples_fraction_frequent: "A record is considered frequent iff it was discovered in at least this fraction of the total number of samples."
     }
@@ -36,6 +38,7 @@ workflow SV_Integration_Workpackage8 {
             input:
                 chromosome = chr,
                 remote_indir = remote_indir,
+                remote_workpackages1_dir = remote_workpackages1_dir,
                 remote_outdir = remote_outdir,
                 n_samples_fraction_frequent = n_samples_fraction_frequent,
                 docker_image = docker_image
@@ -68,6 +71,7 @@ task SingleChromosome {
     input {
         String chromosome
         String remote_indir
+        String remote_workpackages1_dir
         String remote_outdir
         Float n_samples_fraction_frequent
         
@@ -91,6 +95,23 @@ task SingleChromosome {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
+        # ----------------------- Steps of the pipeline ------------------------
+        
+        #
+        function GetNMaleSamples() {
+            gcloud storage cp ~{remote_workpackages1_dir}/workpackage1'_*' .
+            N_MALE_SAMPLES="0"
+            for FILE in $(ls workpackage1_* | sort -V); do
+                N=$(cut -f 2 ${FILE} | grep M | wc -l)
+                N_MALE_SAMPLES=$(( ${N_MALE_SAMPLES} + ${N} ))
+            done
+            rm -f workpackage1_*
+            echo ${N_MALE_SAMPLES}
+        }
+        
+        
+        # ---------------------------- Main program ----------------------------
+        
         TEST=$( gsutil ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
         if [ ${TEST} != "0" ]; then
             # Skipping the chromosome if it has already been processed
@@ -112,10 +133,10 @@ task SingleChromosome {
             df -h 1>&2
             rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
         
-            # Enforcing a distinct ID in every record, and annotating every record
-            # with the number of samples it occurs in. Note that the latter is not
-            # equal to the QUAL field used by truvari collapse upstream, so we have
-            # to recompute this number.
+            # Enforcing a distinct ID in every record, and annotating every
+            # record with the number of samples it occurs in. Note that the
+            # latter is not equal to the QUAL field used by truvari collapse
+            # upstream, so we have to recompute this number.
             CHR=~{chromosome}
             CHR=${CHR#chr}
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
@@ -129,8 +150,11 @@ task SingleChromosome {
             gcloud storage cp in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
         
             # Separating frequent and infrequent records
-            bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
-            N_SAMPLES=$(wc -l < samples.txt)
+            if [ ~{chromosome} = "chrY" ]; then
+                N_SAMPLES=$(GetNMaleSamples)
+            else
+                N_SAMPLES=$(bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 | wc -l)
+            fi
             MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
             MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
             ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
