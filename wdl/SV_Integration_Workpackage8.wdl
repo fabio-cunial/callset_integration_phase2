@@ -1,11 +1,11 @@
 version 1.0
 
 
-# Concatenates chunks of the `truvari collapse` output. Ensures that every
-# record in output has a globally unique ID (this is necessary for kanpig
-# downstream; duplicated IDs may arise naturally from the previous steps of the
-# pipeline), and an INFO field that counts the number of samples it was
-# discovered in. The original ID is copied to an INFO field.
+# Concatenates the `truvari collapse` chunks. Ensures that every record in
+# output has a globally unique ID (this is necessary for kanpig downstream;
+# duplicated IDs may arise naturally from the previous steps of the pipeline),
+# and an INFO field that counts the number of samples it was discovered in. The
+# original ID is copied to an INFO field.
 #
 # Partitions the result of the concatenation into the following files:
 # - Frequent: the subset of all records that were discovered in at least the
@@ -91,51 +91,59 @@ task SingleChromosome {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        # Localizing all chunks
-        TEST=$(gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' && echo 0 || echo 1)
-        if [ ${TEST} -eq 1 ]; then
-            echo "ERROR: ~{chromosome} has no truvari collapse chunks."
-            exit
+        TEST=$( gsutil ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
+        if [ ${TEST} != "0" ]; then
+            # Skipping the chromosome if it has already been processed
+            :
+        else
+            # Localizing all chunks
+            TEST=$(gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' && echo 0 || echo 1)
+            if [ ${TEST} -eq 1 ]; then
+                echo "ERROR: ~{chromosome} has no truvari collapse chunks."
+                exit
+            fi
+            ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
+            ls chunk_*.bcf | sort -V > chunk_list.txt
+            cat chunk_list.txt
+            df -h 1>&2
+        
+            # Concatenating all chunks
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b > out.bcf
+            df -h 1>&2
+            rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+        
+            # Enforcing a distinct ID in every record, and annotating every record
+            # with the number of samples it occurs in. Note that the latter is not
+            # equal to the QUAL field used by truvari collapse upstream, so we have
+            # to recompute this number.
+            CHR=~{chromosome}
+            CHR=${CHR#chr}
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
+            tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
+            echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from bcftools merge -> truvari collapse">' >> header.txt
+            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf > out.bcf
+            df -h 1>&2
+            rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+            gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
+            gcloud storage cp in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
+        
+            # Separating frequent and infrequent records
+            bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
+            N_SAMPLES=$(wc -l < samples.txt)
+            MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
+            MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf > infrequent.bcf &
+            wait
+            df -h 1>&2
+            ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f frequent.bcf &
+            ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f infrequent.bcf &
+            wait
+            gcloud storage mv frequent.'bcf*' infrequent.'bcf*' ~{remote_outdir}/~{chromosome}/
+            touch ~{chromosome}.done
+            gcloud storage mv ~{chromosome}.done ~{remote_outdir}/~{chromosome}/
         fi
-        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
-        ls chunk_*.bcf | sort -V > chunk_list.txt
-        cat chunk_list.txt
-        df -h 1>&2
-        
-        # Concatenating all chunks
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b > out.bcf
-        df -h 1>&2
-        rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-        
-        # Enforcing a distinct ID in every record, and annotating every record
-        # with the number of samples it occurs in. Note that the latter is not
-        # equal to the QUAL field used by truvari collapse upstream, so we have
-        # to recompute this number.
-        CHR=~{chromosome}
-        CHR=${CHR#chr}
-        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
-        tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
-        echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-        echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from bcftools merge -> truvari collapse">' >> header.txt
-        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf > out.bcf
-        df -h 1>&2
-        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-        gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
-        gcloud storage cp in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
-        
-        # Separating frequent and infrequent records
-        bcftools view --header-only in.bcf | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
-        N_SAMPLES=$(wc -l < samples.txt)
-        MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
-        MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf > infrequent.bcf &
-        wait
-        df -h 1>&2
-        ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f frequent.bcf &
-        ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f infrequent.bcf &
-        wait
-        gcloud storage mv frequent.'bcf*' infrequent.'bcf*' ~{remote_outdir}/~{chromosome}/
         echo "~{chromosome}" > out.txt
     >>>
     
@@ -186,7 +194,7 @@ task AllChromosomes {
         echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
         rm -f file_list1.txt file_list2.txt file_list3.txt
         while read CHROMOSOME; do
-            TEST=$(gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf . && echo 0 || echo 1)
+            TEST=$(gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf && echo 0 || echo 1)
             if [ ${TEST} -eq 1 ]; then
                 echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
                 exit
@@ -203,7 +211,7 @@ task AllChromosomes {
             echo ${CHROMOSOME}_infrequent.bcf >> file_list3.txt
         done < chr_list.txt
         
-        # Merging
+        # Concatenating
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b > truvari_collapsed.bcf &
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b > frequent.bcf &
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b > infrequent.bcf &
