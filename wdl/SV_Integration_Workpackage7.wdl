@@ -44,8 +44,12 @@ workflow SV_Integration_Workpackage7 {
 # CAL_SENS<=0.999:
 #
 # TOOL               CPU     RAM     TIME   OUTPUT VCF
-# truvari collapse   100%    3G      3-30m  500M
-# bcftools sort      100%    300M    10s
+# bcftools query     100%    600M      10s  
+# bcftools annotate  200%    600M      20s
+# truvari collapse   100%      8G    3-30m  500M
+# bcftools sort      100%      2G       1m
+#
+# Peak disk (with removed.vcf): 16G
 #
 task Impl {
     input {
@@ -59,8 +63,8 @@ task Impl {
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 4
-        Int disk_size_gb = 10
+        Int ram_size_gb = 16
+        Int disk_size_gb = 20
         Int preemptible_number = 4
     }
     parameter_meta {
@@ -100,18 +104,13 @@ task Impl {
             mv chunk_${CHUNK_ID}.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
             mv chunk_${CHUNK_ID}.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
         
-            # Ensuring that all records are consistently annotated
-            ${TIME_COMMAND} bcftools +fill-tags chunk_${CHUNK_ID}_in.vcf.gz -Ob -o chunk_${CHUNK_ID}_out.bcf -- --tags AC_Hom,AC_Het
-            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
-        
-            # Copying the number of samples to QUAL.
             # Remark: we cannot join annotations just by ID at this stage,
             # since the IDs in the output of bcftools merge are not necessarily
             # all distinct.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.bcf > chunk_${CHUNK_ID}_out.vcf.gz
-            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
+            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
             rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
             
             mv chunk_${CHUNK_ID}_in.vcf.gz chunk_${CHUNK_ID}_annotated.vcf.gz
@@ -142,7 +141,9 @@ task Impl {
             mv chunk_${CHUNK_ID}_annotated.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
             mv chunk_${CHUNK_ID}_annotated.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
             
-            ${TIME_COMMAND} truvari collapse --sizemin 0 --sizemax ${INFINITY} --keep maxqual --gt off ~{truvari_matching_parameters} ${BED_FLAGS} --input chunk_${CHUNK_ID}_in.vcf.gz --output chunk_${CHUNK_ID}_out.vcf
+            # Remark: we do not store `removed.vcf` since it's several GBs per
+            # chunk and much bigger than the collapsed output.
+            ${TIME_COMMAND} truvari collapse --sizemin 0 --sizemax ${INFINITY} --keep maxqual --gt off ~{truvari_matching_parameters} ${BED_FLAGS} --input chunk_${CHUNK_ID}_in.vcf.gz --output chunk_${CHUNK_ID}_out.vcf --removed-output /dev/null
             df -h 1>&2
             ls -laht 1>&2
             rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf chunk_${CHUNK_ID}_in.vcf
