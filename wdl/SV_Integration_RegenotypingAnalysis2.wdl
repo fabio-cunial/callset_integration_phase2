@@ -19,7 +19,7 @@ workflow SV_Integration_RegenotypingAnalysis2 {
         Array[Int] min_n_samples = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
         Int max_sv_length = 10000
-        String limit_to_chromosome = "chr6"
+        String limit_to_chromosome = "all"
         
         String remote_dir
         
@@ -49,6 +49,7 @@ workflow SV_Integration_RegenotypingAnalysis2 {
     }
     parameter_meta {
         min_sv_length: "The program subsets `cohort_truvari_bcf` to this SVLEN range before every other step, and only afterwards re-genotypes. Regardless of this variable, benchmarking results are always reported for >=20bp and >=50bp records separately."
+        limit_to_chromosome: "all=do not limit to any chromosome."
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
@@ -324,7 +325,6 @@ task PrepareCohortBcf {
     }
     parameter_meta {
         cohort_truvari_bcf: "The raw output of cohort-level truvari collapse."
-        limit_to_chromosome: "all=do not limit to any chromosome."
     }
     
     Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
@@ -861,7 +861,7 @@ task PrecisionRecallAnalysis {
             local INPUT_VCF=$2
             local OUTPUT_PREFIX=$3
                 
-            if [ ${INPUT_VCF#*.} -eq vcf.gz ]; then
+            if [ ${INPUT_VCF#*.} = vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
             else
@@ -1107,26 +1107,25 @@ task BenchTrio {
             fi
         done
         
-        # Restricting to autosomes. This is just for simplicity and is not
-        # strictly necessary.
+        # Ensuring a consistent format
         TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_in.vcf.gz &
+            wait
+            tabix -f ${PROBAND_ID}_in.vcf.gz &
+            tabix -f ${FATHER_ID}_in.vcf.gz &
+            tabix -f ${MOTHER_ID}_in.vcf.gz &
+            wait
         else
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.vcf.gz) > ${PROBAND_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.vcf.gz) > ${FATHER_ID}_autosomes.vcf.gz &
-            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.vcf.gz) > ${MOTHER_ID}_autosomes.vcf.gz &
+            mv $(ls ${PROBAND_ID}_*.vcf.gz) ${PROBAND_ID}_in.vcf.gz
+            mv $(ls ${FATHER_ID}_*.vcf.gz) ${FATHER_ID}_in.vcf.gz
+            mv $(ls ${MOTHER_ID}_*.vcf.gz) ${MOTHER_ID}_in.vcf.gz
         fi
-        wait
-        tabix -f ${PROBAND_ID}_autosomes.vcf.gz &
-        tabix -f ${FATHER_ID}_autosomes.vcf.gz &
-        tabix -f ${MOTHER_ID}_autosomes.vcf.gz &
-        wait
-        echo ${PROBAND_ID}_autosomes.vcf.gz > list.txt
-        echo ${FATHER_ID}_autosomes.vcf.gz >> list.txt
-        echo ${MOTHER_ID}_autosomes.vcf.gz >> list.txt
+        echo ${PROBAND_ID}_in.vcf.gz > list.txt
+        echo ${FATHER_ID}_in.vcf.gz >> list.txt
+        echo ${MOTHER_ID}_in.vcf.gz >> list.txt
         ls -laht
         
         # Remark: we keep all records from the three files, since otherwise
@@ -1135,12 +1134,12 @@ task BenchTrio {
         # error is computed.
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_autosomes.vcf.gz > out.vcf.gz
-        rm -f ${PROBAND_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_autosomes.vcf.gz ; tabix -f ${PROBAND_ID}_autosomes.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_autosomes.vcf.gz > out.vcf.gz
-        rm -f ${FATHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_autosomes.vcf.gz ; tabix -f ${FATHER_ID}_autosomes.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_autosomes.vcf.gz > out.vcf.gz
-        rm -f ${MOTHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_autosomes.vcf.gz ; tabix -f ${MOTHER_ID}_autosomes.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz > out.vcf.gz
+        rm -f ${PROBAND_ID}_in.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_in.vcf.gz ; tabix -f ${PROBAND_ID}_in.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz > out.vcf.gz
+        rm -f ${FATHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_in.vcf.gz ; tabix -f ${FATHER_ID}_in.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz > out.vcf.gz
+        rm -f ${MOTHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_in.vcf.gz ; tabix -f ${MOTHER_ID}_in.vcf.gz
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
