@@ -23,6 +23,7 @@ workflow SV_Integration_Workpackage5 {
         Int n_expected_samples_controls_15x
         Int n_expected_samples_controls_30x
         
+        Int merge_mode
         String remote_outdir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
@@ -31,6 +32,7 @@ workflow SV_Integration_Workpackage5 {
         sample_ids: "Speficies the order of the samples to use in bcftools merge."
         remote_indir_bi: "Without final slash"
         remote_outdir: "Without final slash"
+        merge_mode: "1: standard bcftools merge (CHROM,POS,REF,ALT). 2: bcftools merge by ID only."
     }
     
     call Impl {
@@ -53,6 +55,7 @@ workflow SV_Integration_Workpackage5 {
             n_expected_samples_controls_15x = n_expected_samples_controls_15x,
             n_expected_samples_controls_30x = n_expected_samples_controls_30x,
             
+            merge_mode = merge_mode,
             remote_outdir = remote_outdir,
             
             docker_image = docker_image
@@ -68,12 +71,20 @@ workflow SV_Integration_Workpackage5 {
 # TOOL                          CPU     RAM     TIME
 # gcloud storage ls                             30 s
 # gcloud storage cp             280%    100 M    1 m
+#
+# Merge by CHROM,POS,REF,ALT:
 # bcftools merge level 1        100%    300 M    3 s          // 100 files
 # bcftools norm level 1         300%     50 M    1 s
 # bcftools merge level 2        170%      1 G   20 m          // 127 files
 # bcftools norm level 2         300%     11 G    6 m
 #
 # Peak disk usage (all input files of chunk 0): 2 GB
+#
+# Merge by ID:
+# bcftools merge level 1        400%    1.5G     5 s          // 100 files
+# bcftools merge level 2        300%    2.5G    30 s          // 126 files
+#
+# Peak disk usage (all input files of chunk 0): 74G
 #
 task Impl {
     input {
@@ -95,6 +106,7 @@ task Impl {
         Int n_expected_samples_controls_15x
         Int n_expected_samples_controls_30x
         
+        Int merge_mode
         Int n_files_per_merge = 100
         String remote_outdir
         
@@ -260,6 +272,15 @@ task Impl {
         # Trivial "hierarchical" merge with just two steps.
         #
         function MergeChunkFiles() {
+            if [ ~{merge_mode} -eq 1 ]; then
+                MERGE_FLAG="none"
+            elif [ ~{merge_mode} -eq 2 ]; then
+                MERGE_FLAG="id"
+            else
+                echo "ERROR: Merge mode unknown."
+                exit 1
+            fi
+            
             # Step 1
             rm -f list.txt
             while read SAMPLE_ID; do
@@ -268,25 +289,32 @@ task Impl {
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_
             N_LIST_FILES=$(ls list_* | wc -l)
             for LIST_FILE in $(ls list_* | sort -V); do
-                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list ${LIST_FILE} --output-type b > ${LIST_FILE}_merged.bcf
+                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list ${LIST_FILE} --output-type b > ${LIST_FILE}_merged.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
-                df -h
+                df -h 1>&2
                 xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
-                ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf > ${LIST_FILE}_normed.bcf
-                ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
-                df -h
-                rm -f ${LIST_FILE}_merged.bcf*
+                if [ ~{merge_mode} -eq 1 ]; then
+                    ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf > ${LIST_FILE}_normed.bcf
+                    ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
+                    df -h 1>&2
+                    rm -f ${LIST_FILE}_merged.bcf* ; mv ${LIST_FILE}_normed.bcf ${LIST_FILE}_merged.bcf ; mv ${LIST_FILE}_normed.bcf.csi ${LIST_FILE}_merged.bcf.csi
+                fi
             done
             
             # Step 2
-            ls list_*_normed.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b > ~{chunk_id}_merged.bcf
+            ls list_*.bcf | sort -V > list.txt
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list list.txt --output-type b > ~{chunk_id}_merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_merged.bcf
+            df -h 1>&2
             xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} rm -f
+            ls -laht 1>&2
             
             # Making sure no multiallelic record is passed downstream
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_normed.bcf
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_normed.bcf
+            if [ ~{merge_mode} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_normed.bcf
+                ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_normed.bcf
+                rm -f ~{chunk_id}_merged.bcf* ; mv ~{chunk_id}_normed.bcf ~{chunk_id}_merged.bcf ; mv ~{chunk_id}_normed.bcf.csi ~{chunk_id}_merged.bcf.csi
+            fi
         }
         
         
@@ -296,8 +324,8 @@ task Impl {
         
         LocalizeChunkFiles
         MergeChunkFiles
-        gcloud storage mv ~{chunk_id}_normed.bcf ~{remote_outdir}/chunk_~{chunk_id}.bcf
-        gcloud storage mv ~{chunk_id}_normed.bcf.csi ~{remote_outdir}/chunk_~{chunk_id}.bcf.csi
+        gcloud storage mv ~{chunk_id}_merged.bcf ~{remote_outdir}/chunk_~{chunk_id}.bcf
+        gcloud storage mv ~{chunk_id}_merged.bcf.csi ~{remote_outdir}/chunk_~{chunk_id}.bcf.csi
     >>>
     
     output {
