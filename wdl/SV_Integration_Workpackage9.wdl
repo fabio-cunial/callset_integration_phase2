@@ -76,10 +76,10 @@ task Impl {
         String kanpig_params_cohort
         String docker_image
         
-        Int n_cpu = 8
+        Int n_cpu = 6
         Int ram_size_gb = 8
         Int disk_size_gb = 50
-        Int preemptible_number = 3
+        Int preemptible_number = 4
     }
     parameter_meta {
         disk_size_gb: "50GB is enough for many 15x samples, but for ~1500 samples it is not sufficient. 200GB is enough for all 15x and 30x samples."
