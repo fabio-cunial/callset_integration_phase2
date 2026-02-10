@@ -101,16 +101,16 @@ task Impl {
         function CopyNSamplesToQual() {
             local CHUNK_ID=$1
         
-            mv chunk_${CHUNK_ID}.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
-            mv chunk_${CHUNK_ID}.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
+            mv chunk_${CHUNK_ID}.bcf chunk_${CHUNK_ID}_in.bcf
+            mv chunk_${CHUNK_ID}.bcf.csi chunk_${CHUNK_ID}_in.bcf.csi
         
             # Remark: we cannot join annotations just by ID at this stage,
             # since the IDs in the output of bcftools merge are not necessarily
             # all distinct.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.vcf.gz | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.vcf.gz > chunk_${CHUNK_ID}_out.vcf.gz
-            rm -f chunk_${CHUNK_ID}_in.vcf.gz* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.bcf > chunk_${CHUNK_ID}_out.vcf.gz
+            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
             rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
             
             mv chunk_${CHUNK_ID}_in.vcf.gz chunk_${CHUNK_ID}_annotated.vcf.gz
@@ -180,7 +180,7 @@ task Impl {
             fi
             
             # Collapsing
-            gcloud storage cp ~{remote_indir}/~{chromosome_id}/chunk_${CHUNK_ID}.vcf.'gz*' .
+            gcloud storage cp ~{remote_indir}/~{chromosome_id}/chunk_${CHUNK_ID}.'bcf*' .
             CopyNSamplesToQual ${CHUNK_ID}
             Collapse ${CHUNK_ID}
             

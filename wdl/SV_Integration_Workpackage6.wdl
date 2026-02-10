@@ -137,8 +137,8 @@ task Impl {
         echo 'INPUT_BCF=$1' >> script.sh
         echo 'REGION=$2' >> script.sh
         echo 'CHUNK_ID=$3' >> script.sh
-        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type z ${INPUT_BCF} > chunk_${CHUNK_ID}.vcf.gz' >> script.sh
-        echo 'bcftools index -f -t chunk_${CHUNK_ID}.vcf.gz' >> script.sh
+        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} > chunk_${CHUNK_ID}.bcf' >> script.sh
+        echo 'bcftools index -f chunk_${CHUNK_ID}.bcf' >> script.sh
         echo 'df -h 1>&2' >> script.sh
         chmod +x script.sh
         ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
@@ -149,7 +149,7 @@ task Impl {
         # Simple consistency checks
         if [ ~{consistency_checks} -eq 1 ]; then
             N_RECORDS_CHUNKED="0"
-            for FILE in $(ls chunk_*.vcf.gz.tbi | sort -V); do
+            for FILE in $(ls chunk_*.bcf.csi | sort -V); do
                 N=$( bcftools index --nrecords ${FILE} )
                 N_RECORDS_CHUNKED=$(( ${N_RECORDS_CHUNKED} + ${N} ))
             done
@@ -158,14 +158,14 @@ task Impl {
                 exit 1
             fi
             rm -f ids_test.txt
-            for FILE in $(ls chunk_*.vcf.gz | sort -V); do
+            for FILE in $(ls chunk_*.bcf | sort -V); do
                 bcftools query --format '%ID\n' ${FILE} >> ids_test.txt
             done
             diff --brief ids_test.txt ids_truth.txt
         fi
         
         # Uploading
-        ls chunk_*.vcf.gz* > file_list.txt
+        ls chunk_*.bcf* > file_list.txt
         xargs --arg-file=file_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
         gcloud storage cp regions.txt ~{remote_outdir}/~{chromosome_id}/
     >>>
