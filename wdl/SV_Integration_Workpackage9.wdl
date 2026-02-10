@@ -16,6 +16,10 @@ workflow SV_Integration_Workpackage9 {
         File reference_fai
         File ploidy_bed_female
         File ploidy_bed_male
+        File autosomes_bed
+        
+        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         sv_integration_chunk_tsv: "A subset of the rows of table `sv_integration_hg38`, without the header."
@@ -34,7 +38,11 @@ workflow SV_Integration_Workpackage9 {
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             ploidy_bed_female = ploidy_bed_female,
-            ploidy_bed_male = ploidy_bed_male
+            ploidy_bed_male = ploidy_bed_male,
+            autosomes_bed = autosomes_bed,
+            
+            kanpig_params_cohort = kanpig_params_cohort,
+            docker_image = docker_image
     }
     
     output {
@@ -45,6 +53,7 @@ workflow SV_Integration_Workpackage9 {
 # Performance on 12'680 samples, 15x, GRCh38, 8 logical cores, 8GB RAM:
 #
 # TOOL                      CPU     RAM     TIME
+# BAM download                      
 # bcftools view --samples                   3m
 # bcftools concat           600%    34M     3s
 # kanpig                    400%    500M    3m
@@ -69,8 +78,10 @@ task Impl {
         File reference_fai
         File ploidy_bed_female
         File ploidy_bed_male
-        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
-        String kanpig_docker = "fcunial/callset_integration_phase2_workpackages"
+        File autosomes_bed
+        
+        String kanpig_params_cohort
+        String docker_image
         
         Int n_cpu = 8
         Int ram_size_gb = 8
@@ -91,10 +102,8 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export RUST_BACKTRACE="full"
-        INFINITY="1000000000"
         
         
         # ----------------------- Steps of the pipeline ------------------------
@@ -122,7 +131,9 @@ task Impl {
             
             # Downloading
             while : ; do
-                TEST=$(gsutil -m cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
+                date 1>&2
+                TEST=$(gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
+                date 1>&2
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -131,7 +142,7 @@ task Impl {
                 fi
             done
             while : ; do
-                TEST=$(gsutil -m cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
+                TEST=$(gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
                     echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
                     sleep ${GSUTIL_DELAY_S}
@@ -162,33 +173,45 @@ task Impl {
                 PLOIDY_BED=$(echo ~{ploidy_bed_female})
             fi
             
-            # Remark: we set --sizemin 10 instead of zero or one, just because
-            # kanpig needs --sizemin >= --kmer . The purpose is still to
-            # re-genotype every record in the input VCF.
-            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input ${SAMPLE_ID}_personalized.vcf.gz --reads ${SAMPLE_ID}_aligned.bam --out ${SAMPLE_ID}_tmp.vcf --sample ${SAMPLE_ID}
-            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type b ${SAMPLE_ID}_tmp.vcf > ${SAMPLE_ID}_kanpig.bcf
-            rm -f ${SAMPLE_ID}_tmp.vcf
-            bcftools index ${SAMPLE_ID}_kanpig.bcf
+            # Remark: kanpig needs --sizemin >= --kmer
+            ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input ${SAMPLE_ID}_personalized.vcf.gz --reads ${SAMPLE_ID}_aligned.bam --out ${SAMPLE_ID}_out.vcf --sample ${SAMPLE_ID}
+            rm -f ${SAMPLE_ID}_personalized.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            # Basic statistics on the number of present records
-            N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.bcf.csi)
-            N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ${SAMPLE_ID}_kanpig.bcf | wc -l)
-            echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ${SAMPLE_ID}_kanpig_nrecords.txt
+            # Sorting
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.tbi ${SAMPLE_ID}_kanpig.vcf.tbi
+            
+            # Printing debug information
+            N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
+            N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l)
+            PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
+            echo "${N_PRESENT_RECORDS},${N_RECORDS},${PERCENT},Number of records that are marked as ALT by kanpig" >> ${SAMPLE_ID}_kanpig.csv
+            N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
+            echo "${N_HETS_IN_AUTOSOMES},${N_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
+            ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
         }
         
         
-        # Splits the re-genotyped BCF into chunks for bcftools merge downstream.
+        # Splits the re-genotyped VCF into chunks for bcftools merge downstream.
         # 
-        function ChunkKanpig() {
+        function ChunkAndUpload() {
             local SAMPLE_ID=$1
             
             i="0"
             while read INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
-                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.bcf > ${SAMPLE_ID}_chunk_${i}.bcf
-                bcftools index ${SAMPLE_ID}_chunk_${i}.bcf
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.vcf.gz > ${SAMPLE_ID}_chunk_${i}.bcf
+                bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
+                gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf
+                gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
+            gcloud storage cp ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ~{remote_outdir}/
         }
         
         
@@ -196,9 +219,14 @@ task Impl {
         
         # ---------------------------- Main program ----------------------------
         
+        INFINITY="1000000000"
+        ~{docker_dir}/kanpig --version 1>&2
+        
         # Localizing frequent and infrequent BCFs
         while : ; do
-            TEST=$(gsutil -m cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' . && echo 0 || echo 1)
+            date 1>&2
+            TEST=$(gcloud storage cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' . && echo 0 || echo 1)
+            date 1>&2
             if [ ${TEST} -eq 1 ]; then
                 echo "Error downloading the frequent and infrequent BCFs. Trying again..."
                 sleep ${GSUTIL_DELAY_S}
@@ -208,46 +236,44 @@ task Impl {
         done
         
         # Re-genotyping every sample assigned to this task
-        N_EXPECTED_GENOME_CHUNKS=$(wc -l < ~{split_for_bcftools_merge_csv})
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
-            TEST=$(gsutil ls ~{remote_outdir}/${SAMPLE_ID}_chunk_'*.bcf' > genome_chunks.txt && echo "" || echo "ERROR")
-            N_EXISTING_GENOME_CHUNKS=$(wc -l < genome_chunks.txt)
-            if [ ${TEST} = "ERROR" -o ${N_EXISTING_GENOME_CHUNKS} -ne ${N_EXPECTED_GENOME_CHUNKS} ]; then
-                # Proceeding only if the sample has not already been regenotyped
-                LocalizeSample ${SAMPLE_ID} ${LINE}
-                date
-                bcftools view --samples ${SAMPLE_ID} --output-type u infrequent.bcf | bcftools view --drop-genotypes --include 'COUNT(GT="alt")>0' --output-type b > ${SAMPLE_ID}_infrequent.bcf
-                date
-                bcftools index ${SAMPLE_ID}_infrequent.bcf
-                ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf > ${SAMPLE_ID}_personalized.vcf.gz
-                ${TIME_COMMAND} tabix -f ${SAMPLE_ID}_personalized.vcf.gz
-                Kanpig ${SAMPLE_ID} ${SEX}
-                ChunkKanpig ${SAMPLE_ID}
-                while : ; do
-                    TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ${SAMPLE_ID}_chunk_'*.bcf*' ${SAMPLE_ID}_kanpig_nrecords.txt ~{remote_outdir}/ && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error uploading chunks for sample ${SAMPLE_ID}. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                DelocalizeSample ${SAMPLE_ID}
-                ls -laht
+            
+            # Skipping the sample if it has already been processed
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
             fi
+            
+            # Re-genotyping
+            LocalizeSample ${SAMPLE_ID} ${LINE}
+            date 1>&2
+            bcftools view --samples ${SAMPLE_ID} --output-type u infrequent.bcf | bcftools view --include 'GT="alt"' --drop-genotypes --output-type b > ${SAMPLE_ID}_infrequent.bcf
+            date 1>&2
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_infrequent.bcf
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf > ${SAMPLE_ID}_personalized.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
+            Kanpig ${SAMPLE_ID} ${SEX}
+            ChunkAndUpload ${SAMPLE_ID}
+            
+            # Marking the sample as completed
+            touch ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+            DelocalizeSample ${SAMPLE_ID}
+            ls -laht
         done < chunk.csv
     >>>
     
     output {
     }
     runtime {
-        docker: kanpig_docker
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
