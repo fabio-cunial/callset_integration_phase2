@@ -309,11 +309,25 @@ task Impl {
             xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} rm -f
             ls -laht 1>&2
             
-            # Making sure no multiallelic record is passed downstream
+            # Making sure no multiallelic record is passed downstream. This is
+            # not needed when merging by ID, by construction.
             if [ ~{merge_mode} -eq 1 ]; then
                 ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_normed.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_normed.bcf
                 rm -f ~{chunk_id}_merged.bcf* ; mv ~{chunk_id}_normed.bcf ~{chunk_id}_merged.bcf ; mv ~{chunk_id}_normed.bcf.csi ~{chunk_id}_merged.bcf.csi
+            fi
+            
+            # Removing records that are REF in all samples. This is not needed
+            # in the standard merge, since at that step of the pipeline every
+            # input record is ALT in some sample by construction.
+            if [ ~{merge_mode} -eq 2 ]; then
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_cleaned.bcf
+                ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_cleaned.bcf
+                N_RECORDS=$(bcftools index --nrecords ~{chunk_id}_merged.bcf)
+                N_ALT_RECORDS=$(bcftools index --nrecords ~{chunk_id}_cleaned.bcf)
+                PERCENT=$( echo "scale=2; 100 * ${N_ALT_RECORDS} / ${N_RECORDS}" | bc )
+                echo "${N_ALT_RECORDS},${N_RECORDS},${PERCENT},Number of cohort-VCF records that are marked as ALT in >=1 sample by kanpig" > ~{chunk_id}_n_alt.csv
+                rm -f ~{chunk_id}_merged.bcf* ; mv ~{chunk_id}_cleaned.bcf ~{chunk_id}_merged.bcf ; mv ~{chunk_id}_cleaned.bcf.csi ~{chunk_id}_merged.bcf.csi
             fi
         }
         
@@ -326,6 +340,7 @@ task Impl {
         MergeChunkFiles
         gcloud storage mv ~{chunk_id}_merged.bcf ~{remote_outdir}/chunk_~{chunk_id}.bcf
         gcloud storage mv ~{chunk_id}_merged.bcf.csi ~{remote_outdir}/chunk_~{chunk_id}.bcf.csi
+        gcloud storage mv ~{chunk_id}_n_alt.csv ~{remote_outdir}/
     >>>
     
     output {
