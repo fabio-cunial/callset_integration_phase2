@@ -50,22 +50,15 @@ workflow SV_Integration_Workpackage9 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, 8 logical cores, 8GB RAM:
+# Performance on 12'680 samples, 15x, GRCh38, 8 logical cores, 8GB RAM,
+# chr6,X,Y:
 #
 # TOOL                      CPU     RAM     TIME
-# BAM download                      
-# bcftools view --samples                   3m
-# bcftools concat           600%    34M     3s
-# kanpig                    400%    500M    3m
-# bcftools sort             100%    800M    40s
-#
-# Performance on 12'680 samples, 30x, GRCh38, 16 logical cores, 16GB RAM:
-#
-# TOOL                      CPU     RAM     TIME
-# bcftools view --samples                   3m                
-# bcftools concat           900%    50M     3s
-# kanpig                    100%    1G      3m
-# bcftools sort             100%    800M    20s
+# BAM download                               3m
+# bcftools view --samples                    3m
+# bcftools concat           600%     34M     5s
+# kanpig                    400%    1.5G     3m
+# bcftools sort             100%    1.5G    40s
 #
 task Impl {
     input {
@@ -190,9 +183,9 @@ task Impl {
             PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
             echo "${N_PRESENT_RECORDS},${N_RECORDS},${PERCENT},Number of records that are marked as ALT by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
-            echo "${N_HETS_IN_AUTOSOMES},${N_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
+            N_PRESENT_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="alt"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_PRESENT_RECORDS_IN_AUTOSOMES}" | bc )
+            echo "${N_HETS_IN_AUTOSOMES},${N_PRESENT_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
         }
         
