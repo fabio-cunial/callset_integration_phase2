@@ -171,7 +171,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_personalized.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # Sorting
-            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
@@ -198,7 +198,7 @@ task Impl {
             i="0"
             while read INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
-                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.vcf.gz > ${SAMPLE_ID}_chunk_${i}.bcf
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_chunk_${i}.bcf
                 bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
                 gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf
                 gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
@@ -243,10 +243,10 @@ task Impl {
             # Re-genotyping
             LocalizeSample ${SAMPLE_ID} ${LINE}
             date 1>&2
-            bcftools view --samples ${SAMPLE_ID} --output-type u infrequent.bcf | bcftools view --include 'GT="alt"' --drop-genotypes --output-type b > ${SAMPLE_ID}_infrequent.bcf
+            bcftools view --samples ${SAMPLE_ID} --output-type u infrequent.bcf | bcftools view --include 'GT="alt"' --drop-genotypes --output-type b --output ${SAMPLE_ID}_infrequent.bcf
             date 1>&2
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_infrequent.bcf
-            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf > ${SAMPLE_ID}_personalized.vcf.gz
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
             Kanpig ${SAMPLE_ID} ${SEX}
             ChunkAndUpload ${SAMPLE_ID}

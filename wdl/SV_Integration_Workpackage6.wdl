@@ -120,7 +120,7 @@ task Impl {
         # Concatenating all the bcftools merge chunks to build a whole-
         # chromosome VCF. This is because a truvari collapse chunk may straddle
         # multiple bcftools merge chunks.
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > ~{chromosome_id}.bcf
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b --output ~{chromosome_id}.bcf
         bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
         df -h 1>&2
         rm -f chunk_*.bcf* file_list.txt
@@ -137,7 +137,7 @@ task Impl {
         echo 'INPUT_BCF=$1' >> script.sh
         echo 'REGION=$2' >> script.sh
         echo 'CHUNK_ID=$3' >> script.sh
-        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} > chunk_${CHUNK_ID}.bcf' >> script.sh
+        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output chunk_${CHUNK_ID}.bcf' >> script.sh
         echo 'bcftools index -f chunk_${CHUNK_ID}.bcf' >> script.sh
         echo 'df -h 1>&2' >> script.sh
         chmod +x script.sh

@@ -191,7 +191,7 @@ task Impl {
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' >> ${SAMPLE_ID}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} > ${SAMPLE_ID}_scored.bcf
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_scored.bcf
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_scored.bcf
             (bcftools view --no-header ${SAMPLE_ID}_scored.bcf | head -n 1 || echo "0") 1>&2
             
@@ -212,9 +212,9 @@ task Impl {
                 if [ "~{filter_string}" != "none" ]; then
                     # Remark: we use `targets` rather than `regions` because
                     # the former considers just the POS coordinate for overlaps.
-                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} > ${SAMPLE_ID}_chunk_${i}.bcf
+                    bcftools view --threads ${N_THREADS} --include "~{filter_string}" --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} --output ${SAMPLE_ID}_chunk_${i}.bcf
                 else
-                    bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} > ${SAMPLE_ID}_chunk_${i}.bcf
+                    bcftools view --threads ${N_THREADS}                              --targets-file ${SAMPLE_ID}.bed --output-type b ${INPUT_BCF} --output ${SAMPLE_ID}_chunk_${i}.bcf
                 fi
                 bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
                 gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf

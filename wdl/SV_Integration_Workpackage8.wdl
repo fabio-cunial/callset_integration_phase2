@@ -129,7 +129,7 @@ task SingleChromosome {
             df -h 1>&2
         
             # Concatenating all chunks
-            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b > out.bcf
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b --output out.bcf
             df -h 1>&2
             rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
         
@@ -143,7 +143,7 @@ task SingleChromosome {
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
             echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from bcftools merge -> truvari collapse">' >> header.txt
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf > out.bcf
+            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf
             df -h 1>&2
             rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
             gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
@@ -157,8 +157,8 @@ task SingleChromosome {
             fi
             MIN_N_SAMPLES=$(echo "scale=2; ~{n_samples_fraction_frequent} * ${N_SAMPLES}" | bc)
             MIN_N_SAMPLES=$(echo ${MIN_N_SAMPLES} | cut -d . -f 1)
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf > frequent.bcf &
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf > infrequent.bcf &
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'N_DISCOVERY_SAMPLES>='${MIN_N_SAMPLES} --output-type b in.bcf --output frequent.bcf &
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS}                  --include 'N_DISCOVERY_SAMPLES<'${MIN_N_SAMPLES}  --output-type b in.bcf --output infrequent.bcf &
             wait
             df -h 1>&2
             ${TIME_COMMAND} bcftools index --threads $(( ${N_THREADS} / 2 )) -f frequent.bcf &
@@ -236,9 +236,9 @@ task AllChromosomes {
         done < chr_list.txt
         
         # Concatenating
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b > truvari_collapsed.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b > frequent.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b > infrequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b --output truvari_collapsed.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b --output frequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b --output infrequent.bcf &
         wait
         bcftools index --threads $(( ${N_THREADS} / 3 )) -f truvari_collapsed.bcf &
         bcftools index --threads $(( ${N_THREADS} / 3 )) -f frequent.bcf &

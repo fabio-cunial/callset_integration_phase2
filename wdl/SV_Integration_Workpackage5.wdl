@@ -289,12 +289,12 @@ task Impl {
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_
             N_LIST_FILES=$(ls list_* | wc -l)
             for LIST_FILE in $(ls list_* | sort -V); do
-                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list ${LIST_FILE} --output-type b > ${LIST_FILE}_merged.bcf
+                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
                 df -h 1>&2
                 xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
                 if [ ~{merge_mode} -eq 1 ]; then
-                    ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf > ${LIST_FILE}_normed.bcf
+                    ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf --output ${LIST_FILE}_normed.bcf
                     ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
                     df -h 1>&2
                     rm -f ${LIST_FILE}_merged.bcf* ; mv ${LIST_FILE}_normed.bcf ${LIST_FILE}_merged.bcf ; mv ${LIST_FILE}_normed.bcf.csi ${LIST_FILE}_merged.bcf.csi
@@ -303,7 +303,7 @@ task Impl {
             
             # Step 2
             ls list_*.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list list.txt --output-type b > ~{chunk_id}_merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list list.txt --output-type b --output ~{chunk_id}_merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_merged.bcf
             df -h 1>&2
             xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} rm -f
@@ -312,7 +312,7 @@ task Impl {
             # Making sure no multiallelic record is passed downstream. This is
             # not needed when merging by ID, by construction.
             if [ ~{merge_mode} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_normed.bcf
+                ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ~{chunk_id}_merged.bcf --output ~{chunk_id}_normed.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_normed.bcf
                 rm -f ~{chunk_id}_merged.bcf* ; mv ~{chunk_id}_normed.bcf ~{chunk_id}_merged.bcf ; mv ~{chunk_id}_normed.bcf.csi ~{chunk_id}_merged.bcf.csi
             fi
@@ -321,7 +321,7 @@ task Impl {
             # in the standard merge, since at that step of the pipeline every
             # input record is ALT in some sample by construction.
             if [ ~{merge_mode} -eq 2 ]; then
-                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type b ~{chunk_id}_merged.bcf > ~{chunk_id}_cleaned.bcf
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type b ~{chunk_id}_merged.bcf --output ~{chunk_id}_cleaned.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_cleaned.bcf
                 N_RECORDS=$(bcftools index --nrecords ~{chunk_id}_merged.bcf)
                 N_ALT_RECORDS=$(bcftools index --nrecords ~{chunk_id}_cleaned.bcf)
