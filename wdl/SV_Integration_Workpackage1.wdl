@@ -619,7 +619,7 @@ task Impl {
         
         
         # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
-        # necessary, since kanpig overwrites the SAMPLE field.
+        # necessary, since kanpig overwrites the SAMPLE column.
         #
         # Remark: the funtion requires an indexed `.vcf.gz` in input, and it
         # outputs an indexed `.vcf.gz` of `bcf`, depending on `OUTPUT_FORMAT`
@@ -631,17 +631,17 @@ task Impl {
             local OUTPUT_FORMAT=$3
             local OUTPUT_VCF_GZ=$4
             
-            bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=NF-1; i++) printf("\t%s",$i); \
-                if ($6=="0") printf("\t0\t0\t0");
-                else if ($6=="1") printf("\t0\t0\t1");
-                else if ($6=="2") printf("\t0\t1\t0");
-                else if ($6=="3") printf("\t0\t1\t1");
-                else if ($6=="4") printf("\t1\t0\t0");
-                else if ($6=="5") printf("\t1\t0\t1");
-                else if ($6=="6") printf("\t1\t1\t0");
-                else if ($6=="7") printf("\t1\t1\t1");
+                if ($4=="0") printf("\t0\t0\t0");
+                else if ($4=="1") printf("\t0\t0\t1");
+                else if ($4=="2") printf("\t0\t1\t0");
+                else if ($4=="3") printf("\t0\t1\t1");
+                else if ($4=="4") printf("\t1\t0\t0");
+                else if ($4=="5") printf("\t1\t0\t1");
+                else if ($4=="6") printf("\t1\t1\t0");
+                else if ($4=="7") printf("\t1\t1\t1");
                 printf("\n"); \
             }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
@@ -650,7 +650,7 @@ task Impl {
             echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
-            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} --output ${OUTPUT_VCF_GZ}
+            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} --output ${OUTPUT_VCF_GZ}
             if [ ${OUTPUT_FORMAT} = z ]; then
                 bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
             elif [ ${OUTPUT_FORMAT} = b ]; then
