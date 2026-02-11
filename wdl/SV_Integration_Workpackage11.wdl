@@ -83,7 +83,7 @@ task Impl {
         done
         
         # Concatenating
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > merged.bcf
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b --output merged.bcf
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f merged.bcf
         df -h 1>&2
         
