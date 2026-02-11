@@ -1,28 +1,30 @@
 version 1.0
 
 
-# Combines all the bcftools merge chunks of a re-genotyped chromosome.
+# Combines the bcftools merge chunks of a re-genotyped chromosome, in the given
+# order.
 #
 workflow SV_Integration_Workpackage11 {
     input {
-        String chromosome_id
-        String bcftools_chunks
+        String chunk_ids
         
         String remote_indir
         String remote_outdir
+        
+        String docker_image
     }
     parameter_meta {
-        bcftools_chunks: "Comma-separated and sorted integers. Chunk order is assumed to reflect POS order, and every chunk is assumed to be sorted by POS."
+        chunk_ids: "Comma-separated. Chunk order is assumed to reflect POS order, and every chunk is assumed to be sorted by POS."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
     }
     
     call Impl {
         input:
-            chromosome_id = chromosome_id,
-            bcftools_chunks = bcftools_chunks,
+            chunk_ids = chunk_ids,
             remote_indir = remote_indir,
-            remote_outdir = remote_outdir
+            remote_outdir = remote_outdir,
+            docker_image = docker_image
     }
     
     output {
@@ -37,16 +39,16 @@ workflow SV_Integration_Workpackage11 {
 # 
 task Impl {
     input {
-        String chromosome_id
-        String bcftools_chunks
+        String chunk_ids
         
         String remote_indir
         String remote_outdir
         
+        String docker_image
         Int n_cpu = 2
         Int ram_size_gb = 4
         Int disk_size_gb = 50
-        Int preemptible_number = 3
+        Int preemptible_number = 4
     }
     parameter_meta {
     }
@@ -61,51 +63,41 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
         
         
-        # Localizing all the bcftools merge chunks of the chromosome
-        for CHUNK in $(echo ~{bcftools_chunks} | tr ',' ' '); do
+        # Localizing
+        for CHUNK in $(echo ~{chunk_ids} | tr ',' ' '); do
             echo ~{remote_indir}/chunk_${CHUNK}.bcf >> uri_list.txt
             echo ~{remote_indir}/chunk_${CHUNK}.bcf.csi >> uri_list.txt
             echo chunk_${CHUNK}.bcf >> file_list.txt
         done
-        while : ; do
-            TEST=$(cat uri_list.txt | gsutil -m cp -I . && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error downloading bcftools merge chunks. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
-        df -h
+        date 1>&2
+        cat uri_list.txt | gcloud storage cp -I .
+        date 1>&2
+        df -h 1>&2
         
-        # Concatenating all the bcftools merge chunks
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > ~{chromosome_id}.bcf
-        bcftools index ~{chromosome_id}.bcf
-        df -h
+        # Removing ORIGINAL_ID
+        for CHUNK in $(echo ~{chunk_ids} | tr ',' ' '); do
+            ${TIME_COMMAND} bcftools annotate --remove INFO/ORIGINAL_ID --output-type b chunk_${CHUNK}.bcf --output chunk_${CHUNK}_cleaned.bcf
+            rm -f chunk_${CHUNK}.bcf* ; mv chunk_${CHUNK}_cleaned.bcf chunk_${CHUNK}.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK}.bcf
+        done
+        
+        # Concatenating
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b > merged.bcf
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f merged.bcf
+        df -h 1>&2
         
         # Uploading
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp ~{chromosome_id}.'bcf*' ~{remote_outdir}/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading the result of the merge. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        gcloud storage cp merged.'bcf*' ~{remote_outdir}/
     >>>
     
     output {
     }
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
     }
 }
