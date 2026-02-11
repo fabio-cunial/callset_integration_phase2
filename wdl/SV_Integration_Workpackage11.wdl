@@ -11,7 +11,7 @@ workflow SV_Integration_Workpackage11 {
         String remote_indir
         String remote_outdir
         
-        String docker_image
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
         chunk_ids: "Comma-separated. Chunk order is assumed to reflect POS order, and every chunk is assumed to be sorted by POS."
