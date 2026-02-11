@@ -1,5 +1,7 @@
 version 1.0
 
+# Remark: this workflow uses .vcf.gz everywhere, instead of .bcf, just for
+# simplicity when calling tools based on this format.
 #
 workflow SV_Integration_PlotHwe {
     input {
@@ -10,6 +12,7 @@ workflow SV_Integration_PlotHwe {
         Int smaller_or_larger = 1
         Int min_discovery_count = 1268
         Int max_distance_bp = 500
+        String limit_to_chromosome = "all"
         
         File tandem_track_bed
         
@@ -21,6 +24,7 @@ workflow SV_Integration_PlotHwe {
     parameter_meta {
         smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
         ancestry_samples: "A list of sample IDs for each ancestry."
+        limit_to_chromosome: "all = Use all chomosomes"
     }
     
     # All
@@ -30,7 +34,8 @@ workflow SV_Integration_PlotHwe {
             csi = intersample_csi,
             sv_length_threshold = sv_length_threshold,
             smaller_or_larger = smaller_or_larger,
-            sv_type = 0
+            sv_type = 0,
+            limit_to_chromosome = limit_to_chromosome
     }
     call Vcf2Counts as all_counts {
         input:
@@ -304,8 +309,8 @@ task Bcf2Vcf {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -314,7 +319,7 @@ task Bcf2Vcf {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -332,6 +337,7 @@ task FilterByLengthAndType {
         Int sv_length_threshold
         Int smaller_or_larger
         Int sv_type
+        String limit_to_chromosome
         
         Int n_cpu = 8
         Int ram_size_gb = 16
@@ -352,22 +358,26 @@ task FilterByLengthAndType {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        for CHR in $(seq 1 22); do
-            echo -e "chr${CHR}\t0\t3000000000" >> list.bed
-        done
+        if [ ~{limit_to_chromosome} = "all"]; then
+            for CHR in $(seq 1 22); do
+                echo -e "chr${CHR}\t0\t3000000000" >> list.bed
+            done
+        else
+            echo -e "~{limit_to_chromosome}\t0\t3000000000" >> list.bed
+        fi
         if [ ~{smaller_or_larger} -eq 0 ]; then
             OPERATOR='<'
         else
             OPERATOR='>='
         fi
         if [ ~{sv_type} -eq 0 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="DEL" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="DEL" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="INS" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} > filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="INS" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         fi
-        ${TIME_COMMAND} tabix -f filtered.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t filtered.vcf.gz
     >>>
 
     output {
@@ -376,7 +386,7 @@ task FilterByLengthAndType {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -415,8 +425,8 @@ task SelectBiallelic {
         EXTENSION=$(basename ~{vcf_gz})
         EXTENSION=${EXTENSION#*.}
         if [ ${EXTENSION} = "bcf" ]; then
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{vcf_gz} > input.vcf.gz
-            ${TIME_COMMAND} tabix -f input.vcf.gz
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{vcf_gz} --output input.vcf.gz
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t input.vcf.gz
             rm -f ~{vcf_gz} ~{vcf_tbi}
         else
             mv ~{vcf_gz} input.vcf.gz
@@ -425,7 +435,7 @@ task SelectBiallelic {
         date
         truvari anno numneigh --sizemin 1 --refdist ~{max_distance_bp} input.vcf.gz | bcftools view --include 'INFO/NumNeighbors == 0' | bgzip -@ ${N_THREADS} --compress-level 2 > biallelic.vcf.gz
         date
-        ${TIME_COMMAND} tabix -f biallelic.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t biallelic.vcf.gz
         date
     >>>
 
@@ -435,7 +445,7 @@ task SelectBiallelic {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -472,8 +482,8 @@ task FilterByAc {
         GSUTIL_DELAY_S="600"
         
         
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "AC>=~{min_count}" --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "AC>=~{min_count}" --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -482,7 +492,7 @@ task FilterByAc {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -528,8 +538,8 @@ task FilterByNDiscoverySamples {
         else
             OPERATOR='>='
         fi
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include ~{field}${OPERATOR}~{min_count} --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include ~{field}${OPERATOR}~{min_count} --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -538,7 +548,7 @@ task FilterByNDiscoverySamples {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -581,7 +591,7 @@ task SelectTRs {
             INTERSECTION_MODE="-v"
         fi
         ( bcftools view --header-only ~{bcf}; ${TIME_COMMAND} bedtools intersect -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} ) | bgzip --compress-level 2 > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -590,7 +600,7 @@ task SelectTRs {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -646,7 +656,7 @@ task Vcf2Counts {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
@@ -725,9 +735,9 @@ task FilterBySamples {
         bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
         comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
         date
-        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z > out.vcf.gz
+        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z --output out.vcf.gz
         date
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -737,7 +747,7 @@ task FilterBySamples {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -778,8 +788,8 @@ task FilterByMedianDp {
         else
             OPERATOR='>='
         fi
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'AVG(DP)'${OPERATOR}~{median_dp_threshold} --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'AVG(DP)'${OPERATOR}~{median_dp_threshold} --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -788,7 +798,7 @@ task FilterByMedianDp {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
@@ -829,8 +839,8 @@ task FilterByStdevDp {
         else
             OPERATOR='>='
         fi
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'STDEV(DP)'${OPERATOR}~{stdev_dp_threshold} --output-type z ~{bcf} > out.vcf.gz
-        ${TIME_COMMAND} tabix -f out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'STDEV(DP)'${OPERATOR}~{stdev_dp_threshold} --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
 
     output {
@@ -839,7 +849,7 @@ task FilterByStdevDp {
     }
 
     runtime {
-        docker: "fcunial/callset_integration_phase2_workpackages"
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"

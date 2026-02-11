@@ -88,7 +88,7 @@ task Impl {
         df -h 1>&2
         
         # Uploading
-        gcloud storage cp merged.'bcf*' ~{remote_outdir}/
+        gcloud storage mv merged.'bcf*' ~{remote_outdir}/
     >>>
     
     output {
