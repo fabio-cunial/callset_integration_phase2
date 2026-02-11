@@ -135,15 +135,18 @@ task SingleChromosome {
         
             # Enforcing a distinct ID in every record, and annotating every
             # record with the number of samples it occurs in. Note that the
-            # latter is not equal to the QUAL field used by truvari collapse
+            # latter is not equal to the QUAL field in input to truvari collapse
             # upstream, so we have to recompute this number.
+            #
+            # Remark: we do not preserve the original ID from bcftools merge ->
+            # truvari collapse, since the resulting string is too large at the
+            # cohort level and it needlessly inflates output size.
             CHR=~{chromosome}
             CHR=${CHR#chr}
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from bcftools merge -> truvari collapse">' >> header.txt
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf
+            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf
             df -h 1>&2
             rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
             gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
