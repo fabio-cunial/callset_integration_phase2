@@ -142,7 +142,8 @@ workflow SV_Integration_PlotHwe {
             csi = biallelic.out_tbi,
             sv_length_threshold = sv_length_threshold,
             smaller_or_larger = smaller_or_larger,
-            sv_type = 0
+            sv_type = 0,
+            limit_to_chromosome = limit_to_chromosome
     }
     call FilterByNDiscoverySamples as biallelic_frequent {
         input:
@@ -323,7 +324,7 @@ task Bcf2Vcf {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -390,7 +391,7 @@ task FilterByLengthAndType {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -449,7 +450,7 @@ task SelectBiallelic {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -496,7 +497,7 @@ task FilterByAc {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -552,7 +553,7 @@ task FilterByNDiscoverySamples {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -604,7 +605,7 @@ task SelectTRs {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -660,7 +661,7 @@ task Vcf2Counts {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -698,6 +699,7 @@ task Counts2Plot {
         cpu: 1
         memory: "4G"
         disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: 4
     }
 }
 
@@ -751,7 +753,7 @@ task FilterBySamples {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -802,7 +804,7 @@ task FilterByMedianDp {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
 
@@ -853,6 +855,6 @@ task FilterByStdevDp {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 0
+        preemptible: 4
     }
 }
