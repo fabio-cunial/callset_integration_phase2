@@ -243,8 +243,8 @@ task Impl {
                 while read SAMPLE_ID; do
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf" >> list.txt
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf.csi" >> list.txt
-                done < bi_samples_to_prefer_over_ha.txt
-                xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} -I {} gcloud storage cp {} ./input_files/
+                done < bi_samples_to_prefer_over_ha.txt                
+                cat list.txt | gcloud storage cp -I ./input_files/
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_uw}/chunk_~{chunk_id}/'*' ./input_files/

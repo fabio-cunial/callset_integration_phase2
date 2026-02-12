@@ -113,7 +113,9 @@ task Impl {
             echo ~{remote_indir}/chunk_${CHUNK}.bcf.csi >> uri_list.txt
             echo chunk_${CHUNK}.bcf >> file_list.txt
         done
-        ${TIME_COMMAND} xargs --arg-file=uri_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} .
+        date 1>&2
+        cat uri_list.txt | gcloud storage cp -I .
+        date 1>&2
         df -h 1>&2
         rm -f uri_list.txt
         
@@ -166,7 +168,7 @@ task Impl {
         
         # Uploading
         ls chunk_*.bcf* > file_list.txt
-        xargs --arg-file=file_list.txt --max-procs=${N_THREADS} -I {} gcloud storage cp {} ~{remote_outdir}/~{chromosome_id}/
+        cat file_list.txt | gcloud storage cp -I ~{remote_outdir}/~{chromosome_id}/
         gcloud storage cp regions.txt ~{remote_outdir}/~{chromosome_id}/
     >>>
     
