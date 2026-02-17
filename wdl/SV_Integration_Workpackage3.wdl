@@ -96,7 +96,6 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
@@ -200,6 +199,27 @@ task Impl {
         }
         
         
+        # Assumes that `CopyInfoToFormat()` has already been executed.
+        #
+        function PrintDebugInformation() {
+            local SAMPLE_ID=$1
+            local INPUT_BCF=$2
+            
+            rm -rf ${SAMPLE_ID}_xgboost.csv
+            N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
+            for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
+                N_RECORDS_AFTER_FILTERING=$(bcftools view --threads ${N_THREADS} --no-header --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l)
+                PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+                echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_xgboost.csv
+            done
+            if [ "~{filter_string}" != "none" ]; then
+                N_RECORDS_AFTER_FILTERING=$(bcftools view --threads ${N_THREADS} --no-header --include "~{filter_string}" ${INPUT_BCF} | wc -l)
+                PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+                echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records that pass the specified filter" >> ${SAMPLE_ID}_xgboost.csv
+            fi
+        }
+        
+        
         # Remark: the procedure's input and output are indexed `.bcf`.
         # 
         function FilterChunkUpload() {
@@ -245,6 +265,7 @@ task Impl {
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
+            PrintDebugInformation ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
