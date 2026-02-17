@@ -76,7 +76,7 @@ workflow SV_Integration_Workpackage5 {
 # bcftools merge level 1        100%    300 M    3 s          // 100 files
 # bcftools norm level 1         300%     50 M    1 s
 # bcftools merge level 2        170%      1 G   20 m          // 127 files
-# bcftools norm level 2         300%     11 G    6 m
+# bcftools norm level 2         300%     11 G    6 m          // 16.5G in chr1
 #
 # Peak disk usage (all input files of chunk 0): 2 GB
 #
@@ -340,7 +340,9 @@ task Impl {
         MergeChunkFiles
         gcloud storage mv ~{chunk_id}_merged.bcf ~{remote_outdir}/chunk_~{chunk_id}.bcf
         gcloud storage mv ~{chunk_id}_merged.bcf.csi ~{remote_outdir}/chunk_~{chunk_id}.bcf.csi
-        gcloud storage mv ~{chunk_id}_n_alt.csv ~{remote_outdir}/
+        if [ ~{merge_mode} -eq 2 ]; then
+            gcloud storage mv ~{chunk_id}_n_alt.csv ~{remote_outdir}/
+        fi
     >>>
     
     output {
