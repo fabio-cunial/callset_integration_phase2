@@ -183,81 +183,17 @@ task Impl {
             SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 11)
             
             if [ ${MODE} -eq 2 ]; then
-                while : ; do
-                    date 1>&2
-                    TEST=$(gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
-                    date 1>&2
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
+                date 1>&2
+                gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam
+                date 1>&2
+                gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai
             else
-                while : ; do
-                    TEST=$(gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${PAV_VCF_GZ}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${PAV_TBI}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${PBSV_VCF_GZ}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${PBSV_TBI}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${SNIFFLES_VCF_GZ}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
-                while : ; do
-                    TEST=$(gcloud storage cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi && echo 0 || echo 1)
-                    if [ ${TEST} -eq 1 ]; then
-                        echo "Error downloading file <${SNIFFLES_TBI}>. Trying again..."
-                        sleep ${GSUTIL_DELAY_S}
-                    else
-                        break
-                    fi
-                done
+                gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_pav.vcf.gz
+                gcloud storage cp ${PAV_TBI} ./${SAMPLE_ID}_pav.vcf.gz.tbi
+                gcloud storage cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz
+                gcloud storage cp ${PBSV_TBI} ./${SAMPLE_ID}_pbsv.vcf.gz.tbi
+                gcloud storage cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz
+                gcloud storage cp ${SNIFFLES_TBI} ./${SAMPLE_ID}_sniffles.vcf.gz.tbi
             fi
         }
         

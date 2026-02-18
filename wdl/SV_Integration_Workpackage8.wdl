@@ -59,13 +59,13 @@ workflow SV_Integration_Workpackage8 {
 
 # Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, HDD:
 #
-# TOOL                          CPU     RAM     TIME
-# download
-# bcftools concat               
-# bcftools query
-# bcftools annotate
-# bcftools view frequent
-# bcftools view infrequent
+# TOOL                           CPU     RAM   TIME
+# download                      250%    100M    15s
+# bcftools concat                30%     20M     1m
+# bcftools query                100%    150M     4m
+# bcftools annotate             100%    150M    10m
+# bcftools view frequent        150%    160M     2m
+# bcftools view infrequent      300%    140M     5m
 #
 task SingleChromosome {
     input {
@@ -112,13 +112,13 @@ task SingleChromosome {
         
         # ---------------------------- Main program ----------------------------
         
-        TEST=$( gsutil ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
+        TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
         if [ ${TEST} != "0" ]; then
             # Skipping the chromosome if it has already been processed
             :
         else
             # Localizing all chunks
-            TEST=$(gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' && echo 0 || echo 1)
+            TEST=$( gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' || echo "1" )
             if [ ${TEST} -eq 1 ]; then
                 echo "ERROR: ~{chromosome} has no truvari collapse chunks."
                 exit
@@ -137,10 +137,6 @@ task SingleChromosome {
             # record with the number of samples it occurs in. Note that the
             # latter is not equal to the QUAL field in input to truvari collapse
             # upstream, so we have to recompute this number.
-            #
-            # Remark: we do not preserve the original ID from bcftools merge ->
-            # truvari collapse, since the resulting string is too large at the
-            # cohort level and it needlessly inflates output size.
             CHR=~{chromosome}
             CHR=${CHR#chr}
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
@@ -188,6 +184,12 @@ task SingleChromosome {
 }
 
 
+# Performance on 12'680 samples, 15x, GRCh38, CAL_SENS<=0.999, HDD:
+#
+# TOOL                           CPU     RAM   TIME
+# concat truvari                                   
+# concat frequent
+# concat infrequent
 #
 task AllChromosomes {
     input {
@@ -221,7 +223,7 @@ task AllChromosomes {
         echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
         rm -f file_list1.txt file_list2.txt file_list3.txt
         while read CHROMOSOME; do
-            TEST=$(gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf && echo 0 || echo 1)
+            TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo 1 )
             if [ ${TEST} -eq 1 ]; then
                 echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
                 exit
@@ -239,9 +241,9 @@ task AllChromosomes {
         done < chr_list.txt
         
         # Concatenating
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b --output truvari_collapsed.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b --output frequent.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b --output infrequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list1.txt --output-type b --output truvari_collapsed.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list2.txt --output-type b --output frequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list3.txt --output-type b --output infrequent.bcf &
         wait
         bcftools index --threads $(( ${N_THREADS} / 3 )) -f truvari_collapsed.bcf &
         bcftools index --threads $(( ${N_THREADS} / 3 )) -f frequent.bcf &

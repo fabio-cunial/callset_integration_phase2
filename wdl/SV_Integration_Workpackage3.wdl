@@ -108,24 +108,7 @@ task Impl {
             local SAMPLE_ID=$1
             local REMOTE_DIR=$2
             
-            while : ; do
-                TEST=$(gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.'gz*' . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.gz>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.gz>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
+            gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_kanpig.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_training.vcf.'gz*' .
         }
         
         
@@ -208,12 +191,12 @@ task Impl {
             rm -rf ${SAMPLE_ID}_xgboost.csv
             N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
             for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
-                N_RECORDS_AFTER_FILTERING=$(bcftools view --threads ${N_THREADS} --no-header --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l)
+                N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
                 PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_xgboost.csv
             done
             if [ "~{filter_string}" != "none" ]; then
-                N_RECORDS_AFTER_FILTERING=$(bcftools view --threads ${N_THREADS} --no-header --include "~{filter_string}" ${INPUT_BCF} | wc -l)
+                N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID'--include "~{filter_string}" ${INPUT_BCF} | wc -l )
                 PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records that pass the specified filter" >> ${SAMPLE_ID}_xgboost.csv
             fi

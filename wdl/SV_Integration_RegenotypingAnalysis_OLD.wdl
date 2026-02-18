@@ -12,14 +12,14 @@ version 1.0
 #     ├── precision_recall/             for each sample, precision/recall stats;
 #     └── mendelian/                     for each sample, mendelian error stats;
 #
-workflow SV_Integration_RegenotypingAnalysis2 {
+workflow SV_Integration_RegenotypingAnalysis {
     input {
-        File cohort_truvari_bcf
-        File cohort_truvari_csi
+        File cohort_truvari_vcf_gz
+        File cohort_truvari_tbi
         Array[Int] min_n_samples = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
         Int min_sv_length = 20
         Int max_sv_length = 10000
-        String limit_to_chromosome = "all"
+        String limit_to_chromosome = "chr6"
         
         String remote_dir
         
@@ -48,8 +48,7 @@ workflow SV_Integration_RegenotypingAnalysis2 {
         File ploidy_bed_female
     }
     parameter_meta {
-        min_sv_length: "The program subsets `cohort_truvari_bcf` to this SVLEN range before every other step, and only afterwards re-genotypes. Regardless of this variable, benchmarking results are always reported for >=20bp and >=50bp records separately."
-        limit_to_chromosome: "all=do not limit to any chromosome."
+        min_sv_length: "The program subsets `cohort_truvari_vcf_gz` to this SVLEN range before every other step, and only afterwards re-genotypes. Regardless of this variable, benchmarking results are always reported for >=20bp and >=50bp records separately."
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
@@ -60,8 +59,8 @@ workflow SV_Integration_RegenotypingAnalysis2 {
     }
     call PrepareCohortBcf {
         input:
-            cohort_truvari_bcf = cohort_truvari_bcf,
-            cohort_truvari_csi = cohort_truvari_csi,
+            cohort_truvari_vcf_gz = cohort_truvari_vcf_gz,
+            cohort_truvari_tbi = cohort_truvari_tbi,
             limit_to_chromosome = limit_to_chromosome,
             min_sv_length = min_sv_length,
             max_sv_length = max_sv_length
@@ -313,8 +312,8 @@ task ComplementBed {
 #
 task PrepareCohortBcf {
     input {
-        File cohort_truvari_bcf
-        File cohort_truvari_csi
+        File cohort_truvari_vcf_gz
+        File cohort_truvari_tbi
         
         String limit_to_chromosome
         Int min_sv_length
@@ -324,10 +323,11 @@ task PrepareCohortBcf {
         Int ram_size_gb = 8
     }
     parameter_meta {
-        cohort_truvari_bcf: "The raw output of cohort-level truvari collapse."
+        cohort_truvari_vcf_gz: "The raw output of cohort-level truvari collapse."
+        limit_to_chromosome: "all=do not limit to any chromosome."
     }
     
-    Int disk_size_gb = 4*ceil(size(cohort_truvari_bcf,"GB"))
+    Int disk_size_gb = 4*ceil(size(cohort_truvari_vcf_gz,"GB"))
     String docker_dir = "/callset_integration"
     
     command <<<
@@ -340,31 +340,25 @@ task PrepareCohortBcf {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
-        mv ~{cohort_truvari_bcf} in.bcf
-        mv ~{cohort_truvari_csi} in.bcf.csi
+        mv ~{cohort_truvari_vcf_gz} in.vcf.gz
+        mv ~{cohort_truvari_tbi} in.vcf.gz.tbi
         
-        # Filtering by length
+        # Converting to BCF, to speed up all steps downstream.
         if [ ~{limit_to_chromosome} = "all" ]; then
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b in.bcf > out.bcf
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b in.vcf.gz > out.bcf
         else
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --regions ~{limit_to_chromosome} --output-type b in.bcf > out.bcf
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --regions ~{limit_to_chromosome} --output-type b in.vcf.gz > out.bcf
         fi
-        rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index in.bcf
+        rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index in.bcf
         
         # Enforcing a distinct ID in every record, and annotating every record
         # with the number of samples it occurs in.
-        TEST=$(bcftools view --header-only in.bcf | grep "=N_DISCOVERY_SAMPLES," && echo 0 || echo 1)
-        if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=++i; gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
-            tabix -s1 -b2 -e2 annotations.tsv.gz
-            echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-            echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> header.txt
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type z in.bcf > out.bcf
-            bcftools index out.bcf
-        else
-            mv in.bcf out.bcf
-            mv in.bcf.csi out.bcf.csi
-        fi
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=++i; gsub(/;/,"_",$6); print $0 }' | bgzip -c > annotations.tsv.gz
+        tabix -s1 -b2 -e2 annotations.tsv.gz
+        echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+        echo '##INFO=<ID=ORIGINAL_ID,Number=1,Type=String,Description="Original ID from truvari collapse">' >> header.txt
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,ORIGINAL_ID,N_DISCOVERY_SAMPLES --output-type z in.bcf > out.bcf
+        bcftools index out.bcf
     >>>
     
     output {
@@ -861,7 +855,7 @@ task PrecisionRecallAnalysis {
             local INPUT_VCF=$2
             local OUTPUT_PREFIX=$3
                 
-            if [ ${INPUT_VCF#*.} = vcf.gz ]; then
+            if [ ${INPUT_VCF#*.} -eq vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
             else
@@ -1107,25 +1101,26 @@ task BenchTrio {
             fi
         done
         
-        # Ensuring a consistent format
+        # Restricting to autosomes. This is just for simplicity and is not
+        # strictly necessary.
         TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_in.vcf.gz &
-            wait
-            tabix -f ${PROBAND_ID}_in.vcf.gz &
-            tabix -f ${FATHER_ID}_in.vcf.gz &
-            tabix -f ${MOTHER_ID}_in.vcf.gz &
-            wait
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_autosomes.vcf.gz &
         else
-            mv $(ls ${PROBAND_ID}_*.vcf.gz) ${PROBAND_ID}_in.vcf.gz
-            mv $(ls ${FATHER_ID}_*.vcf.gz) ${FATHER_ID}_in.vcf.gz
-            mv $(ls ${MOTHER_ID}_*.vcf.gz) ${MOTHER_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${PROBAND_ID}_*.vcf.gz) > ${PROBAND_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${FATHER_ID}_*.vcf.gz) > ${FATHER_ID}_autosomes.vcf.gz &
+            ${TIME_COMMAND} bcftools filter --regions-file ~{autosomes_bed} --regions-overlap pos --output-type z $(ls ${MOTHER_ID}_*.vcf.gz) > ${MOTHER_ID}_autosomes.vcf.gz &
         fi
-        echo ${PROBAND_ID}_in.vcf.gz > list.txt
-        echo ${FATHER_ID}_in.vcf.gz >> list.txt
-        echo ${MOTHER_ID}_in.vcf.gz >> list.txt
+        wait
+        tabix -f ${PROBAND_ID}_autosomes.vcf.gz &
+        tabix -f ${FATHER_ID}_autosomes.vcf.gz &
+        tabix -f ${MOTHER_ID}_autosomes.vcf.gz &
+        wait
+        echo ${PROBAND_ID}_autosomes.vcf.gz > list.txt
+        echo ${FATHER_ID}_autosomes.vcf.gz >> list.txt
+        echo ${MOTHER_ID}_autosomes.vcf.gz >> list.txt
         ls -laht
         
         # Remark: we keep all records from the three files, since otherwise
@@ -1134,12 +1129,12 @@ task BenchTrio {
         # error is computed.
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz > out.vcf.gz
-        rm -f ${PROBAND_ID}_in.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_in.vcf.gz ; tabix -f ${PROBAND_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz > out.vcf.gz
-        rm -f ${FATHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_in.vcf.gz ; tabix -f ${FATHER_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz > out.vcf.gz
-        rm -f ${MOTHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_in.vcf.gz ; tabix -f ${MOTHER_ID}_in.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${PROBAND_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_autosomes.vcf.gz ; tabix -f ${PROBAND_ID}_autosomes.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${FATHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_autosomes.vcf.gz ; tabix -f ${FATHER_ID}_autosomes.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_autosomes.vcf.gz > out.vcf.gz
+        rm -f ${MOTHER_ID}_autosomes.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_autosomes.vcf.gz ; tabix -f ${MOTHER_ID}_autosomes.vcf.gz
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.

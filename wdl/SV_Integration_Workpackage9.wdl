@@ -123,26 +123,10 @@ task Impl {
             fi
             
             # Downloading
-            while : ; do
-                date 1>&2
-                TEST=$(gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam && echo 0 || echo 1)
-                date 1>&2
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${ALIGNED_BAM}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
-            while : ; do
-                TEST=$(gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading file <${ALIGNED_BAI}>. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            done
+            date 1>&2
+            gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}_aligned.bam
+            date 1>&2
+            gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}_aligned.bam.bai
             touch ${SAMPLE_ID}_aligned.bam.bai
         }
         
@@ -179,7 +163,7 @@ task Impl {
             
             # Printing debug information
             N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
-            N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l)
+            N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
             echo "${N_PRESENT_RECORDS},${N_RECORDS},${PERCENT},Number of records that are marked as ALT by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
@@ -216,17 +200,9 @@ task Impl {
         ~{docker_dir}/kanpig --version 1>&2
         
         # Localizing frequent and infrequent BCFs
-        while : ; do
-            date 1>&2
-            TEST=$(gcloud storage cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' . && echo 0 || echo 1)
-            date 1>&2
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error downloading the frequent and infrequent BCFs. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        date 1>&2
+        gcloud storage cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' .
+        date 1>&2
         
         # Re-genotyping every sample assigned to this task
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
