@@ -46,7 +46,7 @@ workflow SV_Integration_RegenotypingAnalysis {
         File ploidy_bed_male
         File ploidy_bed_female
         
-        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:latest"
         Int preemptible_number = 4
     }
     parameter_meta {
@@ -70,7 +70,9 @@ workflow SV_Integration_RegenotypingAnalysis {
             
             remote_workpackage_8_dir = remote_workpackage_8_dir,
             remote_outdir = remote_outdir+"/truvari",
-            suffix = "truvari"
+            suffix = "truvari",
+            docker_image = docker_image,
+            preemptible_number = preemptible_number
     }
     # 1.2 Mendelian error analysis
     scatter (i in range(mendelian_error_n_trios)) {
@@ -365,7 +367,7 @@ task SplitTruvariCollapsedBcfBySample {
         Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 50
-        Int preemptible_number = 4
+        Int preemptible_number
     }
     parameter_meta {
         remote_outdir: "The result of the split is stored in this bucket location."
@@ -915,7 +917,6 @@ task BenchTrio {
         
         File tandem_bed
         File not_tandem_bed
-        File autosomes_bed
         
         Array[File] in_flag
         
