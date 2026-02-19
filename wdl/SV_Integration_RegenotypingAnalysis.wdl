@@ -114,7 +114,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                 remote_workpackage_8_dir = remote_workpackage_8_dir,
                 chromosome_id = chromosome_id,
                 min_n_samples = min_n_samples[i],
-                docker_image = docker_image
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
         }
         call SplitInfrequentBcfBySample as split_infrequent {
             input:
@@ -285,7 +286,7 @@ workflow SV_Integration_RegenotypingAnalysis {
 #
 task GetFrequentInfrequentBcfs {
     input {
-        File remote_workpackage_8_dir
+        String remote_workpackage_8_dir
         String chromosome_id
         
         Int min_n_samples
