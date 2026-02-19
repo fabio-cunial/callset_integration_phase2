@@ -143,7 +143,7 @@ task SingleChromosome {
             
             # Temporary fix, to be removed.
             bcftools view --header-only in.bcf > header.txt
-            if [ grep -q ORIGINAL_ID header.txt ]; then
+            if grep -q ORIGINAL_ID header.txt ; then
                 bcftools annotate -x INFO/ORIGINAL_ID --output-type b in.bcf --output out.bcf
                 rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
             fi
