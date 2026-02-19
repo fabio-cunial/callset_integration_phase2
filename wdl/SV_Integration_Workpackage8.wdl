@@ -242,14 +242,31 @@ task AllChromosomes {
             echo ${CHROMOSOME}_infrequent.bcf >> file_list3.txt
         done < chr_list.txt
         
+        # Ensuring that all files have exactly the same header
+        FIRST_CHROMOSOME=$(head -n chr_list.txt)
+        bcftools view --header-only ${FIRST_CHROMOSOME}_truvari_collapsed.bcf > header.txt
+        while read CHROMOSOME; do
+            ${TIME_COMMAND} bcftools reheader --header header.txt ${CHROMOSOME}_truvari_collapsed.bcf --output tmp1.bcf &
+            ${TIME_COMMAND} bcftools reheader --header header.txt ${CHROMOSOME}_frequent.bcf --output tmp2.bcf &
+            ${TIME_COMMAND} bcftools reheader --header header.txt ${CHROMOSOME}_infrequent.bcf --output tmp3.bcf &
+            wait
+            rm -f ${CHROMOSOME}_truvari_collapsed.bcf* ; mv tmp1.bcf ${CHROMOSOME}_truvari_collapsed.bcf
+            rm -f ${CHROMOSOME}_frequent.bcf* ; mv tmp2.bcf ${CHROMOSOME}_frequent.bcf
+            rm -f ${CHROMOSOME}_infrequent.bcf* ; mv tmp3.bcf ${CHROMOSOME}_infrequent.bcf
+            bcftools index --threads ${N_THREADS} -f ${CHROMOSOME}_truvari_collapsed.bcf &
+            bcftools index --threads ${N_THREADS} -f ${CHROMOSOME}_frequent.bcf &
+            bcftools index --threads ${N_THREADS} -f ${CHROMOSOME}_infrequent.bcf &
+            wait
+        done < chr_list.txt
+        
         # Concatenating
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list1.txt --output-type b --output truvari_collapsed.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list2.txt --output-type b --output frequent.bcf &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive-force --file-list file_list3.txt --output-type b --output infrequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list1.txt --output-type b --output truvari_collapsed.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list2.txt --output-type b --output frequent.bcf &
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list3.txt --output-type b --output infrequent.bcf &
         wait
-        bcftools index --threads $(( ${N_THREADS} / 3 )) -f truvari_collapsed.bcf &
-        bcftools index --threads $(( ${N_THREADS} / 3 )) -f frequent.bcf &
-        bcftools index --threads $(( ${N_THREADS} / 3 )) -f infrequent.bcf &
+        bcftools index --threads ${N_THREADS} -f truvari_collapsed.bcf &
+        bcftools index --threads ${N_THREADS} -f frequent.bcf &
+        bcftools index --threads ${N_THREADS} -f infrequent.bcf &
         wait
         
         # Uploading
