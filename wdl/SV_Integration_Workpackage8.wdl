@@ -118,8 +118,8 @@ task SingleChromosome {
             :
         else
             # Localizing all chunks
-            TEST=$( gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' || echo "1" )
-            if [ ${TEST} -eq 1 ]; then
+            gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' | grep '.bcf' > test.txt
+            if [ ! -s test.txt ]; then
                 echo "ERROR: ~{chromosome} has no truvari collapse chunks."
                 exit
             fi
@@ -142,8 +142,8 @@ task SingleChromosome {
             
             
             # Temporary fix, to be removed.
-            FOUND=$(bcftools view --header-only in.bcf | grep ORIGINAL_ID | wc -l)
-            if [ ${FOUND} -gt 0 ]; then
+            bcftools view --header-only in.bcf > header.txt
+            if [ grep -q ORIGINAL_ID header.txt ]; then
                 bcftools annotate -x INFO/ORIGINAL_ID --output-type b in.bcf --output out.bcf
                 rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
             fi
@@ -209,10 +209,10 @@ task SingleChromosome {
 
 # Performance on 12'680 samples, 15x, GRCh38, CAL_SENS<=0.999, HDD:
 #
-# TOOL                           CPU     RAM   TIME
-# concat truvari                                   
-# concat frequent
-# concat infrequent
+# TOOL                           CPU     RAM        TIME
+# concat truvari                  1%     9KB        50m 
+# concat frequent                 3%     8KB        16s
+# concat infrequent               1%     9KB        40m
 #
 task AllChromosomes {
     input {
