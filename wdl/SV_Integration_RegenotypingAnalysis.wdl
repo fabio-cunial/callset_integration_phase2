@@ -1,6 +1,9 @@
 version 1.0
 
 
+# Studies the performance of cohort re-genotyping with personalized VCFs
+# filtered at different thresholds.
+#
 # Structure of `remote_outdir`:
 #
 # ├── truvari/         for each sample, its records in the truvari collapse VCF;
@@ -60,7 +63,7 @@ workflow SV_Integration_RegenotypingAnalysis {
     
     
     # 1. Benchmarking the output of truvari collapse
-    call SplitTruvariCollapsedBcf as split_truvari {
+    call SplitTruvariCollapsedBcfBySample as split_truvari {
         input:
             chromosome_id = chromosome_id,
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
@@ -104,14 +107,24 @@ workflow SV_Integration_RegenotypingAnalysis {
     
     # 2. Benchmarking personalized VCFs
     scatter (i in range(length(min_n_samples))) {
-        call SplitInfrequentBcf as split_infrequent {
+        call GetFrequentInfrequentBcfs as get_frequent_infrequent {
             input:
+                remote_workpackage_8_dir = remote_workpackage_8_dir,
                 chromosome_id = chromosome_id,
+                min_n_samples = min_n_samples[i],
+                docker_image = docker_image
+        }
+        call SplitInfrequentBcfBySample as split_infrequent {
+            input:
+                infrequent_bcf = get_frequent_infrequent.infrequent_bcf,
+                infrequent_csi = get_frequent_infrequent.infrequent_csi,
                 samples = flatten([precision_recall_samples, mendelian_error_samples]),
                 
-                remote_workpackage_8_dir = remote_workpackage_8_dir,
                 remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
-                suffix = "infrequent"
+                suffix = "infrequent",
+                
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
         }
         
         # 2.1 Precision/recall analysis
@@ -123,8 +136,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                     alignments_bam = precision_recall_bam[j],
                     alignments_bai = precision_recall_bai[j],
                     
-                    chromosome_id = chromosome_id,
-                    remote_workpackage_8_dir = remote_workpackage_8_dir,
+                    frequent_bcf = get_frequent_infrequent.frequent_bcf,
+                    frequent_csi = get_frequent_infrequent.frequent_csi,
                     remote_indir_infrequent = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
                     remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
                     
@@ -200,8 +213,8 @@ workflow SV_Integration_RegenotypingAnalysis {
                     alignments_bam = mendelian_error_bam[j],
                     alignments_bai = mendelian_error_bai[j],
                     
-                    chromosome_id = chromosome_id,
-                    remote_workpackage_8_dir = remote_workpackage_8_dir,
+                    frequent_bcf = get_frequent_infrequent.frequent_bcf,
+                    frequent_csi = get_frequent_infrequent.frequent_csi,
                     remote_indir_infrequent = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
                     remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
                     
@@ -256,6 +269,79 @@ workflow SV_Integration_RegenotypingAnalysis {
 
 #----------------------- Personalized VCF construction -------------------------
 
+# Partitions the truvari collapse VCF into the following VCFs:
+# - The subset of all records that occur in `>= min_n_samples`. This file does
+#   not have FORMAT and SAMPLE columns.
+# - The subset of all records that occur in `< min_n_samples`. This file has
+#   all the original sample columns.
+#
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                              CPU     RAM     TIME
+# bcftools filter                   100%    500M    3m
+# bcftools view --drop-genotypes    100%    500M    2m
+#
+task GetFrequentInfrequentBcfs {
+    input {
+        File remote_workpackage_8_dir
+        String chromosome_id
+        
+        Int min_n_samples
+        
+        String docker_image
+        Int n_cpu = 4
+        Int ram_size_gb = 8
+        Int preemptible_number
+    }
+    parameter_meta {
+    }
+    
+    Int disk_size_gb = 50
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/truvari_collapsed.'bcf*' .
+        
+        # Splitting
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES>='~{min_n_samples} --output-type b truvari_collapsed.bcf --output tmp.bcf &
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'N_DISCOVERY_SAMPLES<'~{min_n_samples} --output-type b truvari_collapsed.bcf --output infrequent_~{min_n_samples}.bcf &
+        wait
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} tmp.bcf &
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} infrequent_~{min_n_samples}.bcf &
+        wait
+        
+        # Dropping samples from the frequent BCF
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --output-type b tmp.bcf --output frequent_~{min_n_samples}.bcf
+        ${TIME_COMMAND} bcftools index frequent_~{min_n_samples}.bcf
+    >>>
+    
+    output {
+        File frequent_bcf = "frequent_"+min_n_samples+".bcf"
+        File frequent_csi = "frequent_"+min_n_samples+".bcf.csi"
+        File infrequent_bcf = "infrequent_"+min_n_samples+".bcf"
+        File infrequent_csi = "infrequent_"+min_n_samples+".bcf.csi"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+
+
+
 # Writes to a separate file every sample column.
 #
 # Remark: we keep every record, not just those genotyped as present, to support
@@ -266,7 +352,7 @@ workflow SV_Integration_RegenotypingAnalysis {
 # TOOL                              CPU     RAM     TIME
 # bcftools +split                   100%    500M    3m
 #
-task SplitTruvariCollapsedBcf {
+task SplitTruvariCollapsedBcfBySample {
     input {
         String chromosome_id
         Array[String] samples
@@ -335,12 +421,12 @@ task SplitTruvariCollapsedBcf {
 # bcftools filter                   100%    200M    10s
 # bcftools view --drop-genotypes    100%    15M     10s
 #
-task SplitInfrequentBcf {
+task SplitInfrequentBcfBySample {
     input {
-        String chromosome_id
+        File infrequent_bcf
+        File infrequent_csi
         Array[String] samples
         
-        String remote_workpackage_8_dir
         String remote_outdir
         String suffix
         
@@ -348,7 +434,7 @@ task SplitInfrequentBcf {
         Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 50
-        Int preemptible_number = 4
+        Int preemptible_number
     }
     parameter_meta {
         remote_outdir: "The result of the split is stored in this bucket location."
@@ -365,9 +451,8 @@ task SplitInfrequentBcf {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
-        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/infrequent.'bcf*' .
         echo ~{sep="," samples} | tr ',' '\n' > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . infrequent.bcf        
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . ~{infrequent_bcf}
         
         # Keeping only present records. Removing FORMAT and SAMPLE.
         for FILE in $(ls *.bcf); do
@@ -408,8 +493,8 @@ task Kanpig {
         File alignments_bam
         File alignments_bai
         
-        String chromosome_id
-        String remote_workpackage_8_dir
+        File frequent_bcf
+        File frequent_csi
         String remote_indir_infrequent
         String remote_outdir
         
@@ -451,11 +536,10 @@ task Kanpig {
         fi
         
         # Building the personalized VCF
-        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/frequent.'bcf*' .
         gcloud storage cp ~{remote_indir_infrequent}/~{sample_id}_infrequent.'bcf*' .
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ~{sample_id}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{frequent_bcf} ~{sample_id}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
         bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
-        rm -f frequent.bcf* ~{sample_id}_infrequent.bcf*
+        rm -f ~{frequent_bcf} ~{frequent_csi} ~{sample_id}_infrequent.bcf*
         
         mv {SAMPLE_ID}_personalized.vcf.gz in.vcf.gz
         mv {SAMPLE_ID}_personalized.vcf.gz.tbi in.vcf.gz.tbi
