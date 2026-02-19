@@ -14,12 +14,12 @@ version 1.0
 #
 workflow SV_Integration_RegenotypingAnalysis {
     input {
-        String remote_workpackage_8_dir
-        String remote_outdir
-        
         String chromosome_id
         Int max_sv_length = 10000
         Array[Int] min_n_samples = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+        
+        String remote_workpackage_8_dir
+        String remote_outdir
         
         Int precision_recall_bench_method
         Array[String] precision_recall_samples
@@ -39,8 +39,6 @@ workflow SV_Integration_RegenotypingAnalysis {
         File reference_fa
         File reference_fai
         File reference_agp
-        File standard_chromosomes_bed
-        File autosomes_bed
         File tandem_bed
         File ploidy_bed_male
         File ploidy_bed_female
@@ -49,7 +47,6 @@ workflow SV_Integration_RegenotypingAnalysis {
         Int preemptible_number = 4
     }
     parameter_meta {
-        limit_to_chromosome: "all=do not limit to any chromosome."
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
@@ -61,14 +58,18 @@ workflow SV_Integration_RegenotypingAnalysis {
             preemptible_number = preemptible_number
     }
     
-    # Benchmarking the output of truvari collapse
+    
+    # 1. Benchmarking the output of truvari collapse
     call SplitTruvariCollapsedBcf as split_truvari {
         input:
-            remote_workpackage_8_dir = remote_workpackage_8_dir,
+            chromosome_id = chromosome_id,
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
+            
+            remote_workpackage_8_dir = remote_workpackage_8_dir,
             remote_outdir = remote_outdir+"/truvari",
             suffix = "truvari"
     }
+    # 1.2 Mendelian error analysis
     scatter (i in range(mendelian_error_n_trios)) {
         call BenchTrio as me_bench_truvari_20 {
             input:
@@ -80,7 +81,6 @@ workflow SV_Integration_RegenotypingAnalysis {
                 max_sv_length = max_sv_length,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
-                autosomes_bed = autosomes_bed,
                 in_flag = [split_truvari.out_flag],
                 docker_image = docker_image,
                 preemptible_number = preemptible_number
@@ -95,43 +95,41 @@ workflow SV_Integration_RegenotypingAnalysis {
                 max_sv_length = max_sv_length,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
-                autosomes_bed = autosomes_bed,
                 in_flag = [split_truvari.out_flag],
                 docker_image = docker_image,
                 preemptible_number = preemptible_number
         }
     }
     
-    # Benchmarking personalized VCFs
+    
+    # 2. Benchmarking personalized VCFs
     scatter (i in range(length(min_n_samples))) {
         call SplitInfrequentBcf as split_infrequent {
             input:
                 chromosome_id = chromosome_id,
+                samples = flatten([precision_recall_samples, mendelian_error_samples]),
+                
                 remote_workpackage_8_dir = remote_workpackage_8_dir,
                 remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
-                suffix = "infrequent",
-                samples = flatten([precision_recall_samples, mendelian_error_samples])
+                suffix = "infrequent"
         }
+        
+        # 2.1 Precision/recall analysis
         scatter (j in range(length(precision_recall_samples))) {
-            call BuildPersonalizedVcf as pr_personalized {
-                input:
-                    sample_id = precision_recall_samples[j],
-                    frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
-                    frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
-                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
-                    in_flag = split_infrequent.out_flag,
-                    docker_image = docker_image,
-                    preemptible_number = preemptible_number
-            }
             call Kanpig as pr_kanpig {
                 input:
                     sample_id = precision_recall_samples[j],
                     sex = precision_recall_sex[j],
-                    personalized_vcf_gz = pr_personalized.out_vcf_gz,
-                    personalized_tbi = pr_personalized.out_tbi,
                     alignments_bam = precision_recall_bam[j],
                     alignments_bai = precision_recall_bai[j],
-                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    
+                    chromosome_id = chromosome_id,
+                    remote_workpackage_8_dir = remote_workpackage_8_dir,
+                    remote_indir_infrequent = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
+                    remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    
+                    in_flag = split_infrequent.out_flag,
+                    
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
                     ploidy_bed_male = ploidy_bed_male,
@@ -144,9 +142,9 @@ workflow SV_Integration_RegenotypingAnalysis {
                     sample_id = precision_recall_samples[j],
                     sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
                     sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
-                    chromosome = limit_to_chromosome,
+                    chromosome = chromosome_id,
                     
-                    remote_dir = remote_dir,
+                    remote_outdir = remote_outdir,
                     min_n_samples = min_n_samples[i],
                 
                     bench_method = precision_recall_bench_method,
@@ -156,12 +154,11 @@ workflow SV_Integration_RegenotypingAnalysis {
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
                     reference_agp = reference_agp,
-                    standard_chromosomes_bed = standard_chromosomes_bed,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
                     
                     in_flag_truvari = split_truvari.out_flag,
-                    in_flag_kanpig = pr_kanpig.out_flag
+                    in_flag_kanpig = pr_kanpig.out_flag,
                     
                     docker_image = docker_image,
                     preemptible_number = preemptible_number
@@ -171,9 +168,9 @@ workflow SV_Integration_RegenotypingAnalysis {
                     sample_id = precision_recall_samples[j],
                     sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
                     sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
-                    chromosome = limit_to_chromosome,
+                    chromosome = chromosome_id,
                     
-                    remote_dir = remote_dir,
+                    remote_outdir = remote_outdir,
                     min_n_samples = min_n_samples[i],
                 
                     bench_method = precision_recall_bench_method,
@@ -183,7 +180,6 @@ workflow SV_Integration_RegenotypingAnalysis {
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
                     reference_agp = reference_agp,
-                    standard_chromosomes_bed = standard_chromosomes_bed,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
                     
@@ -194,30 +190,27 @@ workflow SV_Integration_RegenotypingAnalysis {
                     preemptible_number = preemptible_number
             }
         }
+        
+        # 2.2 Mendelian error analysis
         scatter (j in range(length(mendelian_error_samples))) {
-            call BuildPersonalizedVcf as me_personalized {
-                input:
-                    sample_id = mendelian_error_samples[j],
-                    frequent_cohort_bcf = PartitionCohortBcf.frequent_bcf,
-                    frequent_cohort_csi = PartitionCohortBcf.frequent_csi,
-                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/infrequent",
-                    in_flag = split_infrequent.out_flag,
-                    docker_image = docker_image,
-                    preemptible_number = preemptible_number
-            }
             call Kanpig as me_kanpig {
                 input:
                     sample_id = mendelian_error_samples[j],
                     sex = mendelian_error_sex[j],
-                    personalized_vcf_gz = me_personalized.out_vcf_gz,
-                    personalized_tbi = me_personalized.out_tbi,
                     alignments_bam = mendelian_error_bam[j],
                     alignments_bai = mendelian_error_bai[j],
-                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    
+                    chromosome_id = chromosome_id,
+                    remote_workpackage_8_dir = remote_workpackage_8_dir,
+                    remote_indir_infrequent = remote_outdir+"/"+min_n_samples[i]+"_samples/infrequent",
+                    remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    
+                    in_flag = split_infrequent.out_flag,
+                    
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
                     ploidy_bed_male = ploidy_bed_male,
-                    ploidy_bed_female = ploidy_bed_female
+                    ploidy_bed_female = ploidy_bed_female,
                     docker_image = docker_image,
                     preemptible_number = preemptible_number
             }
@@ -227,13 +220,12 @@ workflow SV_Integration_RegenotypingAnalysis {
                 input:
                     ped_tsv = mendelian_error_ped,
                     ped_tsv_row = j+1,
-                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
-                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    remote_indir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/mendelian",
                     min_sv_length = 20,
                     max_sv_length = max_sv_length,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
-                    autosomes_bed = autosomes_bed,
                     in_flag = me_kanpig.out_flag,
                     docker_image = docker_image,
                     preemptible_number = preemptible_number
@@ -242,13 +234,12 @@ workflow SV_Integration_RegenotypingAnalysis {
                 input:
                     ped_tsv = mendelian_error_ped,
                     ped_tsv_row = j+1,
-                    remote_indir = remote_dir+"/"+min_n_samples[i]+"_samples/kanpig",
-                    remote_outdir = remote_dir+"/"+min_n_samples[i]+"_samples/mendelian",
+                    remote_indir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
+                    remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/mendelian",
                     min_sv_length = 50,
                     max_sv_length = max_sv_length,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
-                    autosomes_bed = autosomes_bed,
                     in_flag = me_kanpig.out_flag,
                     docker_image = docker_image,
                     preemptible_number = preemptible_number
@@ -264,6 +255,248 @@ workflow SV_Integration_RegenotypingAnalysis {
 
 
 #----------------------- Personalized VCF construction -------------------------
+
+# Writes to a separate file every sample column.
+#
+# Remark: we keep every record, not just those genotyped as present, to support
+# all types of analysis downstream.
+#
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                              CPU     RAM     TIME
+# bcftools +split                   100%    500M    3m
+#
+task SplitTruvariCollapsedBcf {
+    input {
+        String chromosome_id
+        Array[String] samples
+        
+        String remote_workpackage_8_dir
+        String remote_outdir
+        String suffix
+        
+        String docker_image
+        Int n_cpu = 4
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
+        Int preemptible_number = 4
+    }
+    parameter_meta {
+        remote_outdir: "The result of the split is stored in this bucket location."
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/truvari_collapsed.'bcf*' .
+        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
+        rm -f truvari_collapsed.bcf*
+        for FILE in $(ls *.bcf); do
+            SAMPLE_ID=$(basename ${FILE} .bcf)
+            mv ${FILE} ${SAMPLE_ID}_~{suffix}.bcf
+            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_~{suffix}.bcf
+        done
+        ls -laht
+        gcloud storage cp '*_'~{suffix}'.bcf*' ~{remote_outdir}/        
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+# Writes every sample column to a separate file.
+#
+# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+#
+# TOOL                              CPU     RAM     TIME
+# bcftools +split                   100%    500M    3m
+# bcftools filter                   100%    200M    10s
+# bcftools view --drop-genotypes    100%    15M     10s
+#
+task SplitInfrequentBcf {
+    input {
+        String chromosome_id
+        Array[String] samples
+        
+        String remote_workpackage_8_dir
+        String remote_outdir
+        String suffix
+        
+        String docker_image
+        Int n_cpu = 4
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
+        Int preemptible_number = 4
+    }
+    parameter_meta {
+        remote_outdir: "The result of the split is stored in this bucket location."
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/infrequent.'bcf*' .
+        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . infrequent.bcf        
+        
+        # Keeping only present records. Removing FORMAT and SAMPLE.
+        for FILE in $(ls *.bcf); do
+            SAMPLE_ID=$(basename ${FILE} .bcf)
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'GT="alt"' --drop-genotypes --output-type b ${FILE} --output ${SAMPLE_ID}_~{suffix}.bcf
+            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_~{suffix}.bcf
+        done
+        ls -laht
+        gcloud storage cp '*_'~{suffix}'.bcf*' ~{remote_outdir}/        
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+# Identical to `SV_Integration_Workpackage9.wdl`.
+#
+# Remark: we keep every record, not just those genotyped as present, to support
+# all types of analysis downstream.
+#
+task Kanpig {
+    input {
+        String sample_id
+        String sex
+        File alignments_bam
+        File alignments_bai
+        
+        String chromosome_id
+        String remote_workpackage_8_dir
+        String remote_indir_infrequent
+        String remote_outdir
+        
+        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
+        
+        File in_flag
+        
+        File reference_fa
+        File reference_fai
+        File ploidy_bed_male
+        File ploidy_bed_female
+        
+        String docker_image
+        Int n_cpu = 6
+        Int ram_size_gb = 8
+        Int preemptible_number
+    }
+    parameter_meta {
+    }
+    
+    Int disk_size_gb = 4*ceil( size(alignments_bam,"GB") )
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
+        export RUST_BACKTRACE="full"
+        INFINITY="1000000000"
+        
+        if [ ~{sex} == "M" ]; then
+            PLOIDY_BED=$(echo ~{ploidy_bed_male})
+        else
+            PLOIDY_BED=$(echo ~{ploidy_bed_female})
+        fi
+        
+        # Building the personalized VCF
+        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/frequent.'bcf*' .
+        gcloud storage cp ~{remote_indir_infrequent}/~{sample_id}_infrequent.'bcf*' .
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ~{sample_id}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
+        rm -f frequent.bcf* ~{sample_id}_infrequent.bcf*
+        
+        mv {SAMPLE_ID}_personalized.vcf.gz in.vcf.gz
+        mv {SAMPLE_ID}_personalized.vcf.gz.tbi in.vcf.gz.tbi
+        
+        # Remark: kanpig needs --sizemin >= --kmer
+        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
+        rm -f in.vcf.gz* ; mv out.vcf in.vcf
+        
+        # Sorting
+        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type b in.vcf --output out.bcf
+        rm -f in.vcf ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+        
+        mv in.bcf ~{sample_id}_kanpig.bcf
+        mv in.bcf.csi ~{sample_id}_kanpig.bcf.csi
+        
+        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf.csi)
+        N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ~{sample_id}_kanpig.bcf | wc -l )
+        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_nrecords.txt
+        
+        # Uploading
+        gcloud storage cp ~{sample_id}_kanpig'*' ~{remote_outdir}/ 
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+
+
+#------------------------------- Benchmarking ----------------------------------
 
 #
 task ComplementBed {
@@ -312,245 +545,6 @@ task ComplementBed {
 }
 
 
-# Writes to a separate file every sample column.
-#
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
-#
-# TOOL                              CPU     RAM     TIME
-# bcftools +split                   100%    500M    3m
-#
-task SplitTruvariCollapsedBcf {
-    input {
-        String remote_workpackage_8_dir
-        String chromosome_id
-        
-        Array[String] samples
-        String remote_outdir
-        String suffix
-        
-        String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
-        Int preemptible_number = 4
-    }
-    parameter_meta {
-        remote_dir: "The result of the split is stored in this bucket location."
-        remove_sample: "1=The output files do not have FORMAT and SAMPLE columns. 0=The output files have the original FORMAT and SAMPLE columns."
-    }
-    
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        
-        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/truvari_collapsed.'bcf*' .
-        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
-        rm -f truvari_collapsed.bcf*
-        for FILE in $(ls *.bcf); do
-            SAMPLE_ID=$(basename ${FILE} .bcf)
-            mv ${FILE} ${SAMPLE_ID}_~{suffix}.bcf
-            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_~{suffix}.bcf
-        done
-        ls -laht
-        gcloud storage cp '*_'~{suffix}'.bcf*' ~{remote_outdir}/        
-        
-        # Fake output
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-# Writes to a separate file every sample column.
-#
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
-#
-# TOOL                              CPU     RAM     TIME
-# bcftools +split                   100%    500M    3m
-# bcftools filter                   100%    200M    10s
-# bcftools view --drop-genotypes    100%    15M     10s
-#
-task SplitInfrequentBcf {
-    input {
-        String chromosome_id
-        String remote_workpackage_8_dir
-        String remote_outdir
-        String suffix
-        
-        Array[String] samples
-        
-        String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
-        Int preemptible_number = 4
-    }
-    parameter_meta {
-        remote_dir: "The result of the split is stored in this bucket location."
-        remove_sample: "1=The output files do not have FORMAT and SAMPLE columns. 0=The output files have the original FORMAT and SAMPLE columns."
-    }
-    
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        
-        gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/infrequent.'bcf*' .
-        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . infrequent.bcf        
-        
-        # Keeping only present records, then removing FORMAT and SAMPLE.
-        for FILE in $(ls *.bcf); do
-            SAMPLE_ID=$(basename ${FILE} .bcf)
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'GT="alt"' --drop-genotypes --output-type b ${FILE} --output ${SAMPLE_ID}_~{suffix}.bcf
-            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_~{suffix}.bcf
-        done
-        ls -laht
-        gcloud storage cp '*_'~{suffix}'.bcf*' ~{remote_outdir}/        
-        
-        # Fake output
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-# Identical to `SV_Integration_Workpackage9.wdl`.
-#
-task Kanpig {
-    input {
-        String sample_id
-        String sex
-        File personalized_vcf_gz
-        File personalized_tbi
-        File alignments_bam
-        File alignments_bai
-        
-        String remote_outdir
-        
-        String kanpig_params_cohort = "--neighdist 500 --gpenalty 0.04 --hapsim 0.97"
-        Int run_pyro_beta_binomial = 0
-        String pyro_beta_binomial_args = ""
-        
-        File in_flag
-        
-        File reference_fa
-        File reference_fai
-        File ploidy_bed_male
-        File ploidy_bed_female
-        
-        String docker_image
-        Int n_cpu = 6
-        Int ram_size_gb = 8
-        Int preemptible_number
-    }
-    parameter_meta {
-    }
-    
-    Int disk_size_gb = 4*ceil( size(alignments_bam,"GB") )
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
-        export RUST_BACKTRACE="full"
-        INFINITY="1000000000"
-        
-        if [ ~{sex} == "M" ]; then
-            PLOIDY_BED=$(echo ~{ploidy_bed_male})
-        else
-            PLOIDY_BED=$(echo ~{ploidy_bed_female})
-        fi
-        
-        # Building the personalized VCF
-        gcloud storage cp ~{remote_indir_frequent}/frequent.'bcf*' .
-        gcloud storage cp ~{remote_indir_infrequent}/~{sample_id}_infrequent.'bcf*' .
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ~{sample_id}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
-        bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_personalized.vcf.gz
-        rm -f frequent.bcf* ~{sample_id}_infrequent.bcf*
-        
-        mv ~{personalized_vcf_gz} in.vcf.gz
-        mv ~{personalized_tbi} in.vcf.gz.tbi
-        
-        # Remark: kanpig needs --sizemin >= --kmer
-        ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
-        rm -f in.vcf.gz* ; mv out.vcf in.vcf
-        
-        # Sorting
-        ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type b in.vcf --output out.bcf
-        rm -f in.vcf ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-        
-        mv in.bcf ~{sample_id}_kanpig.bcf
-        mv in.bcf.csi ~{sample_id}_kanpig.bcf.csi
-        
-        N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf.csi)
-        N_PRESENT_RECORDS=$(bcftools view --no-header --include 'GT="alt"' ~{sample_id}_kanpig.bcf | wc -l)
-        echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_nrecords.txt
-        
-        # Uploading
-        gcloud storage cp ~{sample_id}_kanpig'*' ~{remote_outdir}/ 
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-
-
-#------------------------------- Benchmarking ----------------------------------
-
 # Performance with 4 cores and 32GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
@@ -564,7 +558,7 @@ task PrecisionRecallAnalysis {
         File sample_dipcall_bed
         String chromosome
         
-        String remote_dir
+        String remote_outdir
         String min_n_samples
         
         Int bench_method
@@ -574,7 +568,6 @@ task PrecisionRecallAnalysis {
         File reference_fa
         File reference_fai
         File reference_agp
-        File standard_chromosomes_bed
         File tandem_bed
         File not_tandem_bed
         
@@ -587,8 +580,7 @@ task PrecisionRecallAnalysis {
         Int disk_size_gb = 20
         Int preemptible_number
     }
-    parameter_meta {
-        chromosome: "all=do not restrict to a chromosome."        
+    parameter_meta {  
         min_sv_length: "The input VCFs (truvari, kanpig and dipcall) are first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
         bench_method: "0=truvari bench with default parameters; 1=vcfdist."
     }
@@ -602,8 +594,8 @@ task PrecisionRecallAnalysis {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
+        
+        
         
         
         # ----------------------- Steps of the pipeline ------------------------
@@ -627,7 +619,7 @@ task PrecisionRecallAnalysis {
         }
         
         
-        # Puts in canonical form a raw VCF from dipcall. This is identical to
+        # Puts in canonical form a raw VCF from dipcall. This is similar to
         # `SV_Integration_BuildTrainingResource.wdl`.
         #
         function CanonizeDipcallVcf() {
@@ -636,37 +628,40 @@ task PrecisionRecallAnalysis {
             local INPUT_TBI=$3
             local MIN_SV_LENGTH=$4
             local MAX_SV_LENGTH=$5
-            local STANDARD_CHROMOSOMES_BED=$6
-            local NOT_GAPS_BED=$7
+            local NOT_GAPS_BED=$6
             
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
-            # Splitting multiallelic records into biallelic records
-            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            # Keeping only records in the given chromosome
+            ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_in.vcf.gz ~{chromosome} --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Removing SNVs, records that are not marked as present, records
-            # with a FILTER, and records with unresolved REF/ALT.
+            # Splitting multiallelic records into biallelic records
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
+            # Removing SNVs, records with unresolved REF/ALT, records that are
+            # not marked as present, and records with a FILTER. 
+            # Remark: in chrY we keep calls with any FILTER and any GT,
+            # otherwise the number of calls becomes very small.
             if [ ~{chromosome} = "chrY" ]; then
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             else
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             fi
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the standard chromosomes
-            ${TIME_COMMAND} bcftools filter --regions-file ${STANDARD_CHROMOSOMES_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            
             # Removing records in reference gaps
-            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the dipcall BED
+            # Keeping only records in the dipcall BED.
+            # Remark: we do not do this in chrY, otherwise the number of calls
+            # becomes very small.
             if [ ~{chromosome} != "chrY" ]; then
-                ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             fi
             
@@ -675,7 +670,7 @@ task PrecisionRecallAnalysis {
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the given length range
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
@@ -700,16 +695,17 @@ task PrecisionRecallAnalysis {
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
             else
-                bcftools view --output-type z ${INPUT_VCF} > ${OUTPUT_PREFIX}_input.vcf.gz
+                bcftools view --output-type z ${INPUT_VCF} --output ${OUTPUT_PREFIX}_input.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_input.vcf.gz
             fi
             
             # Extracting calls with POS inside and outside TRs
-            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_tr.vcf.gz &
-            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz > ${OUTPUT_PREFIX}_not_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz --output ${OUTPUT_PREFIX}_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz --output ${OUTPUT_PREFIX}_not_tr.vcf.gz &
             wait
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_tr.vcf.gz
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_not_tr.vcf.gz
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_not_tr.vcf.gz &
+            wait
         
             # Benchmarking
             if [ ~{bench_method} -eq 0 ]; then
@@ -737,6 +733,8 @@ task PrecisionRecallAnalysis {
         }
 
 
+
+
         # --------------------------- Main program -----------------------------
         
         FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length}"
@@ -754,47 +752,30 @@ task PrecisionRecallAnalysis {
         
         # Canonizing the dipcall VCF
         bcftools index --threads ${N_THREADS} -f -t ~{sample_dipcall_vcf_gz}
-        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
+        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
         rm -f ~{sample_dipcall_vcf_gz}
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_tr.vcf.gz &
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_not_tr.vcf.gz &
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_tr.vcf.gz &
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_not_tr.vcf.gz &
         wait
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truth_tr.vcf.gz &
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truth_not_tr.vcf.gz &
         wait
         
         # Localizing the VCFs to benchmark
-        gsutil -m cp ~{remote_dir}/truvari/~{sample_id}_truvari.'bcf*' .
-        gsutil -m cp ~{remote_dir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
-        
-        # Subsetting every VCF to the given chromosome, if specified.
-        if [ ~{chromosome} != "all" ]; then
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz > ~{sample_id}_truth_prime.vcf.gz
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_tr.vcf.gz > ~{sample_id}_truth_tr_prime.vcf.gz
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_truth_not_tr.vcf.gz > ~{sample_id}_truth_not_tr_prime.vcf.gz
-            
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type b ~{sample_id}_truvari.bcf > ~{sample_id}_truvari_prime.bcf
-            ${TIME_COMMAND} bcftools filter --regions ~{chromosome} --regions-overlap pos --output-type z ~{sample_id}_kanpig.vcf.gz > ~{sample_id}_kanpig_prime.vcf.gz
-            
-            rm -f ~{sample_id}_truth.vcf.gz* ; mv ~{sample_id}_truth_prime.vcf.gz ~{sample_id}_truth.vcf.gz ; bcftools index ~{sample_id}_truth.vcf.gz
-            rm -f ~{sample_id}_truth_tr.vcf.gz* ; mv ~{sample_id}_truth_tr_prime.vcf.gz ~{sample_id}_truth_tr.vcf.gz ; bcftools index ~{sample_id}_truth_tr.vcf.gz
-            rm -f ~{sample_id}_truth_not_tr.vcf.gz* ; mv ~{sample_id}_truth_not_tr_prime.vcf.gz ~{sample_id}_truth_not_tr.vcf.gz ; bcftools index ~{sample_id}_truth_not_tr.vcf.gz
-            
-            rm -f ~{sample_id}_truvari.bcf* ; mv ~{sample_id}_truvari_prime.bcf ~{sample_id}_truvari.bcf ; bcftools index ~{sample_id}_truvari.bcf
-            rm -f ~{sample_id}_kanpig.vcf.gz* ; mv ~{sample_id}_kanpig_prime.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index ~{sample_id}_kanpig.vcf.gz
-        fi
+        gcloud storage cp ~{remote_outdir}/truvari/~{sample_id}_truvari.'bcf*' .
+        gcloud storage cp ~{remote_outdir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_truvari.bcf > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
         rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.vcf.gz --output out.vcf.gz
         rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
         
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.vcf.gz --output out.vcf.gz
         rm -f ~{sample_id}_truvari.vcf.gz* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.vcf.gz --output out.vcf.gz
         rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
         
         # Benchmarking
@@ -802,24 +783,8 @@ task PrecisionRecallAnalysis {
         Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig_~{min_sv_length}bp
         
         # Uploading
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*_truvari_*.txt' ~{remote_dir}/truvari/precision_recall/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading truvari benchmarks. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*_kanpig_*.txt' ~{remote_dir}/~{min_n_samples}_samples/precision_recall/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading kanpig benchmarks. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        gcloud storage cp '*_truvari_*.txt' ~{remote_outdir}/truvari/precision_recall/ 
+        gcloud storage cp '*_kanpig_*.txt' ~{remote_outdir}/~{min_n_samples}_samples/precision_recall/
     >>>
     
     output {
@@ -895,6 +860,10 @@ task BenchTrio {
         GSUTIL_DELAY_S="600"
         
         
+        
+        
+        # ----------------------- Steps of the pipeline ------------------------
+        
         # @param 1: a VCF that contains only 3 samples (child, parents).
         # 
         function Benchmark() {
@@ -908,7 +877,7 @@ task BenchTrio {
             # 2. De novo rate
             
             # 2.1 +trio-dnm2
-            ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} > ${SAMPLE_ID}_annotated.vcf.gz
+            ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_annotated.vcf.gz
             NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
@@ -921,7 +890,9 @@ task BenchTrio {
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
         }
         
-
+        
+        
+        
         # --------------------------- Main program -----------------------------
         
         head -n ~{ped_tsv_row} ~{ped_tsv} | tail -n 1 > ped.tsv
@@ -930,27 +901,17 @@ task BenchTrio {
         MOTHER_ID=$(cut -f 4 ped.tsv)
         
         # Localizing. These files may contain 0/0 records.
-        while : ; do
-            TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                TEST=$(gsutil -m cp ~{remote_indir}/${PROBAND_ID}_'*.bcf*' ~{remote_indir}/${FATHER_ID}_'*.bcf*' ~{remote_indir}/${MOTHER_ID}_'*.bcf*' . && echo 0 || echo 1)
-                if [ ${TEST} -eq 1 ]; then
-                    echo "Error downloading VCF files. Trying again..."
-                    sleep ${GSUTIL_DELAY_S}
-                else
-                    break
-                fi
-            else 
-                break
-            fi
-        done
+        TEST=$(gcloud storage cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
+        if [ ${TEST} -eq 1 ]; then
+            gcloud storage cp ~{remote_indir}/${PROBAND_ID}_'*.bcf*' ~{remote_indir}/${FATHER_ID}_'*.bcf*' ~{remote_indir}/${MOTHER_ID}_'*.bcf*' .
+        fi
         
         # Ensuring a consistent format
         TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) > ${PROBAND_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) > ${FATHER_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) > ${MOTHER_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) --output ${PROBAND_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) --output ${FATHER_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) --output ${MOTHER_ID}_in.vcf.gz &
             wait
             bcftools index --threads ${N_THREADS} -f -t ${PROBAND_ID}_in.vcf.gz &
             bcftools index --threads ${N_THREADS} -f -t ${FATHER_ID}_in.vcf.gz &
@@ -972,11 +933,11 @@ task BenchTrio {
         # error is computed.
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output out.vcf.gz
         rm -f ${PROBAND_ID}_in.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${PROBAND_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output out.vcf.gz
         rm -f ${FATHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${FATHER_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz > out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output out.vcf.gz
         rm -f ${MOTHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${MOTHER_ID}_in.vcf.gz
         
         # Merging records by ID, since the records in every VCF originate from
@@ -989,11 +950,11 @@ task BenchTrio {
         # Benchmarking: original merged VCF.
         Benchmark trio.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all
         
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > tr.vcf.gz
+        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz --output tr.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr.vcf.gz
         Benchmark tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr
         
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz > not_tr.vcf.gz
+        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz --output not_tr.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t not_tr.vcf.gz
         Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr
         
@@ -1014,15 +975,7 @@ task BenchTrio {
         rm -f not_tr*.vcf.gz*
         
         # Uploading
-        while : ; do
-            TEST=$(gsutil -m ${GSUTIL_UPLOAD_THRESHOLD} cp '*.txt' ~{remote_outdir}/ && echo 0 || echo 1)
-            if [ ${TEST} -eq 1 ]; then
-                echo "Error uploading stats. Trying again..."
-                sleep ${GSUTIL_DELAY_S}
-            else
-                break
-            fi
-        done
+        gcloud storage cp '*.txt' ~{remote_outdir}/
     >>>
     
     output {
