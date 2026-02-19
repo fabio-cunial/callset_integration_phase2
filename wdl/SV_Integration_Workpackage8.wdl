@@ -132,7 +132,30 @@ task SingleChromosome {
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b --output out.bcf
             df -h 1>&2
             rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-        
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            # Temporary fix, to be removed.
+            FOUND=$(bcftools view --header-only in.bcf | grep ORIGINAL_ID | wc -l)
+            if [ ${FOUND} -gt 0 ]; then
+                bcftools annotate -x INFO/ORIGINAL_ID --output-type b in.bcf --output out.bcf
+                rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+            fi
+            
+            
+            
+            
+            
+            
+            
+            
+            
             # Enforcing a distinct ID in every record, and annotating every
             # record with the number of samples it occurs in. Note that the
             # latter is not equal to the QUAL field in input to truvari collapse
