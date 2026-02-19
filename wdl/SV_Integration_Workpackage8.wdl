@@ -118,8 +118,10 @@ task SingleChromosome {
             :
         else
             # Localizing all chunks
-            gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' | grep '.bcf' > test.txt
-            if [ ! -s test.txt ]; then
+            gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' > test.txt
+            if grep -q '.bcf' test.txt ; then
+                :
+            else
                 echo "ERROR: ~{chromosome} has no truvari collapse chunks."
                 exit
             fi
@@ -132,29 +134,6 @@ task SingleChromosome {
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b --output out.bcf
             df -h 1>&2
             rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            # Temporary fix, to be removed.
-            bcftools view --header-only in.bcf > header.txt
-            if grep -q ORIGINAL_ID header.txt ; then
-                bcftools annotate -x INFO/ORIGINAL_ID --output-type b in.bcf --output out.bcf
-                rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-            fi
-            
-            
-            
-            
-            
-            
-            
-            
             
             # Enforcing a distinct ID in every record, and annotating every
             # record with the number of samples it occurs in. Note that the
