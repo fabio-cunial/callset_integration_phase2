@@ -243,7 +243,7 @@ task AllChromosomes {
         done < chr_list.txt
         
         # Ensuring that all files have exactly the same header
-        FIRST_CHROMOSOME=$(head -n chr_list.txt)
+        FIRST_CHROMOSOME=$(head -n 1 chr_list.txt)
         bcftools view --header-only ${FIRST_CHROMOSOME}_truvari_collapsed.bcf > header.txt
         while read CHROMOSOME; do
             ${TIME_COMMAND} bcftools reheader --header header.txt ${CHROMOSOME}_truvari_collapsed.bcf --output tmp1.bcf &
