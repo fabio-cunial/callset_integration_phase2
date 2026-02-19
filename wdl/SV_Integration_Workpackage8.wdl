@@ -281,7 +281,7 @@ task AllChromosomes {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
         zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
