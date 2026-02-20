@@ -365,7 +365,7 @@ task SplitTruvariCollapsedBcfBySample {
         String suffix
         
         String docker_image
-        Int n_cpu = 4
+        Int n_cpu = 2
         Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number
@@ -434,7 +434,7 @@ task SplitInfrequentBcfBySample {
         String suffix
         
         String docker_image
-        Int n_cpu = 4
+        Int n_cpu = 2
         Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number
@@ -511,7 +511,7 @@ task Kanpig {
         File ploidy_bed_female
         
         String docker_image
-        Int n_cpu = 6
+        Int n_cpu = 4
         Int ram_size_gb = 8
         Int preemptible_number
     }
@@ -722,27 +722,27 @@ task PrecisionRecallAnalysis {
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
             # Keeping only records in the given chromosome
-            ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_in.vcf.gz ~{chromosome} --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools view --output-type b ${SAMPLE_ID}_in.vcf.gz ~{chromosome} --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
             # Splitting multiallelic records into biallelic records
-            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
             # Removing SNVs, records with unresolved REF/ALT, records that are
             # not marked as present, and records with a FILTER. 
             # Remark: in chrY we keep calls with any FILTER and any GT,
             # otherwise the number of calls becomes very small.
             if [ ~{chromosome} = "chrY" ]; then
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             else
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             fi
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
             # Removing records in reference gaps
-            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the dipcall BED.
             # Remark: we do not do this in chrY, otherwise the number of calls
@@ -922,7 +922,7 @@ task BenchTrio {
         Array[File] in_flag
         
         String docker_image
-        Int n_cpu = 8
+        Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 20
         Int preemptible_number
