@@ -1,7 +1,8 @@
 version 1.0
 
 
-# Performs a bcftools merge of all the VCFs of a given chromosome chunk.
+# Performs a simple bcftools merge and truvari collapse of all the ultralong or
+# BND intra-sample VCFs.
 #
 workflow SV_Integration_Workpackage5_Ultralong {
     input {
@@ -67,7 +68,7 @@ workflow SV_Integration_Workpackage5_Ultralong {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, ultralong VCFs:
+# Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong VCFs:
 #
 # TOOL                          CPU     RAM     TIME
 # gcloud storage cp             
@@ -265,7 +266,7 @@ task Impl {
             # Step 1
             rm -f list.txt
             while read SAMPLE_ID; do
-                echo ./input_files/${SAMPLE_ID}.bcf >> list.txt
+                echo ./input_files/${SAMPLE_ID}_~{suffix}.bcf >> list.txt
             done < ~{sample_ids}
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_
             N_LIST_FILES=$(ls list_* | wc -l)
