@@ -850,20 +850,20 @@ task PrecisionRecallAnalysis {
         
         # Localizing the VCFs to benchmark
         gcloud storage cp ~{remote_outdir}/truvari/~{sample_id}_truvari.'bcf*' .
-        gcloud storage cp ~{remote_outdir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.vcf.'gz*' .
+        gcloud storage cp ~{remote_outdir}/~{min_n_samples}_samples/kanpig/~{sample_id}_kanpig.'bcf*' .
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
-        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.vcf.gz --output out.vcf.gz
-        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}_truvari.bcf --output out.bcf
+        rm -f ~{sample_id}_truvari.bcf* ; mv out.bcf ~{sample_id}_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_truvari.bcf
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.bcf --output out.bcf
+        rm -f ~{sample_id}_kanpig.bcf* ; mv out.bcf ~{sample_id}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_kanpig.bcf
         
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.vcf.gz --output out.vcf.gz
-        rm -f ~{sample_id}_truvari.vcf.gz* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.vcf.gz --output out.vcf.gz
-        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
+        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.bcf --output out.vcf.gz
+        rm -f ~{sample_id}_kanpig.bcf* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
         
         # Benchmarking
         Benchmark ~{sample_id} ~{sample_id}_truvari.vcf.gz truvari_~{min_sv_length}bp
