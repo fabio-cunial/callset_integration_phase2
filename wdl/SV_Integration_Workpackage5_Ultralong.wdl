@@ -339,14 +339,18 @@ task Impl {
             
             # Removing SVLEN from symbolic ALTs, in order not to interfere with
             # `truvari collapse`.
-            date 1>&2
-            ( bcftools view --header-only ${INPUT_BCF} ; bcftools view --no-header ${INPUT_BCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' ) | bgzip --compress-level 1 > in.vcf.gz
-            date 1>&2
+            if [ ~{suffix} = "ultralong" ]; then
+                date 1>&2
+                ( bcftools view --header-only ${INPUT_BCF} ; bcftools view --no-header ${INPUT_BCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                    if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                    printf("%s",$1); \
+                    for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                    printf("\n"); \
+                }' ) | bgzip --compress-level 1 > in.vcf.gz
+                date 1>&2
+            else
+                bcftools view --threads ${N_THREADS} --output-type z ${INPUT_BCF} --output in.vcf.gz
+            fi
             bcftools index --threads ${N_THREADS} -f -t in.vcf.gz
             rm -f ${INPUT_BCF} ${INPUT_CSI}
 
