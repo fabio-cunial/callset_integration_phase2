@@ -535,3 +535,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_RegenotypingAnalysis2.wdl
   testParameterFiles:
+- name: SV_Integration_Workpackage5_Ultralong
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_Workpackage5_Ultralong.wdl
+  testParameterFiles:
