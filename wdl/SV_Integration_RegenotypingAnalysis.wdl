@@ -540,12 +540,12 @@ task Kanpig {
         
         # Building the personalized VCF
         gcloud storage cp ~{remote_indir_infrequent}/~{sample_id}_infrequent.'bcf*' .
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{frequent_bcf} ~{sample_id}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
-        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z ~{frequent_bcf} ~{sample_id}_infrequent.bcf --output ~{sample_id}_personalized.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_personalized.vcf.gz
         rm -f ~{frequent_bcf} ~{frequent_csi} ~{sample_id}_infrequent.bcf*
         
-        mv {SAMPLE_ID}_personalized.vcf.gz in.vcf.gz
-        mv {SAMPLE_ID}_personalized.vcf.gz.tbi in.vcf.gz.tbi
+        mv ~{sample_id}_personalized.vcf.gz in.vcf.gz
+        mv ~{sample_id}_personalized.vcf.gz.tbi in.vcf.gz.tbi
         
         # Remark: kanpig needs --sizemin >= --kmer
         ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --sizemin 10 --sizemax ${INFINITY} ~{kanpig_params_cohort} --reference ~{reference_fa} --ploidy-bed ${PLOIDY_BED} --input in.vcf.gz --reads ~{alignments_bam} --out out.vcf --sample ~{sample_id}
