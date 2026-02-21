@@ -70,14 +70,14 @@ workflow SV_Integration_Workpackage5_Ultralong {
 
 # Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong VCFs:
 #
-# TOOL                          CPU     RAM     TIME
-# gcloud storage cp             
-# bcftools merge level 1        
-# bcftools norm level 1         
+# TOOL                           CPU     RAM     TIME
+# gcloud storage cp             200%    100M      10s
+# bcftools merge level 1        300%      1G      10s
+# bcftools norm level 1         400%    300M       5s
 # bcftools merge level 2        
 # bcftools norm level 2         
 #
-# Peak disk usage (all input files): 
+# Peak disk usage (all input files): 10G
 #
 task Impl {
     input {
@@ -105,7 +105,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 16
+        Int ram_size_gb = 64
         Int disk_size_gb = 50
         Int preemptible_number = 4
     }
@@ -256,7 +256,7 @@ task Impl {
                 echo "ERROR: The number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
                 exit 1
             fi
-            df -h
+            df -h 1>&2
         }
         
         
@@ -397,7 +397,7 @@ task Impl {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
         zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
