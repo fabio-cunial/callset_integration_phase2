@@ -71,8 +71,8 @@ workflow SV_Integration_Workpackage12 {
 #
 # TOOL                           CPU     RAM     TIME
 # gcloud storage cp                         // Whole genome
-# bcftools merge level 1                    // Whole genome
-# bcftools norm level 1                     // Whole genome
+# bcftools merge level 1        300%    600M      10s           // Whole genome
+# bcftools norm level 1         400%    300M      10s   // Whole genome
 # bcftools merge level 2                    // Per chunk
 # bcftools norm level 2                     // Per chunk
 #
@@ -269,6 +269,7 @@ task Impl {
         i="0"
         while read INTERVAL; do
             mkdir -p ./chunk_${i}/
+            i=$(( ${i} + 1 ))
         done < ~{split_for_bcftools_merge_csv}
         
         # Step 1: merging a few samples over the whole genome.
@@ -293,6 +294,7 @@ task Impl {
                 echo ${INTERVAL} | tr ',' '\t' > targets.bed
                 bcftools view --threads ${N_THREADS} --targets-file targets.bed --output-type b ${LIST_FILE}_normed.bcf --output ./chunk_${i}/${LIST_FILE}.bcf
                 bcftools index --threads ${N_THREADS} ./chunk_${i}/${LIST_FILE}.bcf
+                i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
             rm -f ${LIST_FILE}_normed.bcf*
         done
@@ -309,6 +311,7 @@ task Impl {
             mv ./chunk_${i}/normed.bcf ./chunk_${i}.bcf
             mv ./chunk_${i}/normed.bcf.csi ./chunk_${i}.bcf.csi
             rm -rf ./chunk_${i}/
+            i=$(( ${i} + 1 ))
         done < ~{split_for_bcftools_merge_csv}
         df -h 1>&2
         ls -laht 1>&2
