@@ -113,7 +113,7 @@ task Impl {
         String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 16
-        Int disk_size_gb = 50
+        Int disk_size_gb = 100
         Int preemptible_number = 4
     }
     parameter_meta {

@@ -76,12 +76,6 @@ task Impl {
         date 1>&2
         df -h 1>&2
         
-        # Removing ORIGINAL_ID
-        for CHUNK in $(echo ~{chunk_ids} | tr ',' ' '); do
-            ${TIME_COMMAND} bcftools annotate --remove INFO/ORIGINAL_ID --output-type b chunk_${CHUNK}.bcf --output chunk_${CHUNK}_cleaned.bcf
-            rm -f chunk_${CHUNK}.bcf* ; mv chunk_${CHUNK}_cleaned.bcf chunk_${CHUNK}.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK}.bcf
-        done
-        
         # Concatenating
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type b --output merged.bcf
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f merged.bcf
