@@ -270,16 +270,6 @@ bcftools view --output-type b ${INPUT_BCF} ${CHROMOSOME} --output ./${CHROMOSOME
 bcftools index -f ./${CHROMOSOME}/${INPUT_BCF}
 END
         chmod +x chunk_by_chr.sh
-        cat << 'END' > chunk_by_region.sh
-#!/bin/bash
-INPUT_BCF=$1
-CHROMOSOME=$2
-REGION=$3
-CHUNK_ID=$4
-bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output ./${CHROMOSOME}/chunk_${CHUNK_ID}.bcf
-bcftools index -f ./${CHROMOSOME}/chunk_${CHUNK_ID}.bcf
-END
-        chmod +x chunk_by_region.sh        
         
         
         

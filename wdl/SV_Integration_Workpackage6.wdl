@@ -19,7 +19,7 @@ workflow SV_Integration_Workpackage6 {
     }
     parameter_meta {
         bcftools_chunks: "Comma-separated and sorted integers. Chunks are assumed to be sorted by POS."
-        truvari_chunk_min_records: "Min number of records per output chunk. It has to be set to a small number (e.g. 2000) for truvari divide not to use too much RAM."
+        truvari_chunk_min_records: "Min number of records per output chunk"
         truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is this value."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
