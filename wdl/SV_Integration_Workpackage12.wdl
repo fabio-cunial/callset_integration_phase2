@@ -1,8 +1,9 @@
 version 1.0
 
 
-# Performs a simple bcftools merge and truvari collapse of all the ultralong or
-# BND intra-sample VCFs.
+# Performs a simple bcftools merge of all the ultralong or BND intra-sample
+# VCFs. Stores in output per-chromosome VCFs that should then be split for
+# parallel truvari collapse.
 #
 workflow SV_Integration_Workpackage12 {
     input {
@@ -285,6 +286,7 @@ END
         
         # ---------------------------- Main program ----------------------------
         
+        echo ~{chromosomes} | tr ',' '\n' > chromosomes.txt
         LocalizeFiles
         
         # Trivial "hierarchical" bcftools merge with just two steps.
@@ -309,7 +311,6 @@ END
         rm -rf ./input_files/
         
         # Step 2: merging all samples over each chromosome.
-        echo ~{chromosomes} | tr ',' '\n' > chromosomes.txt
         rm -f files_list.txt
         while read CHROMOSOME; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
