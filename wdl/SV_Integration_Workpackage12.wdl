@@ -70,9 +70,9 @@ workflow SV_Integration_Workpackage12 {
 # Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong VCFs:
 #
 # TOOL                           CPU     RAM     TIME
-# gcloud storage cp                         // Whole genome
-# bcftools merge level 1        300%    600M      10s           // Whole genome
-# bcftools norm level 1         400%    300M      10s   // Whole genome
+# gcloud storage cp                                3m            // Whole genome
+# bcftools merge level 1        300%    600M      10s            // Whole genome
+# bcftools norm level 1         300%    300M      10s            // Whole genome
 # bcftools merge level 2                    // Per chunk
 # bcftools norm level 2                     // Per chunk
 #
@@ -288,14 +288,25 @@ task Impl {
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_merged.bcf*
             df -h 1>&2
-            # Splitting the result into genome chunks
+            # Splitting the result into genome chunks in parallel
+            cat << 'EOF' > script.sh
+            #!/bin/bash
+            ID=$1
+            INTERVAL=$2
+            INPUT_BCF=$3
+            echo ${INTERVAL} | tr ',' '\t' > targets_${ID}.bed
+            bcftools view --targets-file targets_${ID}.bed --output-type b ${INPUT_BCF} --output ./chunk_${ID}/${INPUT_BCF}
+            bcftools index ./chunk_${ID}/${INPUT_BCF_ID}.bcf
+            rm -f targets_${ID}.bed
+            EOF
+            chmod +x script.sh
+            rm -f jobs.tsv
             i="0"
             while read INTERVAL; do
-                echo ${INTERVAL} | tr ',' '\t' > targets.bed
-                bcftools view --threads ${N_THREADS} --targets-file targets.bed --output-type b ${LIST_FILE}_normed.bcf --output ./chunk_${i}/${LIST_FILE}.bcf
-                bcftools index --threads ${N_THREADS} ./chunk_${i}/${LIST_FILE}.bcf
+                echo -e "${i}\t${INTERVAL}\t${LIST_FILE}_normed.bcf" >> jobs.tsv
                 i=$(( ${i} + 1 ))
             done < ~{split_for_bcftools_merge_csv}
+            ${TIME_COMMAND} xargs --arg-file=jobs.tsv --max-lines=1 --max-procs=${N_THREADS} ./script.sh
             rm -f ${LIST_FILE}_normed.bcf*
         done
         rm -rf ./input_files/
