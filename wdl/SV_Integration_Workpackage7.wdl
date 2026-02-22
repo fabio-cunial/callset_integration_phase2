@@ -49,7 +49,7 @@ workflow SV_Integration_Workpackage7 {
 # truvari collapse   100%      8G    3-30m  500M
 # bcftools sort      100%      2G       1m
 #
-# Peak disk (with `removed.vcf`): 16G
+# Peak disk (old measurement with `removed.vcf`): 16G
 #
 task Impl {
     input {

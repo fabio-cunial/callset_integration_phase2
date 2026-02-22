@@ -8,8 +8,8 @@ workflow SV_Integration_Workpackage13 {
     input {
         String chromosome_id
         String suffix
-        Int truvari_chunk_min_records
-        Int truvari_collapse_refdist
+        Int truvari_chunk_min_records = 2000
+        Int truvari_collapse_refdist = 1000
         Int consistency_checks
         
         String remote_indir
@@ -31,6 +31,7 @@ workflow SV_Integration_Workpackage13 {
             suffix = suffix,
             truvari_chunk_min_records = truvari_chunk_min_records,
             truvari_collapse_refdist = truvari_collapse_refdist,
+            consistency_checks = consistency_checks,
             
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
@@ -80,6 +81,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         
         
         
