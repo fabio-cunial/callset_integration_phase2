@@ -9,7 +9,7 @@ workflow SV_Integration_Workpackage12 {
         File sample_ids
         String suffix = "ultralong"
         Array[String] bi_samples_to_prefer_over_ha
-        File split_for_bcftools_merge_csv
+        String chromosomes = "chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX,chrY"
         
         String remote_indir_bi
         String remote_indir_ha
@@ -41,7 +41,7 @@ workflow SV_Integration_Workpackage12 {
             sample_ids = sample_ids,
             suffix = suffix,
             bi_samples_to_prefer_over_ha = bi_samples_to_prefer_over_ha,
-            split_for_bcftools_merge_csv = split_for_bcftools_merge_csv,
+            chromosomes = chromosomes,
             
             remote_indir_bi = remote_indir_bi,
             remote_indir_ha = remote_indir_ha,
@@ -83,7 +83,7 @@ task Impl {
         File sample_ids
         String suffix
         Array[String] bi_samples_to_prefer_over_ha
-        File split_for_bcftools_merge_csv
+        String chromosomes
         
         String remote_indir_bi
         String remote_indir_ha
@@ -265,14 +265,20 @@ task Impl {
         # ---------------------------- Main program ----------------------------
         # Trivial "hierarchical" bcftools merge with just two steps.
         
-        LocalizeFiles
-        i="0"
-        while read INTERVAL; do
-            mkdir -p ./chunk_${i}/
-            i=$(( ${i} + 1 ))
-        done < ~{split_for_bcftools_merge_csv}
+        echo ~{chromosomes} | tr ',' '\n' > chromosomes.txt
+        cat << 'END' > script.sh
+#!/bin/bash
+INPUT_BCF=$1
+CHROMOSOME=$2
+mkdir -p ./${CHROMOSOME}/
+bcftools view --output-type b ${INPUT_BCF} ${CHROMOSOME} --output ./${CHROMOSOME}/${INPUT_BCF}
+bcftools index ./${CHROMOSOME}/${INPUT_BCF}
+END
+        chmod +x script.sh
         
-        # Step 1: merging a few samples over the whole genome.
+        LocalizeFiles
+        
+        # Step 1: merging a few samples at a time over the whole genome.
         rm -f list.txt
         while read SAMPLE_ID; do
             echo ./input_files/${SAMPLE_ID}_~{suffix}.bcf >> list.txt
@@ -282,48 +288,26 @@ task Impl {
         for LIST_FILE in $(ls list_* | sort -V); do
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
-            df -h 1>&2
             xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf --output ${LIST_FILE}_normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_merged.bcf*
-            df -h 1>&2
-            # Splitting the result into genome chunks in parallel
-            cat << 'END' > script.sh
-#!/bin/bash
-ID=$1
-INTERVAL=$2
-INPUT_BCF=$3
-echo ${INTERVAL} | tr ',' '\t' > targets_${ID}.bed
-bcftools view --targets-file targets_${ID}.bed --output-type b ${INPUT_BCF} --output ./chunk_${ID}/${INPUT_BCF}
-bcftools index ./chunk_${ID}/${INPUT_BCF}
-rm -f targets_${ID}.bed
-END
-            chmod +x script.sh
-            rm -f jobs.tsv
-            i="0"
-            while read INTERVAL; do
-                echo -e "${i}\t${INTERVAL}\t${LIST_FILE}_normed.bcf" >> jobs.tsv
-                i=$(( ${i} + 1 ))
-            done < ~{split_for_bcftools_merge_csv}
-            ${TIME_COMMAND} xargs --arg-file=jobs.tsv --max-lines=1 --max-procs=${N_THREADS} ./script.sh
+            ${TIME_COMMAND} xargs --arg-file=chromosomes.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ./${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_normed.bcf*
         done
         rm -rf ./input_files/
         
-        # Step 2: merging all samples over each genome chunk.
-        i="0"
-        while read INTERVAL; do
-            ls ./chunk_${i}/list_*.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b --output ./chunk_${i}/merged.bcf
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./chunk_${i}/merged.bcf
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ./chunk_${i}/merged.bcf --output ./chunk_${i}/normed.bcf
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./chunk_${i}/normed.bcf
-            mv ./chunk_${i}/normed.bcf ./chunk_${i}.bcf
-            mv ./chunk_${i}/normed.bcf.csi ./chunk_${i}.bcf.csi
-            rm -rf ./chunk_${i}/
-            i=$(( ${i} + 1 ))
-        done < ~{split_for_bcftools_merge_csv}
+        # Step 2: merging all samples over each chromosome.
+        while read CHROMOSOME; do
+            ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/merged.bcf
+            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ./${CHROMOSOME}/merged.bcf --output ./${CHROMOSOME}/normed.bcf
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/normed.bcf
+            mv ./${CHROMOSOME}/normed.bcf ./${CHROMOSOME}.bcf
+            mv ./${CHROMOSOME}/normed.bcf.csi ./${CHROMOSOME}.bcf.csi
+            rm -rf ./${CHROMOSOME}/
+        done < chromosomes.txt
         df -h 1>&2
         ls -laht 1>&2
         
