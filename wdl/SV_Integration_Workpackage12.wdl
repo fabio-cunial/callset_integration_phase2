@@ -289,7 +289,7 @@ task Impl {
             rm -f ${LIST_FILE}_merged.bcf*
             df -h 1>&2
             # Splitting the result into genome chunks in parallel
-            cat << 'EOF' > script.sh
+            cat << 'END' > script.sh
             #!/bin/bash
             ID=$1
             INTERVAL=$2
@@ -298,7 +298,7 @@ task Impl {
             bcftools view --targets-file targets_${ID}.bed --output-type b ${INPUT_BCF} --output ./chunk_${ID}/${INPUT_BCF}
             bcftools index ./chunk_${ID}/${INPUT_BCF_ID}.bcf
             rm -f targets_${ID}.bed
-            EOF
+            END
             chmod +x script.sh
             rm -f jobs.tsv
             i="0"
