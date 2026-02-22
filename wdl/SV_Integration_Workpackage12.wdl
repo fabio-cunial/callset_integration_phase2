@@ -73,8 +73,8 @@ workflow SV_Integration_Workpackage12 {
 # gcloud storage cp                                3m            // Whole genome
 # bcftools merge level 1        300%    600M      10s            // Whole genome
 # bcftools norm level 1         300%    300M      10s            // Whole genome
-# bcftools merge level 2                    // Per chunk
-# bcftools norm level 2                     // Per chunk
+# bcftools merge level 2        200%    3.5G       4m            // Per chr
+# bcftools norm level 2         250%      4G       2m            // Per chr
 #
 # Peak disk usage (all input files): 10G
 #
@@ -104,7 +104,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 16
+        Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number = 4
     }
@@ -260,24 +260,34 @@ task Impl {
         }
         
         
-        
-        
-        # ---------------------------- Main program ----------------------------
-        # Trivial "hierarchical" bcftools merge with just two steps.
-        
-        echo ~{chromosomes} | tr ',' '\n' > chromosomes.txt
-        cat << 'END' > script.sh
+        cat << 'END' > chunk_by_chr.sh
 #!/bin/bash
 INPUT_BCF=$1
 CHROMOSOME=$2
 mkdir -p ./${CHROMOSOME}/
 bcftools view --output-type b ${INPUT_BCF} ${CHROMOSOME} --output ./${CHROMOSOME}/${INPUT_BCF}
-bcftools index ./${CHROMOSOME}/${INPUT_BCF}
+bcftools index -f ./${CHROMOSOME}/${INPUT_BCF}
 END
-        chmod +x script.sh
+        chmod +x chunk_by_chr.sh
+        cat << 'END' > chunk_by_region.sh
+#!/bin/bash
+INPUT_BCF=$1
+CHROMOSOME=$2
+REGION=$3
+CHUNK_ID=$4
+bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output ./${CHROMOSOME}/chunk_${CHUNK_ID}.bcf
+bcftools index -f ./${CHROMOSOME}/chunk_${CHUNK_ID}.bcf
+END
+        chmod +x chunk_by_region.sh        
+        
+        
+        
+        
+        # ---------------------------- Main program ----------------------------
         
         LocalizeFiles
         
+        # Trivial "hierarchical" bcftools merge with just two steps.
         # Step 1: merging a few samples at a time over the whole genome.
         rm -f list.txt
         while read SAMPLE_ID; do
@@ -289,30 +299,37 @@ END
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
             xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
+            rm -f ${LIST_FILE}
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf --output ${LIST_FILE}_normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_merged.bcf*
-            ${TIME_COMMAND} xargs --arg-file=chromosomes.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ./${LIST_FILE}_normed.bcf
+            ${TIME_COMMAND} xargs --arg-file=chromosomes.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_chr.sh ./${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_normed.bcf*
         done
         rm -rf ./input_files/
         
         # Step 2: merging all samples over each chromosome.
+        echo ~{chromosomes} | tr ',' '\n' > chromosomes.txt
+        rm -f files_list.txt
         while read CHROMOSOME; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/merged.bcf
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ./${CHROMOSOME}/merged.bcf --output ./${CHROMOSOME}/normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/normed.bcf
-            mv ./${CHROMOSOME}/normed.bcf ./${CHROMOSOME}.bcf
-            mv ./${CHROMOSOME}/normed.bcf.csi ./${CHROMOSOME}.bcf.csi
+            mv ./${CHROMOSOME}/normed.bcf ${CHROMOSOME}.bcf
+            mv ./${CHROMOSOME}/normed.bcf.csi ${CHROMOSOME}.bcf.csi
+            echo "${CHROMOSOME}.bcf" >> files_list.txt
+            echo "${CHROMOSOME}.bcf.csi" >> files_list.txt
             rm -rf ./${CHROMOSOME}/
         done < chromosomes.txt
         df -h 1>&2
         ls -laht 1>&2
         
         # Uploading
-        gcloud storage mv 'chunk_*.bcf*' ~{remote_outdir}/
+        date 1>&2
+        cat files_list.txt | gcloud storage mv -I ~{remote_outdir}/
+        date 1>&2
     >>>
     
     output {
