@@ -290,15 +290,15 @@ task Impl {
             df -h 1>&2
             # Splitting the result into genome chunks in parallel
             cat << 'END' > script.sh
-            #!/bin/bash
-            ID=$1
-            INTERVAL=$2
-            INPUT_BCF=$3
-            echo ${INTERVAL} | tr ',' '\t' > targets_${ID}.bed
-            bcftools view --targets-file targets_${ID}.bed --output-type b ${INPUT_BCF} --output ./chunk_${ID}/${INPUT_BCF}
-            bcftools index ./chunk_${ID}/${INPUT_BCF_ID}.bcf
-            rm -f targets_${ID}.bed
-            END
+#!/bin/bash
+ID=$1
+INTERVAL=$2
+INPUT_BCF=$3
+echo ${INTERVAL} | tr ',' '\t' > targets_${ID}.bed
+bcftools view --targets-file targets_${ID}.bed --output-type b ${INPUT_BCF} --output ./chunk_${ID}/${INPUT_BCF}
+bcftools index ./chunk_${ID}/${INPUT_BCF}
+rm -f targets_${ID}.bed
+END
             chmod +x script.sh
             rm -f jobs.tsv
             i="0"
