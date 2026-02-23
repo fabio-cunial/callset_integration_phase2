@@ -152,12 +152,11 @@ task Impl {
             ls -laht 1>&2
             rm -f chunk_${CHUNK_ID}_in.vcf ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
                 
-            # Dropping the IDs written by truvari collapse, since they can be
-            # very long on a large cohort and needlessly inflate output size.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t\n' chunk_${CHUNK_ID}_in.bcf | awk -v id=${CHUNK_ID} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
-            tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
-            rm -f chunk_${CHUNK_ID}_in.bcf ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
+            # Setting to `.` every ID written by truvari collapse, since these
+            # can be very long in a large cohort and needlessly inflate output
+            # size. Unique IDs genome-wide will be assigned downstream.
+            ${TIME_COMMAND} bcftools annotate --remove ID --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
+            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
                 
             mv chunk_${CHUNK_ID}_in.bcf chunk_${CHUNK_ID}_truvari.bcf
             mv chunk_${CHUNK_ID}_in.bcf.csi chunk_${CHUNK_ID}_truvari.bcf.csi

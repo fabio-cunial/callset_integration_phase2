@@ -29,7 +29,7 @@ public class BndStats {
             else if (tokens[0].charAt(3)=='Y') from=24;
             else from=Integer.parseInt(tokens[0].substring(3));
             to=0;
-            for (i=1; i<=22; i++) {
+            for (i=22; i>=1; i--) {
                 if (tokens[1].indexOf("chr"+i)>=0) { to=i; break; }
             }
             if (to==0) {
