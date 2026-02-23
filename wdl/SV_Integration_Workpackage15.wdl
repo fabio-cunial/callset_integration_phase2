@@ -9,7 +9,7 @@ version 1.0
 #
 workflow SV_Integration_Workpackage15 {
     input {
-        Array[String] chromosomes = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY","chrM"]
+        Array[String] chromosomes = ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY"]
         String remote_indir
         String remote_outdir
         Int concat_all_naive = 1
@@ -49,7 +49,7 @@ workflow SV_Integration_Workpackage15 {
 # Performance on 12'680 samples, 15x, GRCh38, chr1, HDD:
 #
 # TOOL                           CPU     RAM   TIME
-# bcftools concat               
+# bcftools concat                
 # bcftools query                
 # bcftools annotate             
 #
@@ -60,9 +60,9 @@ task SingleChromosome {
         String remote_outdir
         
         String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 4
-        Int disk_size_gb = 200
+        Int n_cpu = 1
+        Int ram_size_gb = 2
+        Int disk_size_gb = 10
         Int preemptible_number = 4
     }
     parameter_meta {
