@@ -22,7 +22,7 @@ workflow SV_Integration_Workpackage14 {
     parameter_meta {
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
-        truvari_matching_parameters: "Truvari's definition of a match. The default string contains truvari's defaults."
+        truvari_matching_parameters: "Truvari's definition of a match. The default string contains truvari's defaults. Sequence similarity is turned off for speed reasons."
     }
     
     call Impl {
@@ -161,8 +161,8 @@ task Impl {
             mv chunk_${CHUNK_ID}_annotated.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
             mv chunk_${CHUNK_ID}_annotated.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
             
-            # Remark: we do not store `removed.vcf` since it's several GBs per
-            # chunk and much bigger than the collapsed output.
+            # Remark: we do not store `removed.vcf` since it's not needed and
+            # it can be much bigger than the collapsed output.
             ${TIME_COMMAND} truvari collapse --sizemin 0 --sizemax ${INFINITY} --keep maxqual --gt off ~{truvari_matching_parameters} ${BED_FLAGS} --input chunk_${CHUNK_ID}_in.vcf.gz --output chunk_${CHUNK_ID}_out.vcf --removed-output /dev/null
             df -h 1>&2
             ls -laht 1>&2

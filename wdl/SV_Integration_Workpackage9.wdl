@@ -95,7 +95,7 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-        GSUTIL_DELAY_S="600"
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         export RUST_BACKTRACE="full"
         
         
@@ -199,13 +199,17 @@ task Impl {
         INFINITY="1000000000"
         ~{docker_dir}/kanpig --version 1>&2
         
-        # Localizing frequent and infrequent BCFs
-        date 1>&2
-        gcloud storage cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' .
-        date 1>&2
+        # Localizing frequent/infrequent BCFs. Splitting the infrequent BCF, so
+        # that it is traversed only once.
+        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/frequent.'bcf*' ~{remote_indir}/infrequent.'bcf*' .
+        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
+        cut -d , -f 1 chunk.csv > samples.txt
+        mkdir -p ./infrequent_bcfs/
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output ./infrequent_bcfs/ infrequent.bcf
+        rm -f infrequent.bcf* samples.txt
+        ls -lah ./infrequent_bcfs/* 1>&2
         
         # Re-genotyping every sample assigned to this task
-        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
@@ -213,14 +217,14 @@ task Impl {
             # Skipping the sample if it has already been processed
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
+                rm -f ./infrequent_bcfs/${SAMPLE_ID}.bcf*
                 continue
             fi
             
-            # Re-genotyping
+            # Re-genotyping a personalized VCF
             LocalizeSample ${SAMPLE_ID} ${LINE}
-            date 1>&2
-            bcftools view --samples ${SAMPLE_ID} --output-type u infrequent.bcf | bcftools view --include 'GT="alt"' --drop-genotypes --output-type b --output ${SAMPLE_ID}_infrequent.bcf
-            date 1>&2
+            ${TIME_COMMAND} bcftools view --include 'GT="alt"' --drop-genotypes --output-type b ./infrequent_bcfs/${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_infrequent.bcf
+            rm -f ./infrequent_bcfs/${SAMPLE_ID}.bcf*
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_infrequent.bcf
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_personalized.vcf.gz
