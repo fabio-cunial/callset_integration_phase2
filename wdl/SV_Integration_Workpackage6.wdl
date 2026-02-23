@@ -135,15 +135,17 @@ task Impl {
         ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2 pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} ${N_RECORDS} > regions.txt
         rm -f pos_ref_alt.tsv
-        echo '#!/bin/bash' > script.sh
-        echo 'INPUT_BCF=$1' >> script.sh
-        echo 'REGION=$2' >> script.sh
-        echo 'CHUNK_ID=$3' >> script.sh
-        echo 'bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output chunk_${CHUNK_ID}.bcf' >> script.sh
-        echo 'bcftools index -f chunk_${CHUNK_ID}.bcf' >> script.sh
-        echo 'df -h 1>&2' >> script.sh
-        chmod +x script.sh
-        ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./script.sh ~{chromosome_id}.bcf
+        cat << 'END' > chunk_by_region.sh
+#!/bin/bash
+INPUT_BCF=$1
+REGION=$2
+CHUNK_ID=$3
+bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output chunk_${CHUNK_ID}.bcf
+bcftools index -f chunk_${CHUNK_ID}.bcf
+df -h 1>&2
+END
+        chmod +x chunk_by_region.sh
+        ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_region.sh ~{chromosome_id}.bcf
         ls -laht 1>&2
         df -h  1>&2
         rm -f ~{chromosome_id}.bcf*

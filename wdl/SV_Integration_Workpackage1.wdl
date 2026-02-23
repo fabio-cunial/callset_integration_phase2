@@ -723,6 +723,19 @@ task Impl {
         }
         
         
+        cat << 'END' > truvari_bench.sh
+#!/bin/bash
+SAMPLE_ID=$1
+INPUT_VCF_GZ=$2
+TRAINING_RESOURCE_VCF_GZ=$3
+INFINITY=$4
+CHUNK_ID=$5
+INCLUDE_BED=$5
+${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
+END
+        chmod +x truvari_bench.sh
+        
+        
         # Extracts every record that has a stringent `truvari bench` match with
         # some records in the resource.
         #
@@ -748,15 +761,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             
             # Running in parallel
-            echo '#!/bin/bash' > ${SAMPLE_ID}_script.sh
-            echo 'SAMPLE_ID=$1' >> ${SAMPLE_ID}_script.sh
-            echo 'INPUT_VCF_GZ=$2' >> ${SAMPLE_ID}_script.sh
-            echo 'CHUNK_ID=$3' >> ${SAMPLE_ID}_script.sh
-            echo 'INCLUDE_BED=$4' >> ${SAMPLE_ID}_script.sh
-            echo ${TIME_COMMAND}' truvari bench -b '~{training_resource_vcf_gz}' -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax '${INFINITY}' --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/' >> ${SAMPLE_ID}_script.sh
-            cat ${SAMPLE_ID}_script.sh 1>&2
-            chmod +x ${SAMPLE_ID}_script.sh
-            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./${SAMPLE_ID}_script.sh ${SAMPLE_ID} ${INPUT_VCF_GZ}
+            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./truvari_bench.sh ${SAMPLE_ID} ${INPUT_VCF_GZ} ~{training_resource_vcf_gz} ${INFINITY}
             
             # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
