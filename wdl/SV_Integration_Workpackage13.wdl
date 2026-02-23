@@ -108,8 +108,9 @@ END
         
         gcloud storage cp ~{remote_indir}/~{chromosome_id}.'bcf*' .
         
-        # Removing symbolic INS. This is just a temporary fix and should have
-        # been done in Workpackage1.
+        # Removing symbolic INS. This is just a temporary fix and should be
+        # removed, since we have fixed Workpackage1. The code is still here in
+        # case we need to run another iteration on the current data.
         if [ ~{suffix} = "ultralong" ]; then
             ${TIME_COMMAND} bcftools filter --exclude 'ALT="<INS>"' --output-type b ~{chromosome_id}.bcf --output out.bcf
             rm -f ~{chromosome_id}.bcf* ; mv out.bcf ~{chromosome_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf

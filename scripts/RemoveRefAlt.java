@@ -58,7 +58,15 @@ public class RemoveRefAlt {
                 str=br.readLine();
                 continue;
             }
-            ref=tokens[3]; alt=tokens[4]; info=tokens[7];
+            ref=tokens[3]; alt=tokens[4]; 
+            if (alt.equalsIgnoreCase("<INS>")) {
+                // Discarded: symbolic INS, even if they might have an SVLEN,
+                // are not verifiable downstream.
+                nDiscarded++;
+                str=br.readLine();
+                continue;
+            }
+            info=tokens[7];
             c=ref.charAt(0);
             refIsDna = ref.length()>=1 && (c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n');
             c=alt.charAt(0);

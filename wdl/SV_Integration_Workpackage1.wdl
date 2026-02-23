@@ -467,7 +467,7 @@ task Impl {
         # length at similar POS may be wrongly collapsed. We tolerate this for
         # speed reasons.
         #
-        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # Remark: the function's inputs are indexed `.vcf.gz`, since they are
         # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
         # downstream.
         #
@@ -813,7 +813,10 @@ END
             CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
             
-            # Copying SUPP fields to INFO in the BND and ultralong VCFs as well
+            # Copying SUPP fields to INFO in the BND and ultralong VCFs as well,
+            # just for uniformity. The original SUPP in FORMAT remains there,
+            # and since these VCFs won't be re-genotyped with kanpig, it will be
+            # correctly preserved by cohort-level truvari collapse.
             CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_bnd.vcf.gz b ${SAMPLE_ID}_bnd_supp.bcf
             mv ${SAMPLE_ID}_bnd_supp.bcf ${SAMPLE_ID}_bnd.bcf
             mv ${SAMPLE_ID}_bnd_supp.bcf.csi ${SAMPLE_ID}_bnd.bcf.csi
