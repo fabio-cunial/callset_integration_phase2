@@ -52,6 +52,10 @@ workflow SV_Integration_Workpackage13 {
 #
 # Peak disk usage (all input files): 10G
 #
+# Remark: `TruvariDivide2Ultralong.java` tends to create few chunks in the
+# ultralong cohort VCF in practice. It might be more effective to partition the
+# VCF by SVTYPE before splitting, to reduce overlaps.
+#
 task Impl {
     input {
         String chromosome_id

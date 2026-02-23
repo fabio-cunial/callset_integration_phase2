@@ -43,17 +43,16 @@ workflow SV_Integration_Workpackage14 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, one 5 MB chunk of chr6,
-# CAL_SENS<=0.999:
+# Performance on 12'680 samples, 15x, GRCh38, a chunk with the whole chr1:
 #
 # TOOL                      CPU     RAM     TIME   OUTPUT VCF
-# bcftools view | awk
-# bcftools query     
-# bcftools annotate  
-# truvari collapse   
-# bcftools sort      
+# bcftools view | awk                        15m
+# bcftools query            30%      2G       3m
+# bcftools annotate        200%      5G       5m
+# truvari collapse         100%   13.5G      50m
+# bcftools sort            100%      3G       2m
 #
-# Peak disk (old measurement with `removed.vcf`): 16G
+# Peak disk: 17G
 #
 task Impl {
     input {
