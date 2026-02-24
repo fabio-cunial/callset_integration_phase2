@@ -555,3 +555,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_Workpackage15.wdl
   testParameterFiles:
+- name: InvestigateMaleSamples
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InvestigateMaleSamples.wdl
+  testParameterFiles:
