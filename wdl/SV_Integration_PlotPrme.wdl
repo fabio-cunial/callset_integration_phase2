@@ -20,15 +20,11 @@ workflow SV_Integration_PlotPrme {
         Int precision_recall_bench_method
         Array[String] precision_recall_samples
         Array[String] precision_recall_sex
-        Array[File] precision_recall_bam
-        Array[File] precision_recall_bai
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
         
         Array[String] mendelian_error_samples
         Array[String] mendelian_error_sex
-        Array[File] mendelian_error_bam
-        Array[File] mendelian_error_bai
         File mendelian_error_ped
         Int mendelian_error_n_trios
         
