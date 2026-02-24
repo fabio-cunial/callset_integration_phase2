@@ -11,7 +11,6 @@ workflow InvestigateMaleSamples2 {
         Int max_sv_length = 10000
         
         Array[String] precision_recall_samples
-        Array[String] precision_recall_sex
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
         

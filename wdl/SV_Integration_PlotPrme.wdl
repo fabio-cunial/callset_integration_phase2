@@ -191,8 +191,6 @@ task SplitBcfBySample {
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
         rm -f merged.bcf*
         for FILE in $(ls *.bcf); do
-            SAMPLE_ID=$(basename ${FILE} .bcf)
-            mv ${FILE} ${SAMPLE_ID}.bcf
             bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
         done
         ls -laht
