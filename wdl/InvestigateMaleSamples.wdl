@@ -70,7 +70,7 @@ workflow InvestigateMaleSamples {
 task Impl {
     input {
         File sv_integration_chunk_tsv
-        String regions
+        String region
         String remote_outdir
         
         Int min_sv_length
