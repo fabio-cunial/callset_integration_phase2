@@ -1,5 +1,6 @@
 version 1.0
 
+
 # Remark: this workflow uses .vcf.gz everywhere, instead of .bcf, just for
 # simplicity when calling tools based on this format.
 #
@@ -10,6 +11,7 @@ workflow SV_Integration_PlotHwe {
         
         Int sv_length_threshold = 50
         Int smaller_or_larger = 1
+        String frequent_field = "N_DISCOVERY_SAMPLES"
         Int min_discovery_count = 1268
         Int max_distance_bp = 500
         String limit_to_chromosome = "all"
@@ -94,6 +96,7 @@ workflow SV_Integration_PlotHwe {
         input:
             bcf = all.out_vcf_gz,
             csi = all.out_tbi,
+            field = frequent_field,
             min_count = min_discovery_count,
             smaller_or_larger = 1
     }
@@ -114,6 +117,7 @@ workflow SV_Integration_PlotHwe {
         input:
             bcf = all.out_vcf_gz,
             csi = all.out_tbi,
+            field = frequent_field,
             min_count = min_discovery_count,
             smaller_or_larger = 0
     }
@@ -149,6 +153,7 @@ workflow SV_Integration_PlotHwe {
         input:
             bcf = biallelic_length.out_vcf_gz,
             csi = biallelic_length.out_tbi,
+            field = frequent_field,
             min_count = min_discovery_count,
             smaller_or_larger = 1
     }
