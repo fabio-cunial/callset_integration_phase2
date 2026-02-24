@@ -70,7 +70,7 @@ workflow InvestigateMaleSamples {
 task Impl {
     input {
         File sv_integration_chunk_tsv
-        String region
+        String regions
         String remote_outdir
         
         Int min_sv_length
@@ -530,7 +530,7 @@ INPUT_VCF_GZ=$2
 TRAINING_RESOURCE_VCF_GZ=$3
 INFINITY=$4
 CHUNK_ID=$5
-INCLUDE_BED=$5
+INCLUDE_BED=$6
 ${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
