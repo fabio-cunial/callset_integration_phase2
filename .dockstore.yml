@@ -560,3 +560,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InvestigateMaleSamples.wdl
   testParameterFiles:
+- name: SV_Integration_PlotPrme
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_PlotPrme.wdl
+  testParameterFiles:
