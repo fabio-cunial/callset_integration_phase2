@@ -291,49 +291,6 @@ workflow SV_Integration_PlotHwe {
 }
 
 
-#
-task Bcf2Vcf {
-    input {
-        File bcf
-        File csi
-        
-        Int n_cpu = 8
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        
-        
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type z ~{bcf} --output out.vcf.gz
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
-    >>>
-
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-    }
-
-    runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
-    }
-}
-
-
 # Remark: the task keeps only autosomal calls.
 #
 task FilterByLengthAndType {
@@ -365,6 +322,7 @@ task FilterByLengthAndType {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         if [ ~{limit_to_chromosome} = "all" ]; then
+            # Autosomes only
             for CHR in $(seq 1 22); do
                 echo -e "chr${CHR}\t0\t3000000000" >> list.bed
             done
