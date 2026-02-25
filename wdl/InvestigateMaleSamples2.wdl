@@ -218,43 +218,55 @@ task PrecisionRecallAnalysis {
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
             # Keeping only records in the given chromosome
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             ${TIME_COMMAND} bcftools view --output-type b ${SAMPLE_ID}_in.vcf.gz ~{chromosome} --output ${SAMPLE_ID}_out.bcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             
             # Splitting multiallelic records into biallelic records
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             ${TIME_COMMAND} bcftools norm --multiallelics - --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             
             # Removing SNVs, records with unresolved REF/ALT, records that are
             # not marked as present, and records with a FILTER. 
             # Remark: in chrY we keep calls with any FILTER and any GT,
             # otherwise the number of calls becomes very small.
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             if [ ~{chromosome} = "chrY" ]; then
                 ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             else
                 ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             fi
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             
             # Removing records in reference gaps
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.bcf)
             ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             
             # Keeping only records in the dipcall BED.
             # Remark: we do not do this in chrY, otherwise the number of calls
             # becomes very small.
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             if [ ~{chromosome} != "chrY" ]; then
                 ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             fi
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             
             # Making sure SVLEN and SVTYPE are consistently annotated
             truvari anno svinfo --minsize 1 ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the given length range
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz)
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
