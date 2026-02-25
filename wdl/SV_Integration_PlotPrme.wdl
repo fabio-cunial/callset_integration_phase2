@@ -348,8 +348,8 @@ task PrecisionRecallAnalysis {
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
             # Splitting multiallelic records into biallelic records
-            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
-            rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type b ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
             # Removing SNVs, records with unresolved REF/ALT, records that are
             # not marked as present, and records with a FILTER. 
@@ -587,9 +587,9 @@ task BenchTrio {
         MOTHER_ID=$(cut -f 4 ped.tsv)
         
         # Localizing. These files may contain 0/0 records.
-        TEST=$(gcloud storage cp ~{remote_indir}/${PROBAND_ID}_'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}_'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}_'*.vcf.gz*' . && echo 0 || echo 1)
+        TEST=$(gcloud storage cp ~{remote_indir}/${PROBAND_ID}'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}'*.vcf.gz*' . && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            gcloud storage cp ~{remote_indir}/${PROBAND_ID}_'*.bcf*' ~{remote_indir}/${FATHER_ID}_'*.bcf*' ~{remote_indir}/${MOTHER_ID}_'*.bcf*' .
+            gcloud storage cp ~{remote_indir}/${PROBAND_ID}'*.bcf*' ~{remote_indir}/${FATHER_ID}'*.bcf*' ~{remote_indir}/${MOTHER_ID}'*.bcf*' .
         fi
         
         # Ensuring a consistent format
