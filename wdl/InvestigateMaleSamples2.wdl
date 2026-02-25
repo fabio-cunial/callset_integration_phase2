@@ -388,7 +388,7 @@ task PrecisionRecallAnalysis {
         N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_truvari.bcf)
         ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
         rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari_present.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari_present.vcf.gz
-        N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_truvari.vcf.gz)
+        N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_truvari_present.vcf.gz)
         
         N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
         ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.bcf --output out.vcf.gz
