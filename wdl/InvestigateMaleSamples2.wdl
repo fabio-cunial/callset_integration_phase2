@@ -361,14 +361,14 @@ task PrecisionRecallAnalysis {
         gcloud storage cp ~{remote_dir}/~{sample_id}_kanpig.vcf.'gz*' .
         
         # Keeping only records in the given chromosome
-        N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_raw_truvari.vcf.gz)
-        ${TIME_COMMAND} bcftools view --output-type b ${SAMPLE_ID}_raw_truvari.vcf.gz ~{chromosome} --output out.bcf
-        rm -f ${SAMPLE_ID}_raw_truvari.vcf.gz* ; mv out.bcf ${SAMPLE_ID}_raw_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_raw_truvari.bcf
-        N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_raw_truvari.bcf)
-        N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
-        ${TIME_COMMAND} bcftools view --output-type b ${SAMPLE_ID}_kanpig.vcf.gz ~{chromosome} --output out.bcf
-        rm -f ${SAMPLE_ID}_kanpig.vcf.gz* ; mv out.bcf ${SAMPLE_ID}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_kanpig.bcf
-        N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.bcf)
+        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_raw_truvari.vcf.gz)
+        ${TIME_COMMAND} bcftools view --output-type b ~{sample_id}_raw_truvari.vcf.gz ~{chromosome} --output out.bcf
+        rm -f ~{sample_id}_raw_truvari.vcf.gz* ; mv out.bcf ~{sample_id}_raw_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_raw_truvari.bcf
+        N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_raw_truvari.bcf)
+        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_kanpig.vcf.gz)
+        ${TIME_COMMAND} bcftools view --output-type b ~{sample_id}_kanpig.vcf.gz ~{chromosome} --output out.bcf
+        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.bcf ~{sample_id}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_kanpig.bcf
+        N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
         
         # Keeping only records in the given length range
         N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_raw_truvari.vcf.gz)
