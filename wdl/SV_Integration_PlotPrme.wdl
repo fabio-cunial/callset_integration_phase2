@@ -191,7 +191,7 @@ task SplitBcfBySample {
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
         rm -f merged.bcf*
         for FILE in $(ls *.bcf); do
-            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
+            bcftools index --threads ${N_THREADS} -f ${FILE}
         done
         ls -laht
         gcloud storage cp '*.bcf*' ~{remote_outdir}/        
