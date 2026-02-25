@@ -382,17 +382,22 @@ task PrecisionRecallAnalysis {
         
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
+        bcftools view --output-type z ~{sample_id}_truvari.bcf --output ~{sample_id}_truvari_all.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari_all.vcf.gz
+        
         N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_truvari.bcf)
         ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
-        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
+        rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari_present.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari_present.vcf.gz
         N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_truvari.vcf.gz)
+        
         N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
         ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.bcf --output out.vcf.gz
         rm -f ~{sample_id}_kanpig.bcf* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
         N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_kanpig.vcf.gz)
         
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}_truvari.vcf.gz truvari_~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}_truvari_all.vcf.gz truvari_all_~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}_truvari_present.vcf.gz truvari_present_~{min_sv_length}bp
         Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig_~{min_sv_length}bp
         
         # Uploading
