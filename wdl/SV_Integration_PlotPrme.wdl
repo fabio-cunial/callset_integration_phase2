@@ -456,7 +456,7 @@ task PrecisionRecallAnalysis {
         wait
         
         # Localizing the VCF to benchmark
-        gcloud storage cp ~{remote_outdir}/~{sample_id}.'bcf*' .
+        gcloud storage cp ~{remote_outdir}/samples/~{sample_id}.'bcf*' .
         
         # Keeping only records in the given length range
         ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}.bcf --output out.bcf
