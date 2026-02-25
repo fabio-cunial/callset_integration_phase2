@@ -401,8 +401,8 @@ task PrecisionRecallAnalysis {
         Benchmark ~{sample_id} ~{sample_id}_kanpig.vcf.gz kanpig_~{min_sv_length}bp
         
         # Uploading
-        gcloud storage cp '*_truvari_*.txt' ~{remote_dir}/precision_recall/ 
-        gcloud storage cp '*_kanpig_*.txt' ~{remote_dir}/precision_recall/
+        gcloud storage cp '*_truvari_*.txt' ~{remote_dir}/precision_recall/~{chromosome}/
+        gcloud storage cp '*_kanpig_*.txt' ~{remote_dir}/precision_recall/~{chromosome}/
     >>>
     
     output {
