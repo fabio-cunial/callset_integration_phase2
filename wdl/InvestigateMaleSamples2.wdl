@@ -371,13 +371,13 @@ task PrecisionRecallAnalysis {
         N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
         
         # Keeping only records in the given length range
-        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_raw_truvari.vcf.gz)
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}_raw_truvari.vcf.gz --output out.bcf
-        rm -f ~{sample_id}_raw_truvari.vcf.gz* ; mv out.bcf ~{sample_id}_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_truvari.bcf
+        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_raw_truvari.bcf)
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}_raw_truvari.bcf --output out.bcf
+        rm -f ~{sample_id}_raw_truvari.bcf* ; mv out.bcf ~{sample_id}_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_truvari.bcf
         N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_truvari.bcf)
-        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_kanpig.vcf.gz)
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.vcf.gz --output out.bcf
-        rm -f ~{sample_id}_kanpig.vcf.gz* ; mv out.bcf ~{sample_id}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_kanpig.bcf
+        N_RECORDS_BEFORE=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.bcf --output out.bcf
+        rm -f ~{sample_id}_kanpig.bcf* ; mv out.bcf ~{sample_id}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_kanpig.bcf
         N_RECORDS_AFTER=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf)
         
         # Keeping only records that are genotyped as present. This is important,
