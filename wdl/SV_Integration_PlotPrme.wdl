@@ -595,18 +595,18 @@ task BenchTrio {
         # Ensuring a consistent format
         TEST=$(ls *.vcf.gz && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) --output ${PROBAND_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) --output ${FATHER_ID}_in.vcf.gz &
-            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) --output ${MOTHER_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}*.bcf) --output ${PROBAND_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}*.bcf) --output ${FATHER_ID}_in.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}*.bcf) --output ${MOTHER_ID}_in.vcf.gz &
             wait
             bcftools index --threads ${N_THREADS} -f -t ${PROBAND_ID}_in.vcf.gz &
             bcftools index --threads ${N_THREADS} -f -t ${FATHER_ID}_in.vcf.gz &
             bcftools index --threads ${N_THREADS} -f -t ${MOTHER_ID}_in.vcf.gz &
             wait
         else
-            mv $(ls ${PROBAND_ID}_*.vcf.gz) ${PROBAND_ID}_in.vcf.gz
-            mv $(ls ${FATHER_ID}_*.vcf.gz) ${FATHER_ID}_in.vcf.gz
-            mv $(ls ${MOTHER_ID}_*.vcf.gz) ${MOTHER_ID}_in.vcf.gz
+            mv $(ls ${PROBAND_ID}*.vcf.gz) ${PROBAND_ID}_in.vcf.gz
+            mv $(ls ${FATHER_ID}*.vcf.gz) ${FATHER_ID}_in.vcf.gz
+            mv $(ls ${MOTHER_ID}*.vcf.gz) ${MOTHER_ID}_in.vcf.gz
         fi
         echo ${PROBAND_ID}_in.vcf.gz > list.txt
         echo ${FATHER_ID}_in.vcf.gz >> list.txt
