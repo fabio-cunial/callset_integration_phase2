@@ -468,7 +468,7 @@ task PrecisionRecallAnalysis {
         rm -f ~{sample_id}.bcf* ; mv out.vcf.gz ~{sample_id}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}.vcf.gz
         
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}.vcf.gz final
+        Benchmark ~{sample_id} ~{sample_id}.vcf.gz ~{min_sv_length}bp
         
         # Uploading
         gcloud storage cp '*_final_*.txt' ~{remote_outdir}/precision_recall/ 
