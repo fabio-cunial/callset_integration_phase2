@@ -471,7 +471,7 @@ task PrecisionRecallAnalysis {
         Benchmark ~{sample_id} ~{sample_id}.vcf.gz ~{min_sv_length}bp
         
         # Uploading
-        gcloud storage cp '*_final_*.txt' ~{remote_outdir}/precision_recall/ 
+        gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
     >>>
     
     output {
