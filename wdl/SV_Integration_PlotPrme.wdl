@@ -661,6 +661,7 @@ task BenchTrio {
         
         # Uploading
         gcloud storage cp '*.txt' ~{remote_outdir}/
+        gcloud storage cp trio.vcf.gz ~{remote_outdir}/${PROBAND_ID}_trio.vcf.gz
     >>>
     
     output {
