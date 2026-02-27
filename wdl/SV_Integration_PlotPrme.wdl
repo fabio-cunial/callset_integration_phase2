@@ -187,7 +187,7 @@ task SplitBcfBySample {
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         gcloud storage cp ~{remote_workpackage_11_dir}/merged.'bcf*' .
-        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        echo ~{sep="," samples} | tr ',' '\n' | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
         rm -f merged.bcf*
         for FILE in $(ls *.bcf); do
@@ -586,9 +586,9 @@ task BenchTrio {
         MOTHER_ID=$(cut -f 4 ped.tsv)
         
         # Localizing. These files may contain 0/0 records.
-        TEST=$(gcloud storage cp ~{remote_indir}/${PROBAND_ID}'*.vcf.gz*' ~{remote_indir}/${FATHER_ID}'*.vcf.gz*' ~{remote_indir}/${MOTHER_ID}'*.vcf.gz*' . && echo 0 || echo 1)
+        TEST=$(gcloud storage cp ~{remote_indir}/${PROBAND_ID}.vcf.'gz*' ~{remote_indir}/${FATHER_ID}.vcf.'gz*' ~{remote_indir}/${MOTHER_ID}.vcf.'gz*' . && echo 0 || echo 1)
         if [ ${TEST} -eq 1 ]; then
-            gcloud storage cp ~{remote_indir}/${PROBAND_ID}'*.bcf*' ~{remote_indir}/${FATHER_ID}'*.bcf*' ~{remote_indir}/${MOTHER_ID}'*.bcf*' .
+            gcloud storage cp ~{remote_indir}/${PROBAND_ID}.'bcf*' ~{remote_indir}/${FATHER_ID}.'bcf*' ~{remote_indir}/${MOTHER_ID}.'bcf*' .
         fi
         
         # Ensuring a consistent format
@@ -618,12 +618,18 @@ task BenchTrio {
         # error is computed.
         
         # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output out.vcf.gz
-        rm -f ${PROBAND_ID}_in.vcf.gz* ; mv out.vcf.gz ${PROBAND_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${PROBAND_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output out.vcf.gz
-        rm -f ${FATHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${FATHER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${FATHER_ID}_in.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output out.vcf.gz
-        rm -f ${MOTHER_ID}_in.vcf.gz* ; mv out.vcf.gz ${MOTHER_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${MOTHER_ID}_in.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output ${PROBAND_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output ${FATHER_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output ${MOTHER_ID}_out.vcf.gz &
+        wait
+        rm -f ${PROBAND_ID}_in.vcf.gz* ${FATHER_ID}_in.vcf.gz* ${MOTHER_ID}_in.vcf.gz*
+        mv ${PROBAND_ID}_out.vcf.gz ${PROBAND_ID}_in.vcf.gz
+        mv ${FATHER_ID}_out.vcf.gz ${FATHER_ID}_in.vcf.gz
+        mv ${MOTHER_ID}_out.vcf.gz ${MOTHER_ID}_in.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ${PROBAND_ID}_in.vcf.gz &
+        bcftools index --threads ${N_THREADS} -f -t ${FATHER_ID}_in.vcf.gz &
+        bcftools index --threads ${N_THREADS} -f -t ${MOTHER_ID}_in.vcf.gz &
+        wait
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
