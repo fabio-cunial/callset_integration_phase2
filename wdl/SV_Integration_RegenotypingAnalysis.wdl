@@ -386,7 +386,7 @@ task SplitTruvariCollapsedBcfBySample {
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         gcloud storage cp ~{remote_workpackage_8_dir}/~{chromosome_id}/truvari_collapsed.'bcf*' .
-        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        echo ~{sep="," samples} | tr ',' '\n' | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
         rm -f truvari_collapsed.bcf*
         for FILE in $(ls *.bcf); do
@@ -454,7 +454,7 @@ task SplitInfrequentBcfBySample {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
-        echo ~{sep="," samples} | tr ',' '\n' > samples.txt
+        echo ~{sep="," samples} | tr ',' '\n' | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . ~{infrequent_bcf}
         
         # Keeping only present records. Removing FORMAT and SAMPLE.
@@ -971,8 +971,8 @@ task BenchTrio {
             
             # 2.2 Simple count (and saving the whole matrix for future analysis)
             ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${INPUT_VCF_GZ} | bgzip > ${SAMPLE_ID}_annotated.vcf.gz
-            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix.txt
-            ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix.txt > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
+            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix_${SUFFIX}.txt
+            ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix_${SUFFIX}.txt > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
         }
         

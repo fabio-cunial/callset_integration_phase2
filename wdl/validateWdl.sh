@@ -3,15 +3,15 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
-java -jar ${WOMTOOL_PATH} validate -l InvestigateMaleSamples2.wdl
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_RegenotypingAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_PlotPrme.wdl
+java -jar ${WOMTOOL_PATH} validate -l InvestigateMaleSamples2.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_PlotHwe.wdl
 java -jar ${WOMTOOL_PATH} validate -l InvestigateMaleSamples.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage15.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage14.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage13.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage12.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_RegenotypingAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage11.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage9.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage8.wdl
