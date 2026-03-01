@@ -1,7 +1,10 @@
 version 1.0
 
 
-# 
+# Investigates low performance in male samples by repeating the intra-sample
+# pipeline for the selected samples (whole-genome) and storing the resulting
+# VCFs in a remote directory. This analysis on one or more chromosomes should
+# continue with `InvestigateMaleSamples2.wdl`.
 #
 workflow InvestigateMaleSamples {
     input {

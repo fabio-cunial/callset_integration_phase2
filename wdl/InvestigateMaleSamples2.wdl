@@ -1,6 +1,9 @@
 version 1.0
 
 
+# Investigates low performance in male samples by subsetting to a given 
+# chromosome the VCFs created by `InvestigateMaleSamples.wdl` and then
+# measuring precision/recall.
 #
 workflow InvestigateMaleSamples2 {
     input {
