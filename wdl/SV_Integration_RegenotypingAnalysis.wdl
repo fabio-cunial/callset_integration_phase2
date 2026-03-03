@@ -734,9 +734,11 @@ task PrecisionRecallAnalysis {
             # Remark: in chrY we keep calls with any FILTER and any GT,
             # otherwise the number of calls becomes very small.
             if [ ~{chromosome} = "chrY" ]; then
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                 || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1)                                                                                                       || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+            elif [ ~{chromosome} = "chrX" ]; then
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (GT!="alt" && GT!=".|1" && GT!="1|." && GT!="./1" && GT!="1/.") || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             else
-                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+                ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt"                                                       || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             fi
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
