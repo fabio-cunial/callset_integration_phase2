@@ -747,12 +747,10 @@ task PrecisionRecallAnalysis {
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the dipcall BED.
-            # Remark: we do not do this in chrY, otherwise the number of calls
+            # Remark: we do this also in chrY, even though the number of calls
             # becomes very small.
-            if [ ~{chromosome} != "chrY" ]; then
-                ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            fi
+            ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Making sure SVLEN and SVTYPE are consistently annotated
             truvari anno svinfo --minsize 1 ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
@@ -773,13 +771,10 @@ task PrecisionRecallAnalysis {
             local INPUT_VCF=$2
             local OUTPUT_PREFIX=$3
             
-            if [ ~{chromosome} == "chrY" ]; then
-                BED_FLAG_TRUVARI=" "
-                BED_FLAG_VCFDIST=" "
-            else
-                BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
-                BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
-            fi
+            # Remark: we restrict to the dipcall BED in chrY too, even though
+            # the number of calls becomes very small.
+            BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
+            BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
             if [ ${INPUT_VCF#*.} = vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
