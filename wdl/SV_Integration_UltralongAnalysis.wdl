@@ -15,10 +15,8 @@ workflow SV_Integration_UltralongAnalysis {
         String remote_workpackage_11_dir
         String remote_outdir
         
+        String precision_recall_samples_csv
         String truvari_bench_flags
-        Array[String] precision_recall_samples
-        Array[File] precision_recall_samples_dipcall_vcf_gz
-        Array[File] precision_recall_samples_dipcall_bed
         Int use_dipcall_bed
         
         File reference_fa
@@ -45,7 +43,7 @@ workflow SV_Integration_UltralongAnalysis {
     
     call SplitBcfBySample as split {
         input:
-            samples = precision_recall_samples,
+            samples_csv = precision_recall_samples_csv,
             
             remote_workpackage_11_dir = remote_workpackage_11_dir,
             remote_outdir = remote_outdir+"/samples",
@@ -54,29 +52,24 @@ workflow SV_Integration_UltralongAnalysis {
     }
     
     # 1. Precision/recall analysis
-    scatter (j in range(length(precision_recall_samples))) {
-        call PrecisionRecallAnalysis {
-            input:
-                sample_id = precision_recall_samples[j],
-                sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
-                sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
-                
-                remote_outdir = remote_outdir,
+    call PrecisionRecallAnalysis {
+        input:
+            samples_csv = precision_recall_samples_csv,
+            remote_outdir = remote_outdir,
+        
+            truvari_bench_flags = truvari_bench_flags,
+            use_dipcall_bed = use_dipcall_bed,
+        
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
+            reference_agp = reference_agp,
+            tandem_bed = ComplementBed.sorted_bed,
+            not_tandem_bed = ComplementBed.complement_bed,
             
-                truvari_bench_flags = truvari_bench_flags,
-                use_dipcall_bed = use_dipcall_bed,
+            in_flag = split.out_flag,
             
-                reference_fa = reference_fa,
-                reference_fai = reference_fai,
-                reference_agp = reference_agp,
-                tandem_bed = ComplementBed.sorted_bed,
-                not_tandem_bed = ComplementBed.complement_bed,
-                
-                in_flag = split.out_flag,
-                
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
-        }
+            docker_image = docker_image,
+            preemptible_number = preemptible_number
     }
     
     output {
@@ -96,7 +89,7 @@ workflow SV_Integration_UltralongAnalysis {
 #
 task SplitBcfBySample {
     input {
-        Array[String] samples
+        File samples_csv
         
         String remote_workpackage_11_dir
         String remote_outdir
@@ -123,7 +116,7 @@ task SplitBcfBySample {
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         gcloud storage cp ~{remote_workpackage_11_dir}/merged.'bcf*' .
-        echo ~{sep="," samples} | tr ',' '\n' | sort | uniq > samples.txt
+        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
         rm -f merged.bcf*
         for FILE in $(ls *.bcf); do
@@ -205,15 +198,12 @@ task ComplementBed {
 #
 task PrecisionRecallAnalysis {
     input {
-        String sample_id
-        File sample_dipcall_vcf_gz
-        File sample_dipcall_bed
-        
+        File samples_csv
         String remote_outdir
         
-        String truvari_bench_flags
         Int min_sv_length = 10000
         Int max_sv_length = 999999999
+        String truvari_bench_flags
         Int use_dipcall_bed
         
         File reference_fa
@@ -230,8 +220,7 @@ task PrecisionRecallAnalysis {
         Int disk_size_gb = 20
         Int preemptible_number
     }
-    parameter_meta {  
-        min_sv_length: "The input VCFs (truvari, kanpig and dipcall) are first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
+    parameter_meta {
     }
     
     String docker_dir = "/callset_integration"
@@ -275,9 +264,10 @@ task PrecisionRecallAnalysis {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local INPUT_TBI=$3
-            local MIN_SV_LENGTH=$4
-            local MAX_SV_LENGTH=$5
-            local NOT_GAPS_BED=$6
+            local DIPCALL_BED=$4
+            local MIN_SV_LENGTH=$5
+            local MAX_SV_LENGTH=$6
+            local NOT_GAPS_BED=$7
             
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
@@ -296,9 +286,9 @@ task PrecisionRecallAnalysis {
             ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the dipcall BED
+            # Keeping only records in the dipcall BED, if needed.
             if [ ~{use_dipcall_bed} -eq 1 ]; then
-                ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                ${TIME_COMMAND} bcftools filter --regions-file ${DIPCALL_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             fi
             
@@ -319,11 +309,12 @@ task PrecisionRecallAnalysis {
         function Benchmark() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
-            local OUTPUT_PREFIX=$3
+            local DIPCALL_BED=$3
+            local OUTPUT_PREFIX=$4
             
             if [ ~{use_dipcall_bed} -eq 1 ]; then
-                BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
-                BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
+                BED_FLAG_TRUVARI="--includebed ${DIPCALL_BED}"
+                BED_FLAG_VCFDIST="--bed ${DIPCALL_BED}"
             else
                 BED_FLAG_TRUVARI=" "
                 BED_FLAG_VCFDIST=" "
@@ -365,34 +356,45 @@ task PrecisionRecallAnalysis {
         
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         
-        # Canonizing the dipcall VCF
-        bcftools index --threads ${N_THREADS} -f -t ~{sample_dipcall_vcf_gz}
-        CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-        rm -f ~{sample_dipcall_vcf_gz}
-        ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_tr.vcf.gz &
-        ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_not_tr.vcf.gz &
-        wait
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truth_tr.vcf.gz &
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truth_not_tr.vcf.gz &
-        wait
+        while read ROW; do
+            SAMPLE_ID=$(echo ${ROW} | cut -d , -f 1)
+            DIPCALL_BED_URI=$(echo ${ROW} | cut -d , -f 2)
+            DIPCALL_VCF_URI=$(echo ${ROW} | cut -d , -f 3)
+            
+            # Downloading
+            gcloud storage cp ${DIPCALL_BED_URI} ${SAMPLE_ID}_dipcall.bed
+            gcloud storage cp ${DIPCALL_VCF_URI} ${SAMPLE_ID}_dipcall.vcf.gz
+            
+            # Canonizing the dipcall VCF
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dipcall.vcf.gz
+            CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}_dipcall.vcf.gz ${SAMPLE_ID}_dipcall.vcf.gz.tbi ${SAMPLE_ID}_dipcall.bed ~{min_sv_length} ~{max_sv_length} not_gaps.bed
+            rm -f ${SAMPLE_ID}_dipcall.vcf.gz*
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_truth.vcf.gz --output ${SAMPLE_ID}_truth_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_truth.vcf.gz --output ${SAMPLE_ID}_truth_not_tr.vcf.gz &
+            wait
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_not_tr.vcf.gz &
+            wait
         
-        # Localizing the VCF to benchmark
-        gcloud storage cp ~{remote_outdir}/samples/~{sample_id}.'bcf*' .
+            # Localizing the VCF to benchmark
+            gcloud storage cp ~{remote_outdir}/samples/${SAMPLE_ID}.'bcf*' .
         
-        # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}.bcf --output out.bcf
-        rm -f ~{sample_id}.bcf* ; mv out.bcf ~{sample_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}.bcf
+            # Keeping only records in the given length range
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ${SAMPLE_ID}.bcf --output out.bcf
+            rm -f ${SAMPLE_ID}.bcf* ; mv out.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
         
-        # Keeping only records that are genotyped as present. This is important,
-        # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt" || GT=".|1" || GT="1|." || GT="./1" || GT="1/."' --output-type z ~{sample_id}.bcf --output out.vcf.gz
-        rm -f ~{sample_id}.bcf* ; mv out.vcf.gz ~{sample_id}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}.vcf.gz
+            # Keeping only records that are genotyped as present. This is
+            # important, since truvari bench does not consider GTs when
+            # matching.
+            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || GT=".|1" || GT="1|." || GT="./1" || GT="1/."' --output-type z ${SAMPLE_ID}.bcf --output out.vcf.gz
+            rm -f ${SAMPLE_ID}.bcf* ; mv out.vcf.gz ${SAMPLE_ID}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
         
-        # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}.vcf.gz ~{min_sv_length}bp
+            # Benchmarking
+            Benchmark ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dipcall.bed ultralong
         
-        # Uploading
-        gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
+            # Uploading
+            gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
+        done < ~{samples_csv}
     >>>
     
     output {
