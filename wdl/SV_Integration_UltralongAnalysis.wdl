@@ -115,7 +115,7 @@ task SplitBcfBySample {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
-        gcloud storage cp ~{remote_workpackage_11_dir}/merged.'bcf*' .
+        gcloud storage cp ~{remote_workpackage_11_dir}/truvari_collapsed.'bcf*' .
         cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
         rm -f merged.bcf*
