@@ -117,10 +117,10 @@ task SplitBcfBySample {
         
         gcloud storage cp ~{remote_workpackage_11_dir}/truvari_collapsed.'bcf*' .
         cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
-        rm -f merged.bcf*
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
+        rm -f truvari_collapsed.bcf*
         for FILE in $(ls *.bcf); do
-            bcftools index --threads ${N_THREADS} -f ${FILE}
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${FILE}
         done
         ls -laht
         gcloud storage cp '*.bcf*' ~{remote_outdir}/        
