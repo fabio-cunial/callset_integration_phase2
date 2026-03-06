@@ -1,14 +1,12 @@
 version 1.0
 
 
-# --------->Studies precision, recall, Mendelian error, de novo rate of the final cohort
-# VCF, on the whole genome and for a given set of samples.
-#
+# Simple evaluations of ultralong and BND calls.
+# 
 # Structure of `remote_outdir`:
 #
 # ├── samples/                for each sample, all the records in the final VCF;
-# ├── precision_recall/                 for each sample, precision/recall stats;
-# └── mendelian/                         for each sample, mendelian error stats.
+# └── precision_recall/                 for each sample, precision/recall stats;
 #
 workflow SV_Integration_UltralongAnalysis {
     input {
@@ -18,6 +16,8 @@ workflow SV_Integration_UltralongAnalysis {
         String precision_recall_samples_csv
         Int truvari_bench_mode
         Int limit_to_dipcall_bed
+        Int min_sv_length = 10000
+        Int max_sv_length = 999999999
         
         File reference_fa
         File reference_fai
@@ -61,6 +61,8 @@ workflow SV_Integration_UltralongAnalysis {
         
             truvari_bench_mode = truvari_bench_mode,
             limit_to_dipcall_bed = limit_to_dipcall_bed,
+            min_sv_length = min_sv_length,
+            max_sv_length = max_sv_length,
         
             reference_fa = reference_fa,
             reference_fai = reference_fai,
@@ -203,8 +205,8 @@ task PrecisionRecallAnalysis {
         File samples_csv
         String remote_outdir
         
-        Int min_sv_length = 10000
-        Int max_sv_length = 999999999
+        Int min_sv_length
+        Int max_sv_length
         Int truvari_bench_mode
         Int limit_to_dipcall_bed
         
