@@ -389,8 +389,13 @@ task PrecisionRecallAnalysis {
             gcloud storage cp ~{remote_outdir}/samples/${SAMPLE_ID}.'bcf*' .
         
             # Keeping only records in the given length range
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ${SAMPLE_ID}.bcf --output out.bcf
-            rm -f ${SAMPLE_ID}.bcf* ; mv out.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
+            if [ ~{truvari_bench_mode} -ne 2 ]; then
+                ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ${SAMPLE_ID}.bcf --output out.bcf
+                rm -f ${SAMPLE_ID}.bcf* ; mv out.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
+            else
+                mv ${SAMPLE_ID}.bcf out.bcf
+                mv ${SAMPLE_ID}.bcf.csi out.bcf.csi
+            fi
         
             # Keeping only records that are genotyped as present. This is
             # important, since truvari bench does not consider GTs when
@@ -399,7 +404,12 @@ task PrecisionRecallAnalysis {
             rm -f ${SAMPLE_ID}.bcf* ; mv out.vcf.gz ${SAMPLE_ID}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
         
             # Benchmarking
-            Benchmark ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dipcall.bed ultralong
+            if [ ~{truvari_bench_mode} -eq 2 ]; then
+                OUTPUT_PREFIX="bnd"
+            else
+                OUTPUT_PREFIX="ultralong"
+            fi
+            Benchmark ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dipcall.bed ${OUTPUT_PREFIX}
         
             # Uploading
             gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
