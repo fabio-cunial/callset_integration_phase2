@@ -318,9 +318,9 @@ task PrecisionRecallAnalysis {
             
             if [ ~{truvari_bench_mode} -eq 0 ]; then
                 TRUVARI_MATCH_FLAGS="--pctseq 0"
-            else if [ ~{truvari_bench_mode} -eq 1 ]; then
+            elif [ ~{truvari_bench_mode} -eq 1 ]; then
                 TRUVARI_MATCH_FLAGS="--reference ~{reference_fa} --max-resolve 3000000000 --dup-to-ins"
-            else if [ ~{truvari_bench_mode} -eq 2 ]; then
+            elif [ ~{truvari_bench_mode} -eq 2 ]; then
                 TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
             fi
             if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
