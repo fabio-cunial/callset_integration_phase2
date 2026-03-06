@@ -574,5 +574,4 @@ workflows:
   subclass: wdl
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongAnalysis.wdl
-  subclass: wdl
   testParameterFiles:
