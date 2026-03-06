@@ -16,8 +16,8 @@ workflow SV_Integration_UltralongAnalysis {
         String remote_outdir
         
         String precision_recall_samples_csv
-        String truvari_bench_flags
-        Int use_dipcall_bed
+        Int truvari_bench_mode
+        Int limit_to_dipcall_bed
         
         File reference_fa
         File reference_fai
@@ -30,6 +30,8 @@ workflow SV_Integration_UltralongAnalysis {
         Int preemptible_number = 4
     }
     parameter_meta {
+        truvari_bench_mode: "0: ultralong vs dipcall, sequence similarity OFF. 1: ultralong vs dipcall, sequence similarity ON. 2: BND vs dipcall."
+        limit_to_dipcall_bed: "0=NO, 1=YES."
     }
     
     call ComplementBed {
@@ -57,8 +59,8 @@ workflow SV_Integration_UltralongAnalysis {
             samples_csv = precision_recall_samples_csv,
             remote_outdir = remote_outdir,
         
-            truvari_bench_flags = truvari_bench_flags,
-            use_dipcall_bed = use_dipcall_bed,
+            truvari_bench_mode = truvari_bench_mode,
+            limit_to_dipcall_bed = limit_to_dipcall_bed,
         
             reference_fa = reference_fa,
             reference_fai = reference_fai,
@@ -203,8 +205,8 @@ task PrecisionRecallAnalysis {
         
         Int min_sv_length = 10000
         Int max_sv_length = 999999999
-        String truvari_bench_flags
-        Int use_dipcall_bed
+        Int truvari_bench_mode
+        Int limit_to_dipcall_bed
         
         File reference_fa
         File reference_fai
@@ -287,7 +289,7 @@ task PrecisionRecallAnalysis {
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the dipcall BED, if needed.
-            if [ ~{use_dipcall_bed} -eq 1 ]; then
+            if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
                 ${TIME_COMMAND} bcftools filter --regions-file ${DIPCALL_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             fi
@@ -312,12 +314,17 @@ task PrecisionRecallAnalysis {
             local DIPCALL_BED=$3
             local OUTPUT_PREFIX=$4
             
-            if [ ~{use_dipcall_bed} -eq 1 ]; then
-                BED_FLAG_TRUVARI="--includebed ${DIPCALL_BED}"
-                BED_FLAG_VCFDIST="--bed ${DIPCALL_BED}"
+            if [ ~{truvari_bench_mode} -eq 0 ]; then
+                TRUVARI_MATCH_FLAGS="--pctseq 0"
+            else if [ ~{truvari_bench_mode} -eq 1 ]; then
+                TRUVARI_MATCH_FLAGS="--reference ~{reference_fa} --max-resolve 3000000000 --dup-to-ins"
+            else if [ ~{truvari_bench_mode} -eq 2 ]; then
+                TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
+            fi
+            if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
+                TRUVARI_BED_FLAG="--includebed ${DIPCALL_BED}"
             else
-                BED_FLAG_TRUVARI=" "
-                BED_FLAG_VCFDIST=" "
+                TRUVARI_BED_FLAG=" "
             fi
             if [ ${INPUT_VCF#*.} = vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
@@ -337,9 +344,9 @@ task PrecisionRecallAnalysis {
         
             # Benchmarking
             rm -rf ./${OUTPUT_PREFIX}_truvari_*
-            ${TIME_COMMAND} truvari bench ${BED_FLAG_TRUVARI} -b ${SAMPLE_ID}_truth.vcf.gz        -c ${OUTPUT_PREFIX}_input.vcf.gz  --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} ~{truvari_bench_flags} -o ./${OUTPUT_PREFIX}_truvari_all/ &
-            ${TIME_COMMAND} truvari bench ${BED_FLAG_TRUVARI} -b ${SAMPLE_ID}_truth_tr.vcf.gz     -c ${OUTPUT_PREFIX}_tr.vcf.gz     --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} ~{truvari_bench_flags} -o ./${OUTPUT_PREFIX}_truvari_tr/ &
-            ${TIME_COMMAND} truvari bench ${BED_FLAG_TRUVARI} -b ${SAMPLE_ID}_truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} ~{truvari_bench_flags} -o ./${OUTPUT_PREFIX}_truvari_not_tr/ &
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz        -c ${OUTPUT_PREFIX}_input.vcf.gz  ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_all/ &
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth_tr.vcf.gz     -c ${OUTPUT_PREFIX}_tr.vcf.gz     ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_tr/ &
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_not_tr/ &
             wait
             mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_all.txt
             mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_tr.txt
