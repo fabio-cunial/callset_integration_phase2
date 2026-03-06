@@ -19,7 +19,6 @@ workflow SV_Integration_PlotPrme {
         
         Int precision_recall_bench_method
         Array[String] precision_recall_samples
-        Array[String] precision_recall_sex
         Array[File] precision_recall_samples_dipcall_vcf_gz
         Array[File] precision_recall_samples_dipcall_bed
         

@@ -570,3 +570,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InvestigateMaleSamples2.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongAnalysis
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongAnalysis.wdl
+  subclass: wdl
+  testParameterFiles:
