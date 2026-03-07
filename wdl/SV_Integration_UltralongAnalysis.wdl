@@ -86,10 +86,11 @@ workflow SV_Integration_UltralongAnalysis {
 # Remark: we keep every record, not just those genotyped as present, to support
 # all types of analysis downstream.
 #
-# Performance on 12'680 samples, 15x, GRCh38, chr6, CAL_SENS<=0.999, SSD:
+# Performance on 12'680 samples, whole genome, SSD, 10 samples:
 #
-# TOOL                              CPU     RAM     TIME
-# bcftools +split                   100%    500M    3m
+# TOOL                              CPU     RAM      TIME
+# bcftools +split ultralong        100%      2G     1h40m
+# bcftools +split bnd              100%     85M       10s
 #
 task SplitBcfBySample {
     input {
@@ -392,9 +393,6 @@ task PrecisionRecallAnalysis {
             if [ ~{truvari_bench_mode} -ne 2 ]; then
                 ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ${SAMPLE_ID}.bcf --output out.bcf
                 rm -f ${SAMPLE_ID}.bcf* ; mv out.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
-            else
-                mv ${SAMPLE_ID}.bcf out.bcf
-                mv ${SAMPLE_ID}.bcf.csi out.bcf.csi
             fi
         
             # Keeping only records that are genotyped as present. This is
