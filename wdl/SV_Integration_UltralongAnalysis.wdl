@@ -371,6 +371,12 @@ task PrecisionRecallAnalysis {
             DIPCALL_BED_URI=$(echo ${ROW} | cut -d , -f 2)
             DIPCALL_VCF_URI=$(echo ${ROW} | cut -d , -f 3)
             
+            # Skipping the sample if it has already been processed
+            TEST=$( gsutil ls ~{remote_outdir}/precision_recall/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+            
             # Downloading
             gcloud storage cp ${DIPCALL_BED_URI} ${SAMPLE_ID}_dipcall.bed
             gcloud storage cp ${DIPCALL_VCF_URI} ${SAMPLE_ID}_dipcall.vcf.gz
@@ -410,7 +416,9 @@ task PrecisionRecallAnalysis {
             Benchmark ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dipcall.bed ${OUTPUT_PREFIX}
         
             # Uploading
-            gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
+            gcloud storage mv ${SAMPLE_ID}_'*.txt' ~{remote_outdir}/precision_recall/
+            echo "done" > ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/precision_recall/
         done < ~{samples_csv}
     >>>
     
