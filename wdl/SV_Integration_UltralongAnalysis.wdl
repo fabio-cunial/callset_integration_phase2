@@ -490,8 +490,10 @@ task FilterByType {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
-        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        while read SAMPLE_ID; do
+        
+        while read ROW; do
+            SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
+        
             # Skipping the sample if it has already been filtered
             TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
@@ -512,7 +514,7 @@ task FilterByType {
             gcloud storage mv ${SAMPLE_ID}'.bcf*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
-        done < samples.txt
+        done < ~{samples_csv}
         
         # Fake output
         echo "done" > out.txt
@@ -572,8 +574,9 @@ task FilterByLength {
         else
             SVLEN_MIN=$( echo ~{sv_length_bins} | cut -d , -f ~{index} )
         fi
-        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        while read SAMPLE_ID; do
+        while read ROW; do
+            SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
+        
             # Skipping the sample if it has already been filtered
             TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
@@ -589,7 +592,7 @@ task FilterByLength {
             gcloud storage mv ${SAMPLE_ID}'.bcf*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
-        done < samples.txt
+        done < ~{samples_csv}
         
         # Fake output
         echo "done" > out.txt
@@ -661,11 +664,6 @@ task PrecisionRecallAnalysis {
         elif [ ~{sequence_similarity} -eq 2 ]; then
             TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
         fi
-        if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
-            TRUVARI_BED_FLAG="--includebed ${DIPCALL_BED}"
-        else
-            TRUVARI_BED_FLAG=" "
-        fi
         while read ROW; do
             SAMPLE_ID=$(echo ${ROW} | cut -d , -f 1)
             DIPCALL_BED_URI=$(echo ${ROW} | cut -d , -f 2)
@@ -701,6 +699,11 @@ task PrecisionRecallAnalysis {
             wait
             
             # Benchmarking
+            if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
+                TRUVARI_BED_FLAG="--includebed ${SAMPLE_ID}_dipcall.bed"
+            else
+                TRUVARI_BED_FLAG=" "
+            fi
             rm -rf ./truvari_*
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_dipcall.vcf.gz        -c ${SAMPLE_ID}.vcf.gz        ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin 1 --sizefilt 1 --sizemax ${MAX_SV_LENGTH} -o ./truvari_all/ &
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_dipcall_tr.vcf.gz     -c ${SAMPLE_ID}_tr.vcf.gz     ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin 1 --sizefilt 1 --sizemax ${MAX_SV_LENGTH} -o ./truvari_tr/ &
