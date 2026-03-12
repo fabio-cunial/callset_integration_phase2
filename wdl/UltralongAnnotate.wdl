@@ -149,6 +149,25 @@ task Impl {
         }
         
         
+        # Removes SVLEN from symbolic ALTs, in order not to interfere with
+        # sniffles.
+        #
+        function ResetAlts() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+    
+            date 1>&2
+            ( bcftools view --header-only ${INPUT_VCF_GZ} ; bcftools view --no-header ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' ) | bcftools view --output-type z --output out.vcf.gz
+            date 1>&2
+            rm -f ${INPUT_VCF_GZ}* ; mv out.vcf.gz ${SAMPLE_ID}_reset_alts.vcf.gz ; bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_reset_alts.vcf.gz
+        }
+        
+        
         # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
         # necessary, since sniffles might overwrite the SAMPLE column.
         #
@@ -289,14 +308,15 @@ END
         
             # Annotating and marking training records
             LocalizeSample ${SAMPLE_ID} ${LINE}
-            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz z ${SAMPLE_ID}_supp.vcf.gz
+            ResetAlts ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
+            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz z ${SAMPLE_ID}_supp.vcf.gz
             
             echo "Before sniffles:" 1>&2
-            bcftools view --no-header ${SAMPLE_ID}_supp.vcf.gz | head -n 5 1>&2
+            (bcftools view --no-header ${SAMPLE_ID}_supp.vcf.gz | head -n 5 || echo "1") 1>&2
             Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_supp.vcf.gz ${SAMPLE_ID}.bam
             echo "After sniffles:" 1>&2
-            bcftools view --header-only ${SAMPLE_ID}_sniffles.vcf.gz 1>&2
-            bcftools view --no-header ${SAMPLE_ID}_sniffles.vcf.gz | head -n 5 1>&2
+            (bcftools view --header-only ${SAMPLE_ID}_sniffles.vcf.gz || echo "1") 1>&2
+            (bcftools view --no-header ${SAMPLE_ID}_sniffles.vcf.gz | head -n 5 || echo "1") 1>&2
             
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_sniffles.vcf.gz            
             #-------->CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
