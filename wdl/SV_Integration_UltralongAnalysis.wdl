@@ -27,7 +27,8 @@ workflow SV_Integration_UltralongAnalysis {
         Int min_sv_length = 10000
         
         Array[String] sv_types = ["DEL", "INS"]
-        String sv_length_bins = "10000,50000,100000,500000,1000000"
+        Array[Int] sv_length_bins = [10000,50000,100000,500000,1000000]
+        String sv_length_bins_str = "10000,50000,100000,500000,1000000"
         Int n_length_bins = 5
         
         File reference_fa
@@ -42,7 +43,7 @@ workflow SV_Integration_UltralongAnalysis {
         precision_recall_samples_csv: "Format: ID,dipcall_bed_uri,dipcall_vcf_uri"
         sequence_similarity: "0=OFF, 1=ON."
         limit_to_dipcall_bed: "0=NO, 1=YES."
-        sv_length_bins: "Comma-separated, increasing."
+        sv_length_bins_str: "Comma-separated"
     }
     
     # Preparing the VCFs to be benchmarked
@@ -68,6 +69,8 @@ workflow SV_Integration_UltralongAnalysis {
             reference_agp = reference_agp,
             limit_to_dipcall_bed = limit_to_dipcall_bed,
             remote_outdir = remote_outdir + "/dipcall",
+            reference_fai = reference_fai,
+            reference_agp = reference_agp,
             docker_image = docker_image,
             preemptible_number = preemptible_number
     }    
@@ -76,7 +79,8 @@ workflow SV_Integration_UltralongAnalysis {
     call PrecisionRecallAnalysis {
         input:
             samples_csv = precision_recall_samples_csv,
-            remote_indir = remote_outdir + "/samples",
+            remote_indir_samples = remote_outdir + "/samples",
+            remote_indir_dipcall = remote_outdir + "/dipcall",
             remote_outdir = remote_outdir + "/precision_recall",
         
             sequence_similarity = sequence_similarity,
@@ -85,7 +89,6 @@ workflow SV_Integration_UltralongAnalysis {
         
             reference_fa = reference_fa,
             reference_fai = reference_fai,
-            reference_agp = reference_agp,
             tandem_bed = ComplementBed.sorted_bed,
             not_tandem_bed = ComplementBed.complement_bed,
             
@@ -113,7 +116,7 @@ workflow SV_Integration_UltralongAnalysis {
                 remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i],
                 in_flag = [CanonizeDipcall.out_flag]
         }
-        call PrecisionRecallAnalysis {
+        call PrecisionRecallAnalysis as pr_analysis_type {
             input:
                 samples_csv = precision_recall_samples_csv,
                 remote_indir_samples = remote_outdir + "/samples/type_" + sv_types[i],
@@ -126,11 +129,10 @@ workflow SV_Integration_UltralongAnalysis {
     
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
-                reference_agp = reference_agp,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
         
-                in_flag = [by_type.out_flag, by_type_dipcall.out_flag]
+                in_flag = [by_type.out_flag, by_type_dipcall.out_flag],
         
                 docker_image = docker_image,
                 preemptible_number = preemptible_number
@@ -139,7 +141,7 @@ workflow SV_Integration_UltralongAnalysis {
             call FilterByLength as by_length {
                 input:
                     samples_csv = precision_recall_samples_csv,
-                    sv_length_bins = sv_length_bins,
+                    sv_length_bins = sv_length_bins_str,
                     index = j,
                     remote_indir = remote_outdir + "/samples/type_" + sv_types[i],
                     remote_outdir = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
@@ -148,13 +150,13 @@ workflow SV_Integration_UltralongAnalysis {
             call FilterByLength as by_length_dipcall {
                 input:
                     samples_csv = precision_recall_samples_csv,
-                    sv_length_bins = sv_length_bins,
+                    sv_length_bins = sv_length_bins_str,
                     index = j,
                     remote_indir = remote_outdir + "/dipcall/type_" + sv_types[i],
                     remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
                     in_flag = [by_type_dipcall.out_flag]
             }
-            call PrecisionRecallAnalysis {
+            call PrecisionRecallAnalysis as pr_analysis_type_length {
                 input:
                     samples_csv = precision_recall_samples_csv,
                     remote_indir_samples = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
@@ -167,7 +169,6 @@ workflow SV_Integration_UltralongAnalysis {
         
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
-                    reference_agp = reference_agp,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
             
@@ -240,6 +241,9 @@ task CanonizeDipcall {
         Int limit_to_dipcall_bed
         
         String remote_outdir
+        
+        File reference_fai
+        File reference_agp
         
         String docker_image
         Int n_cpu = 2
@@ -619,7 +623,6 @@ task PrecisionRecallAnalysis {
         
         File reference_fa
         File reference_fai
-        File reference_agp
         File tandem_bed
         File not_tandem_bed
         
