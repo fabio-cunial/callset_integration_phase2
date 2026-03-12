@@ -106,7 +106,9 @@ workflow SV_Integration_UltralongAnalysis {
                 sv_type = sv_types[i],
                 remote_indir = remote_outdir + "/samples",
                 remote_outdir = remote_outdir + "/samples/type_" + sv_types[i],
-                in_flag = [SplitBcfBySample.out_flag]
+                in_flag = [SplitBcfBySample.out_flag],
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
         }
         call FilterByType as by_type_dipcall {
             input:
@@ -114,7 +116,9 @@ workflow SV_Integration_UltralongAnalysis {
                 sv_type = sv_types[i],
                 remote_indir = remote_outdir + "/dipcall",
                 remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i],
-                in_flag = [CanonizeDipcall.out_flag]
+                in_flag = [CanonizeDipcall.out_flag],
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
         }
         call PrecisionRecallAnalysis as pr_analysis_type {
             input:
@@ -145,7 +149,9 @@ workflow SV_Integration_UltralongAnalysis {
                     index = j,
                     remote_indir = remote_outdir + "/samples/type_" + sv_types[i],
                     remote_outdir = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
-                    in_flag = [by_type.out_flag]
+                    in_flag = [by_type.out_flag],
+                    docker_image = docker_image,
+                    preemptible_number = preemptible_number
             }
             call FilterByLength as by_length_dipcall {
                 input:
@@ -154,7 +160,9 @@ workflow SV_Integration_UltralongAnalysis {
                     index = j,
                     remote_indir = remote_outdir + "/dipcall/type_" + sv_types[i],
                     remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
-                    in_flag = [by_type_dipcall.out_flag]
+                    in_flag = [by_type_dipcall.out_flag],
+                    docker_image = docker_image,
+                    preemptible_number = preemptible_number
             }
             call PrecisionRecallAnalysis as pr_analysis_type_length {
                 input:
