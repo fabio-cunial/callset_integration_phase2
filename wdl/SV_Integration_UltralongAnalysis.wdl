@@ -27,9 +27,9 @@ workflow SV_Integration_UltralongAnalysis {
         Int min_sv_length = 10000
         
         Array[String] sv_types = ["DEL", "INS"]
-        Array[Int] sv_length_bins = [10000,50000,100000,500000,1000000]
-        String sv_length_bins_str = "10000,50000,100000,500000,1000000"
-        Int n_length_bins = 5
+        Array[Int] sv_length_bins = [50000,100000,500000,1000000]
+        String sv_length_bins_str = "50000,100000,500000,1000000"
+        Int n_length_bins = 4
         
         File reference_fa
         File reference_fai
@@ -217,8 +217,6 @@ task ComplementBed {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
 
         
         ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
@@ -365,7 +363,7 @@ task CanonizeDipcall {
             # Canonizing
             gcloud storage cp ${REMOTE_BED} ./${SAMPLE_ID}.bed
             gcloud storage cp ${REMOTE_VCF} ./${SAMPLE_ID}.vcf.gz
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.vcf.gz
+            bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}.vcf.gz
             CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ${SAMPLE_ID}.bed ~{min_sv_length} ${MAX_SV_LENGTH} not_gaps.bed
             
             # Uploading

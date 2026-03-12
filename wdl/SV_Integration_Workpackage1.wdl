@@ -150,7 +150,6 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-        GSUTIL_DELAY_S="600"
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         export RUST_BACKTRACE="full"
         
@@ -827,7 +826,7 @@ END
             # Uploading
             gcloud storage mv ${SAMPLE_ID}_kanpig.vcf.'gz*' ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ${SAMPLE_ID}_training.vcf.'gz*' ${SAMPLE_ID}_ultralong.'bcf*' ${SAMPLE_ID}_bnd.'bcf*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
-            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done < chunk.csv
