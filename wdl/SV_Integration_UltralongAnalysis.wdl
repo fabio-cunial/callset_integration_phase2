@@ -1,17 +1,18 @@
 version 1.0
 
 
-# Simple evaluations of ultralong and BND calls.
+# Simple evaluations of ultralong calls. BND calls are analyzed by a separate
+# workflow.
 # 
 # Structure of `remote_outdir`:
 #
-# ├── dipcall/              for each sample, all the records in the dipcall VCF;
+# ├── dipcall/                                                  for each sample;
 # │   └── type_X/
 # │       └── length_X/
-# ├── samples/     for each sample, all its present records from the cohort VCF;
+# ├── samples/                                  present records for each sample;
 # │   └── type_X/
 # │       └── length_X/
-# └── precision_recall/                 for each sample, precision/recall stats;
+# └── precision_recall/                                         output measures;
 #     └── type_X/
 #         └── length_X/
 #
@@ -21,31 +22,30 @@ workflow SV_Integration_UltralongAnalysis {
         String remote_outdir
         
         String precision_recall_samples_csv
-        Int truvari_bench_mode
+        Int sequence_similarity
         Int limit_to_dipcall_bed
         Int min_sv_length = 10000
-        Int max_sv_length = 999999999
         
-        Array[String] sv_types = ["DEL", "INS", "INV", "DUP"]
-        String sv_lengths = "10000,50000,100000,500000,1000000"
-        Int n_lengths = 5
+        Array[String] sv_types = ["DEL", "INS"]
+        String sv_length_bins = "10000,50000,100000,500000,1000000"
+        Int n_length_bins = 5
         
         File reference_fa
         File reference_fai
         File reference_agp
         File tandem_bed
-        File ploidy_bed_male
-        File ploidy_bed_female
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:latest"
         Int preemptible_number = 4
     }
     parameter_meta {
-        truvari_bench_mode: "0: ultralong vs dipcall, sequence similarity OFF. 1: ultralong vs dipcall, sequence similarity ON. 2: BND vs dipcall."
+        precision_recall_samples_csv: "Format: ID,dipcall_bed_uri,dipcall_vcf_uri"
+        sequence_similarity: "0=OFF, 1=ON."
         limit_to_dipcall_bed: "0=NO, 1=YES."
-        sv_lengths: "Comma-separated, increasing."
+        sv_length_bins: "Comma-separated, increasing."
     }
     
+    # Preparing the VCFs to be benchmarked
     call ComplementBed {
         input:
             tandem_bed = tandem_bed,
@@ -53,21 +53,24 @@ workflow SV_Integration_UltralongAnalysis {
             docker_image = docker_image,
             preemptible_number = preemptible_number
     }
-    call SplitBcfBySample as split {
+    call SplitBcfBySample {
         input:
             samples_csv = precision_recall_samples_csv,
-            
             remote_workpackage_11_dir = remote_workpackage_11_dir,
-            remote_outdir = remote_outdir+"/samples",
+            remote_outdir = remote_outdir + "/samples",
             docker_image = docker_image,
             preemptible_number = preemptible_number
     }
-    
-    
----------> Pre-canonize dipcalls here
-    
-    
-    
+    call CanonizeDipcall {
+        input:
+            samples_csv = precision_recall_samples_csv,
+            min_sv_length = min_sv_length,
+            reference_agp = reference_agp,
+            limit_to_dipcall_bed = limit_to_dipcall_bed,
+            remote_outdir = remote_outdir + "/dipcall",
+            docker_image = docker_image,
+            preemptible_number = preemptible_number
+    }    
     
     # For each sample: global analysis.
     call PrecisionRecallAnalysis {
@@ -76,10 +79,9 @@ workflow SV_Integration_UltralongAnalysis {
             remote_indir = remote_outdir + "/samples",
             remote_outdir = remote_outdir + "/precision_recall",
         
-            truvari_bench_mode = truvari_bench_mode,
+            sequence_similarity = sequence_similarity,
             limit_to_dipcall_bed = limit_to_dipcall_bed,
             min_sv_length = min_sv_length,
-            max_sv_length = max_sv_length,
         
             reference_fa = reference_fa,
             reference_fai = reference_fai,
@@ -87,7 +89,7 @@ workflow SV_Integration_UltralongAnalysis {
             tandem_bed = ComplementBed.sorted_bed,
             not_tandem_bed = ComplementBed.complement_bed,
             
-            in_flag = split.out_flag,
+            in_flag = [CanonizeDipcall.out_flag, SplitBcfBySample.out_flag],
             
             docker_image = docker_image,
             preemptible_number = preemptible_number
@@ -101,36 +103,67 @@ workflow SV_Integration_UltralongAnalysis {
                 sv_type = sv_types[i],
                 remote_indir = remote_outdir + "/samples",
                 remote_outdir = remote_outdir + "/samples/type_" + sv_types[i],
-                in_flag = split.out_flag
+                in_flag = [SplitBcfBySample.out_flag]
         }
+        call FilterByType as by_type_dipcall {
+            input:
+                samples_csv = precision_recall_samples_csv,
+                sv_type = sv_types[i],
+                remote_indir = remote_outdir + "/dipcall",
+                remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i],
+                in_flag = [CanonizeDipcall.out_flag]
+        }
+        call PrecisionRecallAnalysis {
+            input:
+                samples_csv = precision_recall_samples_csv,
+                remote_indir_samples = remote_outdir + "/samples/type_" + sv_types[i],
+                remote_indir_dipcall = remote_outdir + "/dipcall/type_" + sv_types[i],
+                remote_outdir = remote_outdir + "/precision_recall/type_" + sv_types[i],
+    
+                sequence_similarity = sequence_similarity,
+                limit_to_dipcall_bed = limit_to_dipcall_bed,
+                min_sv_length = min_sv_length,
+    
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                reference_agp = reference_agp,
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
         
------> Do the same for dipcall        
+                in_flag = [by_type.out_flag, by_type_dipcall.out_flag]
         
-        scatter (j in range(n_lengths)) {
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
+        }
+        scatter (j in range(n_length_bins)) {
             call FilterByLength as by_length {
                 input:
                     samples_csv = precision_recall_samples_csv,
-                    sv_lengths = sv_lengths,
+                    sv_length_bins = sv_length_bins,
                     index = j,
                     remote_indir = remote_outdir + "/samples/type_" + sv_types[i],
-                    remote_outdir = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_lengths[j],
-                    in_flag = by_type.out_flag
+                    remote_outdir = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
+                    in_flag = [by_type.out_flag]
             }
-            
-            
------> Do the same for dipcall        
-            
-            
+            call FilterByLength as by_length_dipcall {
+                input:
+                    samples_csv = precision_recall_samples_csv,
+                    sv_length_bins = sv_length_bins,
+                    index = j,
+                    remote_indir = remote_outdir + "/dipcall/type_" + sv_types[i],
+                    remote_outdir = remote_outdir + "/dipcall/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
+                    in_flag = [by_type_dipcall.out_flag]
+            }
             call PrecisionRecallAnalysis {
                 input:
                     samples_csv = precision_recall_samples_csv,
-                    remote_indir = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_lengths[j],
-                    remote_outdir = remote_outdir + "/precision_recall/type_" + sv_types[i] + "/length_" + sv_lengths[j],
+                    remote_indir_samples = remote_outdir + "/samples/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
+                    remote_indir_dipcall = remote_outdir + "/dipcall/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
+                    remote_outdir = remote_outdir + "/precision_recall/type_" + sv_types[i] + "/length_" + sv_length_bins[j],
         
-                    truvari_bench_mode = truvari_bench_mode,
+                    sequence_similarity = sequence_similarity,
                     limit_to_dipcall_bed = limit_to_dipcall_bed,
                     min_sv_length = min_sv_length,
-                    max_sv_length = max_sv_length,
         
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
@@ -138,7 +171,7 @@ workflow SV_Integration_UltralongAnalysis {
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
             
-                    in_flag = by_length.out_flag,
+                    in_flag = [by_length.out_flag,by_length_dipcall.out_flag],
             
                     docker_image = docker_image,
                     preemptible_number = preemptible_number
@@ -198,233 +231,20 @@ task ComplementBed {
 }
 
 
-# Writes to a separate file every sample column.
 #
-# Remark: we keep every record, not just those genotyped as present, to support
-# all types of analysis downstream.
-#
-# Performance on 12'680 samples, whole genome, SSD, 10 samples:
-#
-# TOOL                              CPU     RAM      TIME
-# bcftools +split ultralong        100%      2G     1h40m
-# bcftools +split bnd              100%     85M       10s
-#
-task SplitBcfBySample {
+task CanonizeDipcall {
     input {
         File samples_csv
-        
-        String remote_workpackage_11_dir
-        String remote_outdir
-        
-        String docker_image
-        Int n_cpu = 2
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
-        Int preemptible_number
-    }
-    parameter_meta {
-        remote_outdir: "The result of the split is stored in this bucket location."
-    }
-    
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        
-        gcloud storage cp ~{remote_workpackage_11_dir}/truvari_collapsed.'bcf*' .
-        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
-        rm -f truvari_collapsed.bcf*
-        for FILE in $(ls *.bcf); do
-
-        
--------> keep only present records        
-
-
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${FILE}
-        done
-        ls -laht
-        gcloud storage cp '*.bcf*' ~{remote_outdir}/        
-        
-        # Fake output
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-#
-task FilterByType {
-    input {
-        File samples_csv
-        String sv_type
-        
-        String remote_indir
-        String remote_outdir
-        
-        File in_flag
-        
-        String docker_image
-        Int n_cpu = 2
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
-        Int preemptible_number
-    }
-    parameter_meta {
-    }
-    
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        
-        gcloud storage cp ~{remote_indir}/'*.bcf*' .
-        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        while read SAMPLE_ID; do
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="'~{sv_type}'"' --output-type b ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_~{sv_type}.bcf
-            rm -f ${SAMPLE_ID}.bcf* ; mv ${SAMPLE_ID}_~{sv_type}.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.bcf
-        done < samples.txt
-        ls -laht
-        gcloud storage cp '*.bcf*' ~{remote_outdir}/
-        
-        # Fake output
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-#
-task FilterByLength {
-    input {
-        File samples_csv
-        String sv_lengths
-        Int index
-        
-        String remote_indir
-        String remote_outdir
-        
-        File in_flag
-        
-        String docker_image
-        Int n_cpu = 2
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
-        Int preemptible_number
-    }
-    parameter_meta {
-        sv_lengths: "Comma-separated, increasing."
-        index: "Zero-based"
-    }
-    
-    String docker_dir = "/callset_integration"
-    
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        
-        SVLEN_MAX=$( echo ~{sv_lengths} | cut -d , -f $(( ~{index} + 1 )) )
-        if [ ~{index} -eq 0 ]; then
-            SVLEN_MIN="0"
-        else
-            SVLEN_MIN=$( echo ~{sv_lengths} | cut -d , -f ~{index} )
-        fi
-        gcloud storage cp ~{remote_indir}/'*.bcf*' .
-        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
-        while read SAMPLE_ID; do
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${SVLEN_MIN}' && ABS(SVLEN)<'${SVLEN_MAX} --output-type b ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_${SVLEN_MAX}.bcf
-            rm -f ${SAMPLE_ID}.bcf* ; mv ${SAMPLE_ID}_${SVLEN_MAX}.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.bcf
-        done < samples.txt
-        ls -laht
-        gcloud storage cp '*.bcf*' ~{remote_outdir}/
-        
-        # Fake output
-        echo "done" > out.txt
-    >>>
-    
-    output {
-        File out_flag = "out.txt"
-    }
-    runtime {
-        docker: docker_image
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
-    }
-}
-
-
-# Performance with 4 cores and 32GB of RAM:
-#
-# TASK                      % CPU       RAM     TIME
-# truvari bench             
-# vcfdist
-#
-task PrecisionRecallAnalysis {
-    input {
-        File samples_csv
-        String remote_indir
-        String remote_outdir
-        
         Int min_sv_length
-        Int max_sv_length
-        Int truvari_bench_mode
-        Int limit_to_dipcall_bed
-        String sv_type
-        
-        File reference_fa
-        File reference_fai
         File reference_agp
-        File tandem_bed
-        File not_tandem_bed
+        Int limit_to_dipcall_bed
         
-        File in_flag
+        String remote_outdir
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 4
-        Int disk_size_gb = 20
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
         Int preemptible_number
     }
     parameter_meta {
@@ -439,6 +259,7 @@ task PrecisionRecallAnalysis {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         
         
@@ -504,74 +325,342 @@ task PrecisionRecallAnalysis {
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the given length range
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type b ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
-            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
-            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
+            mv ${SAMPLE_ID}_in.bcf ${SAMPLE_ID}.bcf
+            mv ${SAMPLE_ID}_in.bcf.csi ${SAMPLE_ID}.bcf.csi
         }
-
         
-        #
-        function Benchmark() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF=$2
-            local DIPCALL_BED=$3
-            local OUTPUT_PREFIX=$4
-            
-            if [ ~{truvari_bench_mode} -eq 0 ]; then
-                TRUVARI_MATCH_FLAGS="--pctseq 0"
-            elif [ ~{truvari_bench_mode} -eq 1 ]; then
-                TRUVARI_MATCH_FLAGS="--reference ~{reference_fa} --max-resolve 3000000000 --dup-to-ins"
-            elif [ ~{truvari_bench_mode} -eq 2 ]; then
-                TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
-            fi
-            if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
-                TRUVARI_BED_FLAG="--includebed ${DIPCALL_BED}"
-            else
-                TRUVARI_BED_FLAG=" "
-            fi
-            if [ ${INPUT_VCF#*.} = vcf.gz ]; then
-                cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
-                cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
-            else
-                bcftools view --output-type z ${INPUT_VCF} --output ${OUTPUT_PREFIX}_input.vcf.gz
-                bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_input.vcf.gz
-            fi
-            
-            # Extracting calls with POS inside and outside TRs
-            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz --output ${OUTPUT_PREFIX}_tr.vcf.gz &
-            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${OUTPUT_PREFIX}_input.vcf.gz --output ${OUTPUT_PREFIX}_not_tr.vcf.gz &
-            wait
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_tr.vcf.gz &
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_PREFIX}_not_tr.vcf.gz &
-            wait
         
-            # Benchmarking
-            rm -rf ./${OUTPUT_PREFIX}_truvari_*
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz        -c ${OUTPUT_PREFIX}_input.vcf.gz  ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_all/ &
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth_tr.vcf.gz     -c ${OUTPUT_PREFIX}_tr.vcf.gz     ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_tr/ &
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth_not_tr.vcf.gz -c ${OUTPUT_PREFIX}_not_tr.vcf.gz ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} -o ./${OUTPUT_PREFIX}_truvari_not_tr/ &
-            wait
-            mv ./${OUTPUT_PREFIX}_truvari_all/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_all.txt
-            mv ./${OUTPUT_PREFIX}_truvari_tr/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_tr.txt
-            mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_not_tr.txt
-            
-            # Removing temporary files
-            rm -f ${OUTPUT_PREFIX}_input.vcf.gz*
-        }
-
-
-
-
+        
+        
         # --------------------------- Main program -----------------------------
         
+        MAX_SV_LENGTH="3000000000"  # Arbitrary
         GetReferenceGaps ~{reference_agp} not_gaps.bed
+        while read ROW; do
+            SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
+            REMOTE_BED=$( echo ${ROW} | cut -d , -f 2 )
+            REMOTE_VCF=$( echo ${ROW} | cut -d , -f 3 )
+            
+            # Skipping the sample if it has already been canonized
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+            
+            # Canonizing
+            gcloud storage cp ${REMOTE_BED} ./${SAMPLE_ID}.bed
+            gcloud storage cp ${REMOTE_VCF} ./${SAMPLE_ID}.vcf.gz
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.vcf.gz
+            CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ${SAMPLE_ID}.bed ~{min_sv_length} ${MAX_SV_LENGTH} not_gaps.bed
+            
+            # Uploading
+            gcloud storage mv ${SAMPLE_ID}.'bcf*' ~{remote_outdir}/
+            touch ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+            rm -f ${SAMPLE_ID}*
+        done < ~{samples_csv}
         
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+# Writes to a separate file every sample column.
+#
+# Remark: we keep only records that are genotyped as present in each sample.
+#
+# Performance on 12'680 samples, whole genome, SSD, 10 samples:
+#
+# TOOL                              CPU     RAM      TIME
+# bcftools +split ultralong        100%      2G     1h40m
+# bcftools +split bnd              100%     85M       10s
+#
+task SplitBcfBySample {
+    input {
+        File samples_csv
+        
+        String remote_workpackage_11_dir
+        String remote_outdir
+        
+        String docker_image
+        Int n_cpu = 2
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
+        Int preemptible_number
+    }
+    parameter_meta {
+        remote_outdir: "The result of the split is stored in this bucket location."
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        gcloud storage cp ~{remote_workpackage_11_dir}/truvari_collapsed.'bcf*' .
+        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
+        rm -f truvari_collapsed.bcf*
+        for FILE in $(ls *.bcf); do
+            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || GT=".|1" || GT="1|." || GT="./1" || GT="1/."' --output-type b ${FILE} --output out.bcf
+            rm -f ${FILE}* ; mv out.bcf ${FILE} ; bcftools index --threads ${N_THREADS} -f ${FILE}
+        done
+        ls -laht
+        gcloud storage mv '*.bcf*' ~{remote_outdir}/        
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+#
+task FilterByType {
+    input {
+        File samples_csv
+        String sv_type
+        
+        String remote_indir
+        String remote_outdir
+        
+        Array[File] in_flag
+        
+        String docker_image
+        Int n_cpu = 2
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
+        Int preemptible_number
+    }
+    parameter_meta {
+        sv_type: "INS or DEL only, since dipcall does not report DUP,INV."
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
+        while read SAMPLE_ID; do
+            # Skipping the sample if it has already been filtered
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+            
+            # Filtering
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}'.bcf*' .
+            if [ ~{sv_type} = "INS" ]; then
+                ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="INS" || SVTYPE="DUP"' --output-type b ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_~{sv_type}.bcf
+            else
+                ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="'~{sv_type}'"' --output-type b ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_~{sv_type}.bcf
+            fi
+            
+            rm -f ${SAMPLE_ID}.bcf* ; mv ${SAMPLE_ID}_~{sv_type}.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.bcf
+            
+            # Uploading
+            gcloud storage mv ${SAMPLE_ID}'.bcf*' ~{remote_outdir}/
+            touch ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+        done < samples.txt
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+#
+task FilterByLength {
+    input {
+        File samples_csv
+        String sv_length_bins
+        Int index
+        
+        String remote_indir
+        String remote_outdir
+        
+        Array[File] in_flag
+        
+        String docker_image
+        Int n_cpu = 2
+        Int ram_size_gb = 8
+        Int disk_size_gb = 50
+        Int preemptible_number
+    }
+    parameter_meta {
+        sv_length_bins: "Comma-separated, increasing."
+        index: "Zero-based"
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
+        
+        SVLEN_MAX=$( echo ~{sv_length_bins} | cut -d , -f $(( ~{index} + 1 )) )
+        if [ ~{index} -eq 0 ]; then
+            SVLEN_MIN="0"
+        else
+            SVLEN_MIN=$( echo ~{sv_length_bins} | cut -d , -f ~{index} )
+        fi
+        cut -d , -f 1 ~{samples_csv} | sort | uniq > samples.txt
+        while read SAMPLE_ID; do
+            # Skipping the sample if it has already been filtered
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+        
+            # Filtering
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}.'bcf*' .    
+            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${SVLEN_MIN}' && ABS(SVLEN)<'${SVLEN_MAX} --output-type b ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_${SVLEN_MAX}.bcf
+            rm -f ${SAMPLE_ID}.bcf* ; mv ${SAMPLE_ID}_${SVLEN_MAX}.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}.bcf
+            
+            # Uploading
+            gcloud storage mv ${SAMPLE_ID}'.bcf*' ~{remote_outdir}/
+            touch ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+        done < samples.txt
+        
+        # Fake output
+        echo "done" > out.txt
+    >>>
+    
+    output {
+        File out_flag = "out.txt"
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}
+
+
+# Performance with 4 cores and 32GB of RAM:
+#
+# TASK                      % CPU       RAM     TIME
+# truvari bench             
+# vcfdist
+#
+task PrecisionRecallAnalysis {
+    input {
+        File samples_csv
+        String remote_indir_samples
+        String remote_indir_dipcall
+        String remote_outdir
+        
+        Int min_sv_length
+        Int sequence_similarity
+        Int limit_to_dipcall_bed
+        String sv_type
+        
+        File reference_fa
+        File reference_fai
+        File reference_agp
+        File tandem_bed
+        File not_tandem_bed
+        
+        Array[File] in_flag
+        
+        String docker_image
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+        Int disk_size_gb = 20
+        Int preemptible_number
+    }
+    parameter_meta {
+    }
+    
+    String docker_dir = "/callset_integration"
+    
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        MAX_SV_LENGTH="3000000000"  # Arbitrary
+        if [ ~{sequence_similarity} -eq 0 ]; then
+            TRUVARI_MATCH_FLAGS="--pctseq 0 --dup-to-ins"
+        elif [ ~{sequence_similarity} -eq 1 ]; then
+            TRUVARI_MATCH_FLAGS="--reference ~{reference_fa} --max-resolve ${MAX_SV_LENGTH} --dup-to-ins"
+        elif [ ~{sequence_similarity} -eq 2 ]; then
+            TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
+        fi
+        if [ ~{limit_to_dipcall_bed} -eq 1 ]; then
+            TRUVARI_BED_FLAG="--includebed ${DIPCALL_BED}"
+        else
+            TRUVARI_BED_FLAG=" "
+        fi
         while read ROW; do
             SAMPLE_ID=$(echo ${ROW} | cut -d , -f 1)
             DIPCALL_BED_URI=$(echo ${ROW} | cut -d , -f 2)
-            DIPCALL_VCF_URI=$(echo ${ROW} | cut -d , -f 3)
             
             # Skipping the sample if it has already been processed
             TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
@@ -581,46 +670,43 @@ task PrecisionRecallAnalysis {
             
             # Downloading
             gcloud storage cp ${DIPCALL_BED_URI} ${SAMPLE_ID}_dipcall.bed
-            gcloud storage cp ${DIPCALL_VCF_URI} ${SAMPLE_ID}_dipcall.vcf.gz
+            gcloud storage cp ~{remote_indir_samples}/${SAMPLE_ID}.'bcf*' .
+            gcloud storage cp ~{remote_indir_dipcall}/${SAMPLE_ID}.bcf ./${SAMPLE_ID}_dipcall.bcf
+            gcloud storage cp ~{remote_indir_dipcall}/${SAMPLE_ID}.bcf.csi ./${SAMPLE_ID}_dipcall.bcf.csi
             
-            # Canonizing the dipcall VCF
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dipcall.vcf.gz
-            CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}_dipcall.vcf.gz ${SAMPLE_ID}_dipcall.vcf.gz.tbi ${SAMPLE_ID}_dipcall.bed ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-            rm -f ${SAMPLE_ID}_dipcall.vcf.gz*
-            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_truth.vcf.gz --output ${SAMPLE_ID}_truth_tr.vcf.gz &
-            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_truth.vcf.gz --output ${SAMPLE_ID}_truth_not_tr.vcf.gz &
+            # Extracting calls with POS inside and outside TRs
+            ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz &
+            ${TIME_COMMAND} bcftools view --output-type z ${SAMPLE_ID}_dipcall.bcf --output ${SAMPLE_ID}_dipcall.vcf.gz &
             wait
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_tr.vcf.gz &
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_not_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dipcall.vcf.gz &
             wait
-        
-            # Localizing the VCF to benchmark
-            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}.'bcf*' .
-        
-            # Keeping only records in the given length range
-            if [ ~{truvari_bench_mode} -ne 2 ]; then
-                ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ${SAMPLE_ID}.bcf --output out.bcf
-                rm -f ${SAMPLE_ID}.bcf* ; mv out.bcf ${SAMPLE_ID}.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}.bcf
-            fi
-        
-            # Keeping only records that are genotyped as present. This is
-            # important, since truvari bench does not consider GTs when
-            # matching.
-            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || GT=".|1" || GT="1|." || GT="./1" || GT="1/."' --output-type z ${SAMPLE_ID}.bcf --output out.vcf.gz
-            rm -f ${SAMPLE_ID}.bcf* ; mv out.vcf.gz ${SAMPLE_ID}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
-        
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_not_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_dipcall.bcf --output ${SAMPLE_ID}_dipcall_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_dipcall.bcf --output ${SAMPLE_ID}_dipcall_not_tr.vcf.gz &
+            wait
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dipcall_tr.vcf.gz &
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dipcall_not_tr.vcf.gz &
+            wait
+            
             # Benchmarking
-            if [ ~{truvari_bench_mode} -eq 2 ]; then
-                OUTPUT_PREFIX="bnd"
-            else
-                OUTPUT_PREFIX="ultralong"
-            fi
-            Benchmark ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dipcall.bed ${OUTPUT_PREFIX}
+            rm -rf ./truvari_*
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_dipcall.vcf.gz        -c ${SAMPLE_ID}.vcf.gz        ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin 1 --sizefilt 1 --sizemax ${MAX_SV_LENGTH} -o ./truvari_all/ &
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_dipcall_tr.vcf.gz     -c ${SAMPLE_ID}_tr.vcf.gz     ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin 1 --sizefilt 1 --sizemax ${MAX_SV_LENGTH} -o ./truvari_tr/ &
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_dipcall_not_tr.vcf.gz -c ${SAMPLE_ID}_not_tr.vcf.gz ${TRUVARI_MATCH_FLAGS} ${TRUVARI_BED_FLAG} --sizemin 1 --sizefilt 1 --sizemax ${MAX_SV_LENGTH} -o ./truvari_not_tr/ &
+            wait
+            mv ./truvari_all/summary.json ./${SAMPLE_ID}_all.txt
+            mv ./truvari_tr/summary.json ./${SAMPLE_ID}_tr.txt
+            mv ./truvari_not_tr/summary.json ./${SAMPLE_ID}_not_tr.txt
         
             # Uploading
             gcloud storage mv ${SAMPLE_ID}_'*.txt' ~{remote_outdir}/
             echo "done" > ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+            rm -f ${SAMPLE_ID}*
         done < ~{samples_csv}
     >>>
     
