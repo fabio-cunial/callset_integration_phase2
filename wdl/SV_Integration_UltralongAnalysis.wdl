@@ -627,7 +627,6 @@ task PrecisionRecallAnalysis {
         Int min_sv_length
         Int sequence_similarity
         Int limit_to_dipcall_bed
-        String sv_type
         
         File reference_fa
         File reference_fai
