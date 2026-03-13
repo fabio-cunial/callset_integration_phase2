@@ -115,9 +115,18 @@ RUN pip install truvari==${truvari_version} \
     && truvari --help
 
 # SNIFFLES
+# Remark: the latest version is currently 2.7.3, but it throws errors on our
+# ultralong VCFs. E.g.:
+#
+# Sniffles2 Error: Error parsing input VCF: Line 1:
+# 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
+# exiting.)
+#
+# v2.7.1 is currently the latest release that doesn't throw errors.
+ARG sniffles_version=2.7.1
 RUN conda config --add channels bioconda \
     && conda config --add channels conda-forge \
-    && conda install sniffles=2.7.3 \ 
+    && conda install sniffles=${sniffles_version} \ 
     && sniffles --help
     
 # CUTEFC

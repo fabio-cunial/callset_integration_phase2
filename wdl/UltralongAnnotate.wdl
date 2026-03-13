@@ -8,6 +8,7 @@ workflow UltralongAnnotate {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File reference_agp
         File training_resource_bed
@@ -26,6 +27,7 @@ workflow UltralongAnnotate {
             chunk_csv = chunk_csv,
             remote_outdir = remote_outdir,
     
+            reference_fa = reference_fa,
             reference_fai = reference_fai,
             reference_agp = reference_agp,
             training_resource_bed = training_resource_bed,
@@ -47,6 +49,7 @@ task Impl {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File reference_agp
         File training_resource_bed
@@ -168,69 +171,169 @@ task Impl {
         }
         
         
-        # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
-        # necessary, since sniffles might overwrite the SAMPLE column.
-        #
-        # Remark: the funtion requires an indexed `.vcf.gz` in input, and it
-        # outputs an indexed `.vcf.gz` of `bcf`, depending on `OUTPUT_FORMAT`
-        # (`z` or `b`).
-        #
-        function CopySuppToInfo() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF_GZ=$2
-            local OUTPUT_FORMAT=$3
-            local OUTPUT_VCF_GZ=$4
-            
-            bcftools query --format '%CHROM\t%POS\t%ID\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                printf("%s",$1); \
-                for (i=2; i<=NF-1; i++) printf("\t%s",$i); \
-                if ($4=="0") printf("\t0\t0\t0");
-                else if ($4=="1") printf("\t0\t0\t1");
-                else if ($4=="2") printf("\t0\t1\t0");
-                else if ($4=="3") printf("\t0\t1\t1");
-                else if ($4=="4") printf("\t1\t0\t0");
-                else if ($4=="5") printf("\t1\t0\t1");
-                else if ($4=="6") printf("\t1\t1\t0");
-                else if ($4=="7") printf("\t1\t1\t1");
-                printf("\n"); \
-            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by sniffles">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
-            # Remark: the order of the callers is now the reverse of the one in
-            # which they were bcftools-merged.
-            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} --output ${OUTPUT_VCF_GZ}
-            if [ ${OUTPUT_FORMAT} = z ]; then
-                bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
-            elif [ ${OUTPUT_FORMAT} = b ]; then
-                bcftools index --threads ${N_THREADS} -f -c ${OUTPUT_VCF_GZ}
-            fi
-            
-            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF_GZ}*
-        }
-        
-        
-        # Remark: we consider sniffles just as a feature annotator, so we keep
-        # all recors, even those that are not genotyped as present by sniffles.
-        #
-        # Remark: the function outputs a `.vcf.gz`, since it's needed by the 
-        # following steps.
+        # Remark: the procedure stores in a TSV just the features created by the
+        # genotyper (the re-genotyped VCF is not saved). In this way we do not
+        # care if the genotyper removes fields from the input VCF.
         #
         function Sniffles() {
             local SAMPLE_ID=$1
-            local INPUT_VCF=$2
+            local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} sniffles --input ${ALIGNMENTS_BAM} --genotype-vcf ${INPUT_VCF} --vcf ${SAMPLE_ID}_out.vcf
-            rm -f ${INPUT_VCF} ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            
-            # Sorting
+            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --genotype-vcf ${INPUT_VCF_GZ} --vcf ${SAMPLE_ID}_out.vcf
+            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz
-            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_sniffles.vcf.gz.tbi
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                \
+                if ($5==".") GQ=-1; \
+                else GQ=$5; \
+                \
+                if ($6==".") DR=-1; \
+                else DR=$6; \
+                \
+                if ($7==".") DV=-1; \
+                else DV=$7; \
+                \
+                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\n",$1,$2,$3,GT_COUNT,GQ,DR,DV); \
+            }' | bgzip -c > sniffles_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz*
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 sniffles_annotations.tsv.gz
+            echo '##INFO=<ID=SNIFFLES_GT_COUNT,Number=1,Type=Integer,Description="Sniffles GT converted to an integer in {0,1,2}.">' > sniffles_header.txt
+            echo '##INFO=<ID=SNIFFLES_GQ,Number=1,Type=Integer,Description="Genotype quality according to sniffles">' >> sniffles_header.txt
+            echo '##INFO=<ID=SNIFFLES_DR,Number=1,Type=Integer,Description="Number of reference reads according to sniffles">' >> sniffles_header.txt
+            echo '##INFO=<ID=SNIFFLES_DV,Number=1,Type=Integer,Description="Number of variant reads according to sniffles">' >> sniffles_header.txt
+            SNIFFLES_COLUMNS='CHROM,POS,~ID,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
+        }
+        
+        
+        # Remark: the procedure stores in a TSV just the features created by the
+        # genotyper (the re-genotyped VCF is not saved). In this way we do not
+        # care if the genotyper removes fields from the input VCF (cuteFC does,
+        # for example).
+        #
+        function Cutefc() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local ALIGNMENTS_BAM=$3
+                
+            mkdir ./cutefc_dir/
+            ${TIME_COMMAND} cuteFC --threads ${N_THREADS} --genotype --max_size -1 --detect_large_ins --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_out.vcf ./cutefc_dir
+            rm -rf ./cutefc_dir ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\t[%PL]\t%INFO/CIPOS\t%INFO/CILEN\t%INFO/RE\t%INFO/STRAND\n' ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                \
+                if ($5==".") GQ=-1; \
+                else GQ=$5; \
+                \
+                if ($6==".") DR=-1; \
+                else DR=$6; \
+                \
+                if ($7==".") DV=-1; \
+                else DV=$7; \
+                \
+                PL_1=-1; PL_2=-1; PL_3=-1; \
+                p=0; \
+                for (i=1; i<=length($8); i++) { \
+                    if (substr($8,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    PL_1=substr($8,1,p-1); \
+                    q=0; \
+                    for (i=p+1; i<=length($8); i++) { \
+                        if (substr($8,i,1)==",") { q=i; break; } \
+                    } \
+                    if (q>0) { \
+                        PL_2=substr($8,p+1,q-1-p); } \
+                        PL_3=substr($8,q+1); } \
+                    } \
+                    else { PL_2=substr($8,p+1); } \
+                } \
+                else { PL_1=$8; }
+                \
+                CIPOS_1=-1; CIPOS_2=-1; \
+                p=0; \
+                for (i=1; i<=length($9); i++) { \
+                    if (substr($9,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CIPOS_1=substr($9,1,p-1); \
+                    CIPOS_2=substr($9,p+1); \
+                } \
+                else { CIPOS_1=$9; } \
+                \
+                CILEN_1=-1; CILEN_2=-1; \
+                p=0; \
+                for (i=1; i<=length($10); i++) { \
+                    if (substr($10,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CILEN_1=substr($10,1,p-1); \
+                    CILEN_2=substr($10,p+1); \
+                } \
+                else { CILEN_1=$10; } \
+                \
+                if ($11==".") RE=-1; \
+                else RE=$11; \
+                \
+                STRAND=-1; \
+                if ($12=="--") STRAND=0; \
+                else if ($12=="-+") STRAND=1; \
+                else if ($12=="+-") STRAND=2; \
+                else if ($12=="++") STRAND=3; \
+                \
+                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
+            }' | bgzip -c > cutefc_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz*
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 cutefc_annotations.tsv.gz
+            echo '##INFO=<ID=CUTEFC_GT_COUNT,Number=1,Type=Integer,Description="Cutefc GT converted to an integer in {0,1,2}.">' > cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_GQ,Number=1,Type=Integer,Description="Genotype quality according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Integer,Description="High-quality reference reads according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Integer,Description="High-quality variant reads according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_1,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_2,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_3,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_CIPOS_1,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_CIPOS_2,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_CILEN_1,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_CILEN_2,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> cutefc_header.txt
+            echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> cutefc_header.txt
+            CUTEFC_COLUMNS='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
+        }
+        
+        
+        # Copies the annotations of all genotypers to a single VCF.
+        #
+        # Remark: SUPP_* fields from intra-sample truvari are already in INFO,
+        # thanks to the pipeline steps upstream.
+        #
+        function Annotate() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local OUTPUT_VCF_GZ=$3
+            
+            mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
+            mv ${INPUT_VCF_GZ}.tbi ${SAMPLE_ID}_in.vcf.gz.tbi
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations sniffles_annotations.tsv.gz --header-lines sniffles_header.txt --columns ${SNIFFLES_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations cutefc_annotations.tsv.gz --header-lines cutefc_header.txt --columns ${CUTEFC_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            rm -f ${INPUT_VCF_GZ}*
+            
+            mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${OUTPUT_VCF_GZ}.tbi
         }
         
         
@@ -295,6 +398,7 @@ END
         INFINITY="1000000000"
         truvari --help 1>&2
         sniffles --version 1>&2
+        cuteFC --version 1>&2
         
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         while read LINE; do
@@ -309,20 +413,13 @@ END
             # Annotating and marking training records
             LocalizeSample ${SAMPLE_ID} ${LINE}
             ResetAlts ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            CopySuppToInfo ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz z ${SAMPLE_ID}_supp.vcf.gz
-            
-            echo "Before sniffles:" 1>&2
-            (bcftools view --no-header ${SAMPLE_ID}_supp.vcf.gz | head -n 5 || echo "1") 1>&2
-            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_supp.vcf.gz ${SAMPLE_ID}.bam
-            echo "After sniffles:" 1>&2
-            (bcftools view --header-only ${SAMPLE_ID}_sniffles.vcf.gz || echo "1") 1>&2
-            (bcftools view --no-header ${SAMPLE_ID}_sniffles.vcf.gz | head -n 5 || echo "1") 1>&2
-            
-            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_sniffles.vcf.gz            
-            #-------->CopyKanpigFieldsToInfo ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz
+            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}.bam
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}.bam
+            Annotate ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
+            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
             # Uploading
-            gcloud storage mv ${SAMPLE_ID}_sniffles.vcf.'gz*' ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
