@@ -122,12 +122,14 @@ RUN pip install truvari==${truvari_version} \
 # 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
 # exiting.)
 #
-# v2.7.1 is currently the latest release that doesn't throw errors.
-ARG sniffles_version=2.7.1
-RUN conda config --add channels bioconda \
-    && conda config --add channels conda-forge \
-    && conda install sniffles=${sniffles_version} \ 
-    && sniffles --help
+# The following is currently the latest release that doesn't throw errors.
+#ARG sniffles_version=2.7.0
+RUN pip install sniffles==2.6.3
+#
+# conda config --add channels bioconda \
+#     && conda config --add channels conda-forge \
+#     && conda install sniffles=${sniffles_version} \
+#     && sniffles --help
     
 # CUTEFC
 ARG cutefc_version=1.0.2

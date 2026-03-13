@@ -1,7 +1,8 @@
 version 1.0
 
 
-# 
+# Annotates ultralong records with Sniffles and cuteFC features, and extracts TP
+# records for XGBoost.
 #
 workflow UltralongAnnotate {
     input {
@@ -11,15 +12,16 @@ workflow UltralongAnnotate {
         File reference_fa
         File reference_fai
         File reference_agp
-        File training_resource_bed
-        File training_resource_vcf_gz
-        File training_resource_tbi
+        File ultralong_training_resource_bed
+        File ultralong_training_resource_vcf_gz
+        File ultralong_training_resource_tbi
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
         Int preemptible_number = 4
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam,csi,bcf"
+        ultralong_training_resource_vcf_gz: "This should be a training resource specifically built for ultralong records. The standard training resource excludes such records."
     }
     
     call Impl {
@@ -30,9 +32,9 @@ workflow UltralongAnnotate {
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             reference_agp = reference_agp,
-            training_resource_bed = training_resource_bed,
-            training_resource_vcf_gz = training_resource_vcf_gz,
-            training_resource_tbi = training_resource_tbi,
+            ultralong_training_resource_bed = ultralong_training_resource_bed,
+            ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
+            ultralong_training_resource_tbi = ultralong_training_resource_tbi,
     
             docker_image = docker_image,
             preemptible_number = preemptible_number
@@ -52,9 +54,9 @@ task Impl {
         File reference_fa
         File reference_fai
         File reference_agp
-        File training_resource_bed
-        File training_resource_vcf_gz
-        File training_resource_tbi
+        File ultralong_training_resource_bed
+        File ultralong_training_resource_vcf_gz
+        File ultralong_training_resource_tbi
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
         Int n_cpu = 4
@@ -74,7 +76,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
 
 
         
@@ -96,7 +98,7 @@ task Impl {
             bedtools complement -L -i gaps.bed -g ~{reference_fai} > not_gaps.bed
             
             # Intersecting non-gap regions with the training BED
-            bedtools sort -i ~{training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
+            bedtools sort -i ~{ultralong_training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
             rm -f training_not_gaps_beds.wsv
             ID="0"
             while read ROW; do
@@ -337,57 +339,55 @@ task Impl {
         }
         
         
+        # Remark: we keep sequence similarity on, even if the records are
+        # ultralong, to be as specific as possible.
+        #
         cat << 'END' > truvari_bench.sh
 #!/bin/bash
-SAMPLE_ID=$1
-INPUT_VCF_GZ=$2
-TRAINING_RESOURCE_VCF_GZ=$3
-INFINITY=$4
-CHUNK_ID=$5
-INCLUDE_BED=$6
-${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
+TRAINING_RESOURCE_VCF_GZ=$1
+INFINITY=$2
+INPUT_VCF=$3
+
+CHUNK_ID=${INPUT_VCF#chunk_}
+CHUNK_ID=${CHUNK_ID%.vcf}
+${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
                 
         
         # Extracts every record that has a stringent `truvari bench` match with
-        # some records in the resource.
-        #
-        # Remark: we use `--pick single` to force every resource record to be
-        # matched with at most one sample record, which is hopefully the
-        # most similar to it. This is because we assume that using a
-        # contaminated training set in XGBoost downstream is worse than using a
-        # slightly smaller training set. With `--pick multi` e.g. two records in
-        # the sample VCF might be matched to the same record in the resource 
-        # VCF (probably not good) and vice versa (good).
-        #
-        # Remark: multiple instances of `truvari bench` are run in parallel
-        # using `not_gaps.bed`.
-        #
-        # Remark: in few anecdotal tests, `--pick multi` seems a bit faster than
-        # `--pick single` (4m vs 5m with 6 hyperthreading cores).
-        #
-        # Remark: both the inputs and the output of the function are indexed
-        # `.vcf.gz`, since they are needed by `truvari bench`.
+        # some records in the resource. 
         #
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             
-            # Running in parallel
-            ${TIME_COMMAND} xargs --arg-file=training_not_gaps_beds.wsv --max-lines=1 --max-procs=${N_THREADS} ./truvari_bench.sh ${SAMPLE_ID} ${INPUT_VCF_GZ} ~{training_resource_vcf_gz} ${INFINITY}
+            # Storing every record in a separate VCF
+            rm -f tasks.wsv
+            bcftools view --header-only ${INPUT_VCF_GZ} > header.txt
+            bcftools view --no-header ${INPUT_VCF_GZ} | split -d -a 4 -l 1 chunk_
+            for FILE in $( ls chunk_* ); do
+                cat header.txt ${FILE} > ${FILE}.vcf
+                rm -f ${FILE}
+                echo "${FILE}.vcf" >> tasks.wsv
+            done
+            rm -f header.txt
             
-            # Concatenating outputs
-            rm -f ${SAMPLE_ID}_outputs.txt
-            while read ROW; do
-                ID=$(echo ${ROW} | cut -d ' ' -f 1)
-                echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
-            done < training_not_gaps_beds.wsv
-            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list ${SAMPLE_ID}_outputs.txt --output-type z --output ${SAMPLE_ID}_training.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
+            # Running every record in parallel
+            ${TIME_COMMAND} xargs --arg-file=tasks.wsv --max-lines=1 --max-procs=${N_THREADS} ./truvari_bench.sh ~{ultralong_training_resource_vcf_gz} ${INFINITY}
+            
+            # Concatenating TPs
+            rm -f file_list.txt
+            while read FILE; do
+                CHUNK_ID=${FILE#chunk_}
+                CHUNK_ID=${CHUNK_ID%.vcf}
+                echo truvari_${CHUNK_ID}/tp-comp.vcf.gz >> file_list.txt
+            done < tasks.wsv
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z --output ${SAMPLE_ID}_training.vcf.gz
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
             
             # Removing temporary files
-            rm -rf ${SAMPLE_ID}_script.sh ${SAMPLE_ID}_outputs.txt ./${SAMPLE_ID}_truvari_*/
+            rm -rf ./truvari_*/ ./chunk_*.vcf file_list.txt
         }
         
         
