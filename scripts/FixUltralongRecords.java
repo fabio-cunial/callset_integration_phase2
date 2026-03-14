@@ -5,7 +5,9 @@ import java.io.*;
 
 
 /**
- * 
+ * - Discards records with first or last position outside the chromosome.
+ * - Ensures that the correct value of END is present in every record.
+ * - Removes SVLEN from symbolic ALTs.
  */
 public class FixUltralongRecords {
     
@@ -22,8 +24,9 @@ public class FixUltralongRecords {
         
         final int QUANTUM = 5000;  // Arbitrary
         
+        boolean endFound;
         int i;
-        int chromLength, pos, svlen, nRecords, nDiscarded_pos, nDiscarded_svlen;
+        int chromLength, pos, svlen, end, nRecords, nDiscarded_pos, nDiscarded_svlen, nNoEnd, nWrongEnd;
         String chrom, ref, alt, info, str, svlenStr, endStr;
         BufferedReader br;
         String[] tokens;
@@ -31,9 +34,11 @@ public class FixUltralongRecords {
 
         loadFai(INPUT_FAI);
         br = new BufferedReader( new InputStreamReader( INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz") ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        str=br.readLine(); nRecords=0; nDiscarded_pos=0; nDiscarded_svlen=0;
+        str=br.readLine(); nRecords=0; endFound=false; nDiscarded_pos=0; nDiscarded_svlen=0; nNoEnd=0; nWrongEnd=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
+                if (str.indexOf("INFO=<ID=END,")>=0) endFound=true;
+                if (!endFound && str.substring(0,6).equals("#CHROM")) System.out.println("##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant described in this record\">");
                 System.out.println(str);
                 str=br.readLine();
                 continue;
@@ -49,20 +54,30 @@ public class FixUltralongRecords {
                 str=br.readLine();
                 continue;
             }
-            alt=tokens[4];
-            if (alt.charAt(0)!='<') {
-                System.out.println(str);
-                str=br.readLine();
-                continue;
-            }
-            info=tokens[7];
+            alt=tokens[4]; info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
-            if (pos+svlen>chromLength) {
-                nDiscarded_svlen++;
-                System.err.println("Call ends beyond "+chrom+": "+(pos+svlen)+">"+chromLength+" (excess: "+(pos+svlen-chromLength)+")");
-                str=br.readLine();
-                continue;
+            if (alt.charAt(0)=='<') {
+                if (pos+svlen>chromLength) {
+                    nDiscarded_svlen++;
+                    System.err.println("Call ends after "+chrom+": "+(pos+svlen)+">"+chromLength+" (excess: "+(pos+svlen-chromLength)+")");
+                    str=br.readLine();
+                    continue;
+                }
+                alt=alt.substring(0,4)+'>';
+                end=pos+svlen;
             }
+            else end=pos;
+            endStr=getInfoField(info,"END");
+            if (endStr==null) {
+                nNoEnd++;
+                info+=";END="+end;
+            }
+            else if (Integer.parseInt(endStr)!=end) {
+                System.err.println("Call "+tokens[2]+" has wrong END: "+endStr+" != "+end);
+                nWrongEnd++;
+                info=replaceInfoField(info,"END",end+"");
+            }
+            tokens[4]=alt; tokens[7]=info;
             
             // Outputting
             System.out.print(tokens[0]);
@@ -76,6 +91,8 @@ public class FixUltralongRecords {
         System.err.println("nRecords="+nRecords);
         System.err.println("nDiscarded_pos="+nDiscarded_pos+" ("+((100.0*nDiscarded_pos)/nRecords)+"% of nRecords)");
         System.err.println("nDiscarded_svlen="+nDiscarded_svlen+" ("+((100.0*nDiscarded_svlen)/nRecords)+"% of nRecords)");
+        System.err.println("nNoEnd="+nNoEnd+" ("+((100.0*nNoEnd)/nRecords)+"% of nRecords)");
+        System.err.println("nWrongEnd="+nWrongEnd+" ("+((100.0*nWrongEnd)/nRecords)+"% of nRecords)");
     }
     
     
@@ -109,6 +126,22 @@ public class FixUltralongRecords {
 		if (p<0) return null;
 		q=info.indexOf(";",p+FIELD_LENGTH);
 		return info.substring(p+FIELD_LENGTH,q<0?info.length():q);
+	}
+    
+    
+    /**
+     * @return `ìnfo` if `field` does not occur in `info`.
+     */
+	private static final String replaceInfoField(String info, String field, String newValue) {
+		final int FIELD_LENGTH = field.length()+1;
+        int p, q;
+    
+        p=-FIELD_LENGTH;
+        do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
+        while (p>0 && info.charAt(p-1)!=';');
+		if (p<0) return info;
+		q=info.indexOf(";",p+FIELD_LENGTH);
+		return info.substring(0,p+FIELD_LENGTH)+newValue+info.substring(q);
 	}
 
 }

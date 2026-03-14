@@ -118,22 +118,14 @@ task Impl {
         }
         
         
-        # Removes SVLEN from symbolic ALTs, in order not to interfere with
-        # sniffles.
+        # Ensures the VCF is correctly formatted for the genotypers
         #
-        function ResetAlts() {
+        function CanonizeVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
     
-            date 1>&2
-            ( bcftools view --header-only ${INPUT_VCF_GZ} ; bcftools view --no-header ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' ) | bcftools view --output-type z --output out.vcf.gz
-            date 1>&2
-            rm -f ${INPUT_VCF_GZ}* ; mv out.vcf.gz ${SAMPLE_ID}_reset_alts.vcf.gz ; bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_reset_alts.vcf.gz
+            java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_canonized.vcf.gz
+            rm -f ${INPUT_VCF_GZ}* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_canonized.vcf.gz
         }
         
         
@@ -376,10 +368,10 @@ END
         
             # Annotating and marking training records
             LocalizeSample ${SAMPLE_ID} ${LINE}
-            ResetAlts ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}.bam
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}.bam
-            Annotate ${SAMPLE_ID} ${SAMPLE_ID}_reset_alts.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
+            CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
+            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
             # Uploading
