@@ -134,7 +134,7 @@ task Impl {
             date 1>&2
             gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
             date 1>&2
-            gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
+            #gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
             gcloud storage cp ${ULTRALONG_BCF} ./${SAMPLE_ID}.bcf
             gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.csi
             
@@ -142,6 +142,10 @@ task Impl {
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
             bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}.vcf.gz
             rm -f ${SAMPLE_ID}.bcf*
+            
+            # Checking the integrity of the BAM
+            ${TIME_COMMAND} samtools quickcheck -v ${SAMPLE_ID}.bam && echo "BAM is OK" || echo "BAM is CORRUPT"
+            ${TIME_COMMAND} samtools index --threads ${N_THREADS} ${SAMPLE_ID}.bam
         }
         
         
@@ -399,6 +403,7 @@ END
         truvari --help 1>&2
         sniffles --version 1>&2
         cuteFC --version 1>&2
+        df -h 1>&2
         
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         while read LINE; do

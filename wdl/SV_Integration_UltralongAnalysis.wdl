@@ -1,8 +1,8 @@
 version 1.0
 
 
-# Simple evaluations of ultralong calls. BND calls are analyzed by a separate
-# workflow.
+# Simple evaluations of ultralong calls. BND calls should be analyzed with a
+# separate, ad hoc workflow.
 # 
 # Structure of `remote_outdir`:
 #
