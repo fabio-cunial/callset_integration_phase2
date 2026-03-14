@@ -94,18 +94,17 @@ task Impl {
             date 1>&2
             gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
             date 1>&2
-            #gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
+            gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
             gcloud storage cp ${ULTRALONG_BCF} ./${SAMPLE_ID}.bcf
             gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.csi
             
-            # Converting to .vcf.gz for sniffles
+            # Converting to .vcf.gz for the genotypers
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
             bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}.vcf.gz
             rm -f ${SAMPLE_ID}.bcf*
             
             # Checking the integrity of the BAM
-            ${TIME_COMMAND} samtools quickcheck -v ${SAMPLE_ID}.bam && echo "BAM is OK" || echo "BAM is CORRUPT"
-            ${TIME_COMMAND} samtools index --threads ${N_THREADS} ${SAMPLE_ID}.bam
+            ${TIME_COMMAND} samtools quickcheck -v ${SAMPLE_ID}.bam && echo "" || echo "ERROR: the BAM is corrupted."
         }
         
         
@@ -312,7 +311,7 @@ END
                 
         
         # Extracts every record that has a stringent `truvari bench` match with
-        # some records in the resource. 
+        # some records in the resource. This is parallelized by record.
         #
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
