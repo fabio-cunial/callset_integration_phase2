@@ -11,7 +11,6 @@ workflow UltralongAnnotate {
         
         File reference_fa
         File reference_fai
-        File reference_agp
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
@@ -31,7 +30,6 @@ workflow UltralongAnnotate {
     
             reference_fa = reference_fa,
             reference_fai = reference_fai,
-            reference_agp = reference_agp,
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
             ultralong_training_resource_tbi = ultralong_training_resource_tbi,
@@ -53,7 +51,6 @@ task Impl {
         
         File reference_fa
         File reference_fai
-        File reference_agp
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
@@ -81,43 +78,6 @@ task Impl {
 
         
         # ----------------------- Steps of the pipeline ------------------------
-        
-        # Builds a BED file that excludes every gap from the AGP file of
-        # the reference.
-        #
-        function GetReferenceGaps() {
-            # Computing non-gap regions
-            awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                    if ( ( $1=="chr1" || $1=="chr2" || $1=="chr3" || $1=="chr4" || $1=="chr5" || $1=="chr6" || $1=="chr7" || $1=="chr8" || $1=="chr9" || $1=="chr10" || \
-                           $1=="chr11" || $1=="chr12" || $1=="chr13" || $1=="chr14" || $1=="chr15" || $1=="chr16" || $1=="chr17" || $1=="chr18" || $1=="chr19" || $1=="chr20" || \
-                           $1=="chr21" || $1=="chr22" || $1=="chrX" || $1=="chrY" || $1=="chrM" \
-                         ) && $5=="N" \
-                       ) print $0 \
-                 }' ~{reference_agp} > gaps_unsorted.bed
-            bedtools sort -i gaps_unsorted.bed -faidx ~{reference_fai} > gaps.bed
-            bedtools complement -L -i gaps.bed -g ~{reference_fai} > not_gaps.bed
-            
-            # Intersecting non-gap regions with the training BED
-            bedtools sort -i ~{ultralong_training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
-            rm -f training_not_gaps_beds.wsv
-            ID="0"
-            while read ROW; do
-                ID=$(( ${ID} + 1 ))
-                echo "${ROW}" > ${ID}.bed
-                bedtools intersect -a ${ID}.bed -b training_resource_sorted.bed -sorted -g ~{reference_fai} > training_not_gaps_${ID}.bed
-                if [ -s training_not_gaps_${ID}.bed ]; then
-                    echo "${ID} training_not_gaps_${ID}.bed" >> training_not_gaps_beds.wsv
-                else
-                    rm -f training_not_gaps_${ID}.bed
-                fi
-                rm -f ${ID}.bed
-            done < not_gaps.bed
-            ls -lht *.bed 1>&2
-            
-            # Removing temporary files
-            rm -f gaps_unsorted.bed training_resource_sorted.bed
-        }
-        
         
         # @param 
         # $2 A row of `chunk_csv`.
@@ -186,7 +146,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --genotype-vcf ${INPUT_VCF_GZ} --vcf ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --reference ~{reference_fa} --genotype-vcf ${INPUT_VCF_GZ} --vcf ${SAMPLE_ID}_out.vcf
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
@@ -405,7 +365,6 @@ END
         cuteFC --version 1>&2
         df -h 1>&2
         
-        GetReferenceGaps ~{reference_agp} not_gaps.bed
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             

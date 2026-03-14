@@ -123,11 +123,10 @@ RUN pip install truvari==${truvari_version} \
 # exiting.)
 #
 # The following is currently the latest release that doesn't throw errors.
-RUN pip install pysam==0.23.0 \
-    && pip install sniffles==2.6.3
+RUN pip install sniffles==2.6.3
     
 # CUTEFC
-ARG cutefc_version=1.0.2
+ARG cutefc_version=1.0.1
 RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
     && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
     && rm -f cuteFC-v${cutefc_version}.tar.gz \
