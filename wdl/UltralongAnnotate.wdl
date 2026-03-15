@@ -243,8 +243,8 @@ task Impl {
                         if (substr($8,i,1)==",") { q=i; break; } \
                     } \
                     if (q>0) { \
-                        PL_2=substr($8,p+1,q-1-p); } \
-                        PL_3=substr($8,q+1); } \
+                        PL_2=substr($8,p+1,q-1-p); \
+                        PL_3=substr($8,q+1); \
                     } \
                     else { PL_2=substr($8,p+1); } \
                 } \
