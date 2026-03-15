@@ -54,7 +54,9 @@ public class FixUltralongRecords {
                 str=br.readLine();
                 continue;
             }
-            alt=tokens[4]; info=tokens[7];
+            ref=tokens[3].toUpperCase();
+            alt=tokens[4].toUpperCase();
+            info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
             if (alt.charAt(0)=='<') {
                 if (pos+svlen>chromLength) {
@@ -77,7 +79,7 @@ public class FixUltralongRecords {
                 nWrongEnd++;
                 info=replaceInfoField(info,"END",end+"");
             }
-            tokens[4]=alt; tokens[7]=info;
+            tokens[3]=ref; tokens[4]=alt; tokens[7]=info;
             
             // Outputting
             System.out.print(tokens[0]);
