@@ -43,6 +43,12 @@ workflow UltralongAnnotate {
 }
 
 
+# TOOL                      CPU     RAM     TIME
+# sniffles           
+# cutefc       
+# bcftools query
+# bcftools annotate
+# truvari bench      
 #
 task Impl {
     input {
@@ -320,11 +326,12 @@ task Impl {
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
             mv ${INPUT_VCF_GZ}.tbi ${SAMPLE_ID}_in.vcf.gz.tbi
+            
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations sniffles_annotations.tsv.gz --header-lines sniffles_header.txt --columns ${SNIFFLES_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations cutefc_annotations.tsv.gz --header-lines cutefc_header.txt --columns ${CUTEFC_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            rm -f ${INPUT_VCF_GZ}*
             
             mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${OUTPUT_VCF_GZ}.tbi
@@ -404,7 +411,15 @@ END
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            
+            gcloud storage cp sniffles_annotations.tsv.gz ~{remote_outdir}/
+            
+            
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            
+            gcloud storage cp cutefc_annotations.tsv.gz ~{remote_outdir}/
+            
+            
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             
             
