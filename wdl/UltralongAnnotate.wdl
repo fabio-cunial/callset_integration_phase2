@@ -342,7 +342,7 @@ INPUT_VCF=$3
 
 CHUNK_ID=${INPUT_VCF#chunk_}
 CHUNK_ID=${CHUNK_ID%.vcf}
-${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
+${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
                 
