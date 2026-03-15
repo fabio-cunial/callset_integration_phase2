@@ -123,14 +123,13 @@ RUN pip install truvari==${truvari_version} \
 # exiting.)
 #
 # The following is currently the latest release that doesn't throw errors.
+ARG sniffles_version=2.6.3
 RUN python -m venv /opt/sniffles_env
-ENV PATH="/opt/sniffles_env/bin:$PATH"
-RUN pip install sniffles==2.6.3
+RUN /opt/sniffles_env/bin/pip install sniffles==${sniffles_version}
     
 # CUTEFC
 ARG cutefc_version=1.0.1
 RUN python -m venv /opt/cutefc_env
-ENV PATH="/opt/cutefc_env/bin:$PATH"
 RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
     && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
     && rm -f cuteFC-v${cutefc_version}.tar.gz \

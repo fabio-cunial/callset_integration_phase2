@@ -163,6 +163,7 @@ task Impl {
             local ALIGNMENTS_BAM=$3
             
             source /opt/sniffles_env/bin/activate
+            sniffles --version 1>&2
             ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --reference ~{reference_fa} --genotype-vcf ${INPUT_VCF_GZ} --vcf ${SAMPLE_ID}_out.vcf
             deactivate
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -208,6 +209,7 @@ task Impl {
                 
             mkdir ./cutefc_dir/
             source /opt/cutefc_env/bin/activate
+            cuteFC --version 1>&2
             ${TIME_COMMAND} cuteFC --threads ${N_THREADS} --genotype --max_size -1 --detect_large_ins --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_out.vcf ./cutefc_dir
             deactivate
             rm -rf ./cutefc_dir ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -381,8 +383,6 @@ END
         
         INFINITY="1000000000"
         truvari --help 1>&2
-        sniffles --version 1>&2
-        cuteFC --version 1>&2
         df -h 1>&2
         
         while read LINE; do
