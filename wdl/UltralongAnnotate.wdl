@@ -353,11 +353,11 @@ task Impl {
 #!/bin/bash
 TRAINING_RESOURCE_VCF_GZ=$1
 INFINITY=$2
-INPUT_VCF=$3
+INPUT_VCF_GZ=$3
 
-CHUNK_ID=${INPUT_VCF#chunk_}
-CHUNK_ID=${CHUNK_ID%.vcf}
-${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
+CHUNK_ID=${INPUT_VCF_GZ#chunk_}
+CHUNK_ID=${CHUNK_ID%.vcf.gz}
+${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
                 
@@ -374,9 +374,10 @@ END
             bcftools view --header-only ${INPUT_VCF_GZ} > header.txt
             bcftools view --no-header ${INPUT_VCF_GZ} | split -d -a 4 -l 1 - chunk_
             for FILE in $( ls chunk_* ); do
-                cat header.txt ${FILE} > ${FILE}.vcf
+                cat header.txt ${FILE} | bgzip > ${FILE}.vcf.gz
+                bcftools index -t -f ${FILE}.vcf.gz
                 rm -f ${FILE}
-                echo "${FILE}.vcf" >> tasks.wsv
+                echo "${FILE}.vcf.gz" >> tasks.wsv
             done
             rm -f header.txt
             
