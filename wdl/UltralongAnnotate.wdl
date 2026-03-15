@@ -123,8 +123,33 @@ task Impl {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
     
-            java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_canonized.vcf.gz
-            rm -f ${INPUT_VCF_GZ}* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_canonized.vcf.gz
+            #java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_canonized.vcf.gz
+            #rm -f ${INPUT_VCF_GZ}* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_canonized.vcf.gz
+            
+            # 1. Fixing symbolic records
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G FixSymbolicRecords ${INPUT_VCF_GZ} ~{reference_fa} > ${SAMPLE_ID}_out.vcf
+            rm -f ${INPUT_VCF_GZ}.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 2. Fixing REF
+            ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 3. Cleaning REF, ALT, QUAL, FILTER.
+            # - REF and ALT must be uppercase for XGBoost scoring downstream to
+            #   work.
+            # - We force every record to PASS, to rule out any filter-dependent
+            #   effect in downstream tools.
+            DEFAULT_QUAL="60"   # Arbitrary
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_in.vcf ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 4. Removing END, since its values may be inconsistent and make
+            # GATK crash downstream.
+            ${TIME_COMMAND} bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_in.vcf.gz
+            
+            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
+            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_canonized.vcf.gz.tbi
         }
         
         
