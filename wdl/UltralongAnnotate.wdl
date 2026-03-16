@@ -338,7 +338,8 @@ task Impl {
         
         
         # Remark: we keep sequence similarity on, even if the records are
-        # ultralong, to be as specific as possible.
+        # ultralong, to be as specific as possible. However, this is too slow in
+        # practice, even after parallelizing by record.
         #
         cat << 'END' > truvari_bench.sh
 #!/bin/bash
@@ -427,7 +428,7 @@ gcloud storage cp cutefc_annotations.tsv.gz ~{remote_outdir}/${SAMPLE_ID}_cutefc
 gcloud storage cp ${SAMPLE_ID}_annotated.vcf.gz ~{remote_outdir}/
             
             
-            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
+            #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
             # Uploading
             gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/

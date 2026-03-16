@@ -123,7 +123,7 @@ RUN pip install truvari==${truvari_version} \
 # exiting.)
 #
 # The following is currently the latest release that doesn't throw errors.
-ARG sniffles_version=2.6.3
+ARG sniffles_version=2.7.3
 RUN python -m venv /opt/sniffles_env
 RUN /opt/sniffles_env/bin/pip install sniffles==${sniffles_version}
 
