@@ -128,40 +128,31 @@ task Impl {
         function CanonizeVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-    
+            
+            # 1. Fixing END
             java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
-            mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_canonized.vcf.gz.tbi
+            # 2. Adding sequence to symbolic records
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G FixSymbolicRecords ${SAMPLE_ID}_in.vcf.gz ~{reference_fa} > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
+            # 3. Fixing REF
+            ${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
+            # 4. Cleaning REF, ALT, QUAL, FILTER.
+            # - REF and ALT must be uppercase for XGBoost scoring downstream to
+            #   work.
+            # - We force every record to PASS, to rule out any filter-dependent
+            #   effect in downstream tools.
+            DEFAULT_QUAL="60"   # Arbitrary
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_in.vcf ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            
-            ## 1. Fixing symbolic records
-            #${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G FixSymbolicRecords ${INPUT_VCF_GZ} ~{reference_fa} > ${SAMPLE_ID}_out.vcf
-            #rm -f ${INPUT_VCF_GZ}.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            #
-            ## 2. Fixing REF
-            #${TIME_COMMAND} bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
-            #rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            #
-            ## 3. Cleaning REF, ALT, QUAL, FILTER.
-            ## - REF and ALT must be uppercase for XGBoost scoring downstream to
-            ##   work.
-            ## - We force every record to PASS, to rule out any filter-dependent
-            ##   effect in downstream tools.
-            #DEFAULT_QUAL="60"   # Arbitrary
-            #${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_in.vcf ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
-            #rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            #
-            ## 4. Removing END, since its values may be inconsistent and make
-            ## GATK crash downstream.
-            #${TIME_COMMAND} bcftools annotate --remove INFO/END --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
-            #rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_in.vcf.gz
-            #
-            #mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_canonized.vcf.gz
-            #mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_canonized.vcf.gz.tbi
+            bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_canonized.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_canonized.vcf.gz
         }
         
         
@@ -185,7 +176,7 @@ task Impl {
             
             
             
-            gcloud storage cp ${SAMPLE_ID}_in.vcf.gz ~{remote_outdir}/sniffles.vcf.gz
+            gcloud storage cp ${SAMPLE_ID}_in.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_sniffles.vcf.gz
             
             
             
@@ -388,7 +379,7 @@ END
             rm -f file_list.txt
             while read FILE; do
                 CHUNK_ID=${FILE#chunk_}
-                CHUNK_ID=${CHUNK_ID%.vcf}
+                CHUNK_ID=${CHUNK_ID%.vcf.gz}
                 echo truvari_${CHUNK_ID}/tp-comp.vcf.gz >> file_list.txt
             done < tasks.wsv
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list file_list.txt --output-type z --output ${SAMPLE_ID}_training.vcf.gz
@@ -421,18 +412,19 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             
-            gcloud storage cp sniffles_annotations.tsv.gz ~{remote_outdir}/
+gcloud storage cp sniffles_annotations.tsv.gz ~{remote_outdir}/${SAMPLE_ID}_sniffles_annotations.tsv.gz
             
             
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             
-            gcloud storage cp cutefc_annotations.tsv.gz ~{remote_outdir}/
+            
+gcloud storage cp cutefc_annotations.tsv.gz ~{remote_outdir}/${SAMPLE_ID}_cutefc_annotations.tsv.gz
             
             
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             
             
-            gcloud storage cp ${SAMPLE_ID}_annotated.vcf.gz ~{remote_outdir}/
+gcloud storage cp ${SAMPLE_ID}_annotated.vcf.gz ~{remote_outdir}/
             
             
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
