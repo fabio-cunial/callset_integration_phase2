@@ -172,15 +172,6 @@ task Impl {
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            
-            
-            
-            
-            gcloud storage cp ${SAMPLE_ID}_in.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_sniffles.vcf.gz
-            
-            
-            
-            
             bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${SAMPLE_ID}_in.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
                 if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
@@ -313,6 +304,100 @@ task Impl {
         }
         
         
+        # Remark: the procedure stores in a TSV just the features created by the
+        # genotyper (the re-genotyped VCF is not saved). In this way we do not
+        # care if the genotyper removes fields from the input VCF.
+        #
+        function Lrcaller() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local ALIGNMENTS_BAM=$3
+        
+            bcftools view --threads ${N_THREADS} --drop-gentotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            lrcaller --version
+            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                printf("%s",$1); \
+                for (i=2; i<=3; i++) printf("\t%s",$i); \
+                for (i=10; i<=14; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' | tr ':' '\t' | tr ',' '\t' | bgzip -c > lrcaller_annotations.tsv.gz
+            zcat lrcaller_annotations.tsv.gz | head -n 10 1>&2
+            rm -f ${SAMPLE_ID}_in.vcf
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations.tsv.gz
+            echo '##INFO=<ID=GT1,Number=1,Type=String,Description="Genotype">' > lrcaller_header.txt
+            echo '##INFO=<ID=GT2,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
+            echo '##INFO=<ID=GT3,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
+            echo '##INFO=<ID=GT4,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
+            echo '##INFO=<ID=GT5,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=AD11,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD12,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD13,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=AD21,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD22,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD23,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=AD31,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD32,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD33,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=AD41,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD42,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD43,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=AD51,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD52,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD53,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=VA11,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA12,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA13,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=VA21,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA22,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA23,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=VA31,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA32,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA33,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=VA41,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA42,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA43,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=VA51,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA52,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA53,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=PL11,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL12,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL13,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=PL21,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL22,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL23,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=PL31,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL32,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL33,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=PL41,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL42,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL43,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            
+            echo '##INFO=<ID=PL51,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL52,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL53,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            
+            LRCALLER_COLUMNS='CHROM,POS,~ID,INFO/GT1,INFO/AD11,INFO/AD12,INFO/AD13,INFO/VA11,INFO/VA12,INFO/VA13,INFO/PL11,INFO/PL12,INFO/PL13,INFO/GT2,INFO/AD21,INFO/AD22,INFO/AD23,INFO/VA21,INFO/VA22,INFO/VA23,INFO/PL21,INFO/PL22,INFO/PL23,INFO/GT3,INFO/AD31,INFO/AD32,INFO/AD33,INFO/VA31,INFO/VA32,INFO/VA33,INFO/PL31,INFO/PL32,INFO/PL33,INFO/GT4,INFO/AD41,INFO/AD42,INFO/AD43,INFO/VA41,INFO/VA42,INFO/VA43,INFO/PL41,INFO/PL42,INFO/PL43,INFO/GT5,INFO/AD51,INFO/AD52,INFO/AD53,INFO/VA51,INFO/VA52,INFO/VA53,INFO/PL51,INFO/PL52,INFO/PL53'
+        }
+        
+        
         # Copies the annotations of all genotypers to a single VCF.
         #
         # Remark: SUPP_* fields from intra-sample truvari are already in INFO,
@@ -326,10 +411,13 @@ task Impl {
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
             mv ${INPUT_VCF_GZ}.tbi ${SAMPLE_ID}_in.vcf.gz.tbi
             
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations sniffles_annotations.tsv.gz --header-lines sniffles_header.txt --columns ${SNIFFLES_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            #${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations sniffles_annotations.tsv.gz --header-lines sniffles_header.txt --columns ${SNIFFLES_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            #rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations cutefc_annotations.tsv.gz --header-lines cutefc_header.txt --columns ${CUTEFC_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            #${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations cutefc_annotations.tsv.gz --header-lines cutefc_header.txt --columns ${CUTEFC_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            #rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations.tsv.gz --header-lines lrcaller_header.txt --columns ${LRCALLER_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
@@ -411,27 +499,15 @@ END
             # Annotating and marking training records
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            
-gcloud storage cp sniffles_annotations.tsv.gz ~{remote_outdir}/${SAMPLE_ID}_sniffles_annotations.tsv.gz
-            
-            
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            
-            
-gcloud storage cp cutefc_annotations.tsv.gz ~{remote_outdir}/${SAMPLE_ID}_cutefc_annotations.tsv.gz
-            
-            
+            #Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
-            
-            
-gcloud storage cp ${SAMPLE_ID}_annotated.vcf.gz ~{remote_outdir}/
-            
-            
             #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
             # Uploading
-            gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ~{remote_outdir}/
+            #gcloud storage mv ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}

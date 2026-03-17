@@ -136,7 +136,16 @@ RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_
     && cd cuteFC-cuteFC-v${cutefc_version} \
     && /opt/cutefc_env/bin/python setup.py install
 
+# LRCALLER
+ARG lrcaller_version=1.0
+RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcaller_version}/lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+    && tar -xzvf lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+    && chmod +x lrcaller-${lrcaller_version}/bin/* \
+    && mv lrcaller-${lrcaller_version}/bin/* /usr/local/bin \
+    && lrcaller --help || echo "LRcaller returns an error code when called"
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
 COPY *.r .
+COPY *.py .
