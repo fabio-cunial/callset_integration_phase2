@@ -313,7 +313,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
         
-            bcftools view --threads ${N_THREADS} --drop-gentotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
+            bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             lrcaller --version
             ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null
@@ -453,7 +453,7 @@ END
             rm -f tasks.wsv
             bcftools view --header-only ${INPUT_VCF_GZ} > header.txt
             bcftools view --no-header ${INPUT_VCF_GZ} | split -d -a 4 -l 1 - chunk_
-            for FILE in $( ls chunk_* ); do
+            for FILE in chunk_* ; do
                 cat header.txt ${FILE} | bgzip > ${FILE}.vcf.gz
                 bcftools index -t -f ${FILE}.vcf.gz
                 rm -f ${FILE}
@@ -491,7 +491,7 @@ END
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
                 continue
             fi
