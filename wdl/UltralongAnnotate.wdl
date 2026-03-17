@@ -354,7 +354,12 @@ END
                     printf("\t%s",$i); \
                 } \
                 printf("\n"); \
-            }' | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            }' > tmp.tsv
+            head -n 10 tmp.tsv
+            
+gcloud storage cp tmp.tsv ~{remote_outdir}/
+            
+            cat tmp.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
                 if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
                 else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
