@@ -316,10 +316,10 @@ task Impl {
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             lrcaller --version
-            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            grep '^[^#]' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=3; i++) printf("\t%s",$i); \
                 for (i=10; i<=14; i++) { \
