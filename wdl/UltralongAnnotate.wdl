@@ -322,9 +322,13 @@ task Impl {
             bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=3; i++) printf("\t%s",$i); \
-                for (i=10; i<=14; i++) printf("\t%s",$i); \
+                for (i=10; i<=14; i++) { \
+                    sub(":","\t",$i); \
+                    sub(",","\t",$i); \
+                    printf("\t%s",$i); \
+                } \
                 printf("\n"); \
-            }' | tr ':' '\t' | tr ',' '\t' | bgzip -c > lrcaller_annotations.tsv.gz
+            }' | bgzip -c > lrcaller_annotations.tsv.gz
             zcat lrcaller_annotations.tsv.gz | head -n 10 1>&2
             rm -f ${SAMPLE_ID}_in.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations.tsv.gz
@@ -395,6 +399,16 @@ task Impl {
             echo '##INFO=<ID=PL53,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
             
             LRCALLER_COLUMNS='CHROM,POS,~ID,INFO/GT1,INFO/AD11,INFO/AD12,INFO/AD13,INFO/VA11,INFO/VA12,INFO/VA13,INFO/PL11,INFO/PL12,INFO/PL13,INFO/GT2,INFO/AD21,INFO/AD22,INFO/AD23,INFO/VA21,INFO/VA22,INFO/VA23,INFO/PL21,INFO/PL22,INFO/PL23,INFO/GT3,INFO/AD31,INFO/AD32,INFO/AD33,INFO/VA31,INFO/VA32,INFO/VA33,INFO/PL31,INFO/PL32,INFO/PL33,INFO/GT4,INFO/AD41,INFO/AD42,INFO/AD43,INFO/VA41,INFO/VA42,INFO/VA43,INFO/PL41,INFO/PL42,INFO/PL43,INFO/GT5,INFO/AD51,INFO/AD52,INFO/AD53,INFO/VA51,INFO/VA52,INFO/VA53,INFO/PL51,INFO/PL52,INFO/PL53'
+        }
+        
+        
+        function FeatureExtraction() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local ALIGNMENTS_BAM=$3
+            
+            ${TIME_COMMAND} python ~{docker_dir}/feature_extraction.py ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa}
+            ls -laht
         }
         
         
@@ -503,6 +517,7 @@ END
             #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
             # Uploading
