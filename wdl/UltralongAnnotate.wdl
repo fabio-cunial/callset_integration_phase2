@@ -312,11 +312,19 @@ task Impl {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
-        
+            local BREAKPOINT=$4
+            
+            if [ ${BREAKPOINT} -eq 0 ]; then
+                LRCALLER_BREAKPOINT_FLAG=""
+                SUFFIX="left"
+            else
+                LRCALLER_BREAKPOINT_FLAG="--right_breakpoint"
+                SUFFIX="right"
+            fi
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             lrcaller --version
-            ${TIME_COMMAND} (lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null)
+            ${TIME_COMMAND} { lrcaller --number_of_threads ${N_THREADS} ${LRCALLER_BREAKPOINT_FLAG} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null ; }
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             grep '^[^#]' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
@@ -327,77 +335,81 @@ task Impl {
                     printf("\t%s",$i); \
                 } \
                 printf("\n"); \
-            }' | bgzip -c > lrcaller_annotations.tsv.gz
-            zcat lrcaller_annotations.tsv.gz | head -n 10 1>&2 || echo "0"
+            }' | bgzip -c > lrcaller_annotations_${SUFFIX}.tsv.gz
+            zcat lrcaller_annotations_${SUFFIX}.tsv.gz | head -n 10 1>&2 || echo "0"
             rm -f ${SAMPLE_ID}_in.vcf
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations.tsv.gz
-            echo '##INFO=<ID=GT1,Number=1,Type=String,Description="Genotype">' > lrcaller_header.txt
-            echo '##INFO=<ID=GT2,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
-            echo '##INFO=<ID=GT3,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
-            echo '##INFO=<ID=GT4,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
-            echo '##INFO=<ID=GT5,Number=1,Type=String,Description="Genotype">' >> lrcaller_header.txt
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations_${SUFFIX}.tsv.gz
+            echo '##INFO=<ID=GT1_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' > lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GT2_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GT3_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GT4_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GT5_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=AD11,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD12,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD13,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD11_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD12_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD13_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=AD21,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD22,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD23,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD21_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD22_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD23_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=AD31,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD32,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD33,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD31_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD32_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD33_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=AD41,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD42,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD43,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD41_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD42_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD43_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=AD51,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD52,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=AD53,Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=AD51_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD52_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=AD53_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=VA11,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA12,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA13,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA11_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA12_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA13_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=VA21,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA22,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA23,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA21_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA22_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA23_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=VA31,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA32,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA33,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA31_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA32_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA33_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=VA41,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA42,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA43,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA41_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA42_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA43_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=VA51,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA52,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
-            echo '##INFO=<ID=VA53,Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header.txt
+            echo '##INFO=<ID=VA51_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA52_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=VA53_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=PL11,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL12,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL13,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL11_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL12_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL13_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=PL21,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL22,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL23,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL21_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL22_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL23_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=PL31,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL32,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL33,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL31_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL32_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL33_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=PL41,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL42,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL43,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL41_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL42_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL43_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
-            echo '##INFO=<ID=PL51,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL52,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
-            echo '##INFO=<ID=PL53,Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header.txt
+            echo '##INFO=<ID=PL51_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL52_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=PL53_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
-            LRCALLER_COLUMNS='CHROM,POS,~ID,INFO/GT1,INFO/AD11,INFO/AD12,INFO/AD13,INFO/VA11,INFO/VA12,INFO/VA13,INFO/PL11,INFO/PL12,INFO/PL13,INFO/GT2,INFO/AD21,INFO/AD22,INFO/AD23,INFO/VA21,INFO/VA22,INFO/VA23,INFO/PL21,INFO/PL22,INFO/PL23,INFO/GT3,INFO/AD31,INFO/AD32,INFO/AD33,INFO/VA31,INFO/VA32,INFO/VA33,INFO/PL31,INFO/PL32,INFO/PL33,INFO/GT4,INFO/AD41,INFO/AD42,INFO/AD43,INFO/VA41,INFO/VA42,INFO/VA43,INFO/PL41,INFO/PL42,INFO/PL43,INFO/GT5,INFO/AD51,INFO/AD52,INFO/AD53,INFO/VA51,INFO/VA52,INFO/VA53,INFO/PL51,INFO/PL52,INFO/PL53'
+            if [ ${BREAKPOINT} -eq 0 ]; then
+                LRCALLER_COLUMNS_LEFT='CHROM,POS,~ID,INFO/GT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
+            else
+                LRCALLER_COLUMNS_RIGHT='CHROM,POS,~ID,INFO/GT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
+            fi
         }
         
         
@@ -430,7 +442,7 @@ task Impl {
             #${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations cutefc_annotations.tsv.gz --header-lines cutefc_header.txt --columns ${CUTEFC_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             #rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations.tsv.gz --header-lines lrcaller_header.txt --columns ${LRCALLER_COLUMNS} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_left.tsv.gz --header-lines lrcaller_header_left.txt --columns ${LRCALLER_COLUMNS_LEFT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
@@ -514,7 +526,7 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             #Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
