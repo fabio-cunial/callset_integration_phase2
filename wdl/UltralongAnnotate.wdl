@@ -316,20 +316,19 @@ task Impl {
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             lrcaller --version
-            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null
+            ${TIME_COMMAND} (lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null)
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             grep '^[^#]' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=3; i++) printf("\t%s",$i); \
                 for (i=10; i<=14; i++) { \
-                    sub(":","\t",$i); \
-                    sub(",","\t",$i); \
+                    gsub(/[:,]/,"\t",$i); \
                     printf("\t%s",$i); \
                 } \
                 printf("\n"); \
             }' | bgzip -c > lrcaller_annotations.tsv.gz
-            zcat lrcaller_annotations.tsv.gz | head -n 10 1>&2
+            zcat lrcaller_annotations.tsv.gz | head -n 10 1>&2 || echo "0"
             rm -f ${SAMPLE_ID}_in.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations.tsv.gz
             echo '##INFO=<ID=GT1,Number=1,Type=String,Description="Genotype">' > lrcaller_header.txt
