@@ -313,6 +313,8 @@ BREAKPOINT_FLAG=$4
 REFERENCE_FA=$5
 N_THREADS=$6
 
+set -euxo pipefail
+
 lrcaller --number_of_threads ${N_THREADS} ${BREAKPOINT_FLAG} --dyn-w-size --fa ${REFERENCE_FA} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf 2> /dev/null
 END
         chmod +x lrcaller.sh
@@ -473,6 +475,8 @@ END
 TRAINING_RESOURCE_VCF_GZ=$1
 INFINITY=$2
 INPUT_VCF_GZ=$3
+
+set -euxo pipefail
 
 CHUNK_ID=${INPUT_VCF_GZ#chunk_}
 CHUNK_ID=${CHUNK_ID%.vcf.gz}
