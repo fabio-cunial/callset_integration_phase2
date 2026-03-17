@@ -63,7 +63,7 @@ task Impl {
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 32
         Int disk_size_gb = 128
         Int preemptible_number
     }
@@ -316,7 +316,7 @@ task Impl {
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             lrcaller --version
-            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf 2> /dev/null
+            ${TIME_COMMAND} lrcaller --number_of_threads ${N_THREADS} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
