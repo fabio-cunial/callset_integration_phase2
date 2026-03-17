@@ -354,12 +354,7 @@ END
                     printf("\t%s",$i); \
                 } \
                 printf("\n"); \
-            }' > tmp.tsv
-            head -n 10 tmp.tsv
-            
-gcloud storage cp tmp.tsv ~{remote_outdir}/
-            
-            cat tmp.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            }' | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
                 if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
                 else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
@@ -391,7 +386,8 @@ gcloud storage cp tmp.tsv ~{remote_outdir}/
                 $44=GT_COUNT; \
                 \
                 printf("%s",$1); \
-                for (i=2; i<=$NF; i++) printf("\t%s",$i); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
             }' | bgzip -c > lrcaller_annotations_${SUFFIX}.tsv.gz
             zcat lrcaller_annotations_${SUFFIX}.tsv.gz | head -n 10 1>&2 || echo "0"
             rm -f ${SAMPLE_ID}_in.vcf
