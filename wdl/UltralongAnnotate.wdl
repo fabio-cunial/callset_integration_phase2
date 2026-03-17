@@ -354,15 +354,48 @@ END
                     printf("\t%s",$i); \
                 } \
                 printf("\n"); \
+            }' | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                $4=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($14=="0/0" || $14=="0|0" || $14=="./."  || $14==".|." || $14=="./0" || $14==".|0" || $14=="0/." || $14=="0|." || $14=="0" || $14==".") GT_COUNT=0; \
+                else if ($14=="0/1" || $14=="0|1" || $14=="1/0" || $14=="1|0" || $14=="./1" || $14==".|1" || $14=="1/." || $14=="1|." || $14=="1") GT_COUNT=1; \
+                else if ($14=="1/1" || $14=="1|1") GT_COUNT=2; \
+                $14=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($24=="0/0" || $24=="0|0" || $24=="./."  || $24==".|." || $24=="./0" || $24==".|0" || $24=="0/." || $24=="0|." || $24=="0" || $24==".") GT_COUNT=0; \
+                else if ($24=="0/1" || $24=="0|1" || $24=="1/0" || $24=="1|0" || $24=="./1" || $24==".|1" || $24=="1/." || $24=="1|." || $24=="1") GT_COUNT=1; \
+                else if ($24=="1/1" || $24=="1|1") GT_COUNT=2; \
+                $24=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($34=="0/0" || $34=="0|0" || $34=="./."  || $34==".|." || $34=="./0" || $34==".|0" || $34=="0/." || $34=="0|." || $34=="0" || $34==".") GT_COUNT=0; \
+                else if ($34=="0/1" || $34=="0|1" || $34=="1/0" || $34=="1|0" || $34=="./1" || $34==".|1" || $34=="1/." || $34=="1|." || $34=="1") GT_COUNT=1; \
+                else if ($34=="1/1" || $34=="1|1") GT_COUNT=2; \
+                $34=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($44=="0/0" || $44=="0|0" || $44=="./."  || $44==".|." || $44=="./0" || $44==".|0" || $44=="0/." || $44=="0|." || $44=="0" || $44==".") GT_COUNT=0; \
+                else if ($44=="0/1" || $44=="0|1" || $44=="1/0" || $44=="1|0" || $44=="./1" || $44==".|1" || $44=="1/." || $44=="1|." || $44=="1") GT_COUNT=1; \
+                else if ($44=="1/1" || $44=="1|1") GT_COUNT=2; \
+                $44=GT_COUNT; \
+                \
+                printf("%s",$1); \
+                for (i=2; i<=$NF; i++) printf("\t%s",$i); \
             }' | bgzip -c > lrcaller_annotations_${SUFFIX}.tsv.gz
             zcat lrcaller_annotations_${SUFFIX}.tsv.gz | head -n 10 1>&2 || echo "0"
             rm -f ${SAMPLE_ID}_in.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 lrcaller_annotations_${SUFFIX}.tsv.gz
-            echo '##INFO=<ID=GT1_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' > lrcaller_header_${SUFFIX}.txt
-            echo '##INFO=<ID=GT2_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
-            echo '##INFO=<ID=GT3_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
-            echo '##INFO=<ID=GT4_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
-            echo '##INFO=<ID=GT5_'${SUFFIX}',Number=1,Type=String,Description="Genotype">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GTCOUNT1_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' > lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GTCOUNT2_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GTCOUNT3_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GTCOUNT4_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> lrcaller_header_${SUFFIX}.txt
+            echo '##INFO=<ID=GTCOUNT5_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> lrcaller_header_${SUFFIX}.txt
             
             echo '##INFO=<ID=AD11_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
             echo '##INFO=<ID=AD12_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> lrcaller_header_${SUFFIX}.txt
@@ -425,9 +458,9 @@ END
             echo '##INFO=<ID=PL53_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> lrcaller_header_${SUFFIX}.txt
             
             if [ ${BREAKPOINT} -eq 0 ]; then
-                LRCALLER_COLUMNS_LEFT='CHROM,POS,~ID,INFO/GT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
+                LRCALLER_COLUMNS_LEFT='CHROM,POS,~ID,INFO/GTCOUNT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GTCOUNT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GTCOUNT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GTCOUNT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GTCOUNT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
             else
-                LRCALLER_COLUMNS_RIGHT='CHROM,POS,~ID,INFO/GT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
+                LRCALLER_COLUMNS_RIGHT='CHROM,POS,~ID,INFO/GTCOUNT1_'${SUFFIX}',INFO/AD11_'${SUFFIX}',INFO/AD12_'${SUFFIX}',INFO/AD13_'${SUFFIX}',INFO/VA11_'${SUFFIX}',INFO/VA12_'${SUFFIX}',INFO/VA13_'${SUFFIX}',INFO/PL11_'${SUFFIX}',INFO/PL12_'${SUFFIX}',INFO/PL13_'${SUFFIX}',INFO/GTCOUNT2_'${SUFFIX}',INFO/AD21_'${SUFFIX}',INFO/AD22_'${SUFFIX}',INFO/AD23_'${SUFFIX}',INFO/VA21_'${SUFFIX}',INFO/VA22_'${SUFFIX}',INFO/VA23_'${SUFFIX}',INFO/PL21_'${SUFFIX}',INFO/PL22_'${SUFFIX}',INFO/PL23_'${SUFFIX}',INFO/GTCOUNT3_'${SUFFIX}',INFO/AD31_'${SUFFIX}',INFO/AD32_'${SUFFIX}',INFO/AD33_'${SUFFIX}',INFO/VA31_'${SUFFIX}',INFO/VA32_'${SUFFIX}',INFO/VA33_'${SUFFIX}',INFO/PL31_'${SUFFIX}',INFO/PL32_'${SUFFIX}',INFO/PL33_'${SUFFIX}',INFO/GTCOUNT4_'${SUFFIX}',INFO/AD41_'${SUFFIX}',INFO/AD42_'${SUFFIX}',INFO/AD43_'${SUFFIX}',INFO/VA41_'${SUFFIX}',INFO/VA42_'${SUFFIX}',INFO/VA43_'${SUFFIX}',INFO/PL41_'${SUFFIX}',INFO/PL42_'${SUFFIX}',INFO/PL43_'${SUFFIX}',INFO/GTCOUNT5_'${SUFFIX}',INFO/AD51_'${SUFFIX}',INFO/AD52_'${SUFFIX}',INFO/AD53_'${SUFFIX}',INFO/VA51_'${SUFFIX}',INFO/VA52_'${SUFFIX}',INFO/VA53_'${SUFFIX}',INFO/PL51_'${SUFFIX}',INFO/PL52_'${SUFFIX}',INFO/PL53_'${SUFFIX}
             fi
         }
         
@@ -462,6 +495,9 @@ END
             #rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_left.tsv.gz --header-lines lrcaller_header_left.txt --columns ${LRCALLER_COLUMNS_LEFT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_right.tsv.gz --header-lines lrcaller_header_right.txt --columns ${LRCALLER_COLUMNS_RIGHT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
@@ -548,6 +584,7 @@ END
             #Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 1
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz

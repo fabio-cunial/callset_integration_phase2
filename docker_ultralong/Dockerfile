@@ -145,6 +145,7 @@ RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcalle
     && lrcaller --help || echo "LRcaller returns an error code when called"
 
 # AD HOC SCRIPTS
+RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy 
 COPY *.java .
 RUN javac *.java
 COPY *.r .
