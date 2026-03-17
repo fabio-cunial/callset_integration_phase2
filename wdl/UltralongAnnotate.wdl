@@ -310,7 +310,7 @@ SAMPLE_ID=$1
 INPUT_VCF_GZ=$2
 ALIGNMENTS_BAM=$3
 
-lrcaller --number_of_threads ${N_THREADS} ${LRCALLER_BREAKPOINT_FLAG} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf 2> /dev/null
+lrcaller --number_of_threads ${N_THREADS} ${LRCALLER_BREAKPOINT_FLAG} --dyn-w-size --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf
 END
         chmod +x lrcaller.sh
         
@@ -334,7 +334,7 @@ END
             fi
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            lrcaller --version
+            lrcaller --version 1>&2
             ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf.gz ${ALIGNMENTS_BAM}
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
