@@ -251,21 +251,17 @@ def compute_sequence_context_features(ref_file, chrom, start, end):
         flank = 500
         seq_start = max(0, start - flank)
         seq_end = end + flank
-
+        
         # Handle chromosome naming variations
         sequence = ""
         test_chroms = [
-            chrom,
-            chrom[3:] if chrom.startswith('chr') else f'chr{chrom}',
-            NCBI_CHROM_MAP.get(chrom.replace('chr', ''), None)
-        ]
-        test_chroms = [c for c in test_chroms if c is not None]
-
+            chrom
+        ]        
         for test_chrom in test_chroms:
             if test_chrom in ref_file.references:
                 sequence = ref_file.fetch(test_chrom, seq_start, seq_end).upper()
                 break
-
+        
         if sequence:
             # gc_frac
             gc_count = sequence.count('G') + sequence.count('C')

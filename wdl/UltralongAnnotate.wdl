@@ -483,12 +483,15 @@ END
         }
         
         
-        # This script suffers from the same problem as sniffles and cutesv:
+        # This script suffers from the same problem as sniffles and cutesv, i.e.
+        # it crashes on reading the BAM and does not write the corresponding
+        # annotations:
         #
         # [E::bgzf_read] Read block operation failed with error 3 after 0 of 4
         # bytes
         #
-        # So it is likely an issue with pysam.
+        # So it is likely an issue with pysam. The only nontrivial annotations
+        # written are gc_frac, homopolymer_max.
         #
         # TOOL                           CPU%         RAM        TIME    NOTES
         # feature_extraction.py          100%        3.5G         10s
@@ -499,8 +502,7 @@ END
             local ALIGNMENTS_BAM=$3
             
             ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
-            head -n 20 features.csv
-            
+            head -n 20 features.csv 1>&2
             N_DEL=$(bcftools query --format '%ID\n' --include 'SVTYPE="DEL"' ${INPUT_VCF_GZ} | wc -l)
             N_INS=$(bcftools query --format '%ID\n' --include 'SVTYPE="INS"' ${INPUT_VCF_GZ} | wc -l)
             N_INV=$(bcftools query --format '%ID\n' --include 'SVTYPE="INV"' ${INPUT_VCF_GZ} | wc -l)
@@ -552,10 +554,16 @@ INPUT_VCF_GZ=$3
 
 CHUNK_ID=${INPUT_VCF_GZ#chunk_}
 CHUNK_ID=${CHUNK_ID%.vcf.gz}
-${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --dup-to-ins --max-resolve ${INFINITY} --no-roll --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o truvari_${CHUNK_ID}/
+SVTYPE=$(bcftools query --format '%INFO/SVTYPE\n' ${INPUT_VCF_GZ})
+if [ ${SVTYPE} = "INS" ]; then
+    PCTSEQ_FLAG="--pctseq 0.9 --no-roll"
+else
+    PCTSEQ_FLAG="--pctseq 0"
+fi
+${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --dup-to-ins --max-resolve ${INFINITY} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 ${PCTSEQ_FLAG} --pick single -o truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
-                
+        
         
         # Extracts every record that has a stringent `truvari bench` match with
         # some records in the resource. This is parallelized by record.
@@ -616,15 +624,15 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             #Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            #Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
             #Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 1
-            #Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
-            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
-        
-            # Uploading
+            Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ~{remote_outdir}/
-            #gcloud storage mv ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
+            #FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
+            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
+            gcloud storage mv ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
+            
+            # Next iteration
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
