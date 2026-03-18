@@ -410,7 +410,8 @@ def main(args):
             'ref': sys.argv[3]
         }
     }
-
+    
+    all_dataframes = []
     for dataset_name, dataset_info in DATASETS.items():
         try:
             df = process_dataset(dataset_name, dataset_info)

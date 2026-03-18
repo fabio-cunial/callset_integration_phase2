@@ -483,13 +483,28 @@ END
         }
         
         
+        # This script suffers from the same problem as sniffles and cutesv:
+        #
+        # [E::bgzf_read] Read block operation failed with error 3 after 0 of 4
+        # bytes
+        #
+        # So it is likely an issue with pysam.
+        #
+        # TOOL                           CPU%         RAM        TIME    NOTES
+        # feature_extraction.py          100%        3.5G         10s
+        #
         function FeatureExtraction() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa}
-            ls -laht
+            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
+            head -n 20 features.csv
+            
+            N_DEL=$(bcftools query --format '%ID\n' --include 'SVTYPE="DEL"' | wc -l)
+            N_INS=$(bcftools query --format '%ID\n' --include 'SVTYPE="INS"' | wc -l)
+            N_INV=$(bcftools query --format '%ID\n' --include 'SVTYPE="INV"' | wc -l)
+            N_DUP=$(bcftools query --format '%ID\n' --include 'SVTYPE="DUP"' | wc -l)
         }
         
         
