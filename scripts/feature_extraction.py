@@ -377,8 +377,8 @@ def process_dataset(dataset_name, dataset_info):
             pbar.update(1)
 
     # Close files
-    bam_file.close()
-    ref_file.close()
+    #bam_file.close()
+    #ref_file.close()
 
     # Combine data
     if new_results:
@@ -449,4 +449,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

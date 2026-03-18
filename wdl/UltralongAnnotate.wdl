@@ -15,6 +15,8 @@ workflow UltralongAnnotate {
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
         
+        File feature_extraction_py
+        
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
         Int preemptible_number = 4
     }
@@ -33,6 +35,8 @@ workflow UltralongAnnotate {
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
             ultralong_training_resource_tbi = ultralong_training_resource_tbi,
+    
+            feature_extraction_py = feature_extraction_py,
     
             docker_image = docker_image,
             preemptible_number = preemptible_number
@@ -60,6 +64,8 @@ task Impl {
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
+        
+        File feature_extraction_py
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
         Int n_cpu = 4
@@ -160,6 +166,10 @@ task Impl {
         # genotyper (the re-genotyped VCF is not saved). In this way we do not
         # care if the genotyper removes fields from the input VCF.
         #
+        # TOOL                     CPU%         RAM        TIME     NOTES
+        # sniffles 2.6.3 --vcf     100%         3G         20s      Empty output
+        # sniffles 2.7.3 --vcf                                      Crashes
+        #
         function Sniffles() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -203,6 +213,9 @@ task Impl {
         # genotyper (the re-genotyped VCF is not saved). In this way we do not
         # care if the genotyper removes fields from the input VCF (cuteFC does,
         # for example).
+        #
+        # TOOL                  CPU%      RAM        TIME       NOTES
+        # cuteFC 1.0.2 -Ivcf    120%      3G         44s        All zeros in out
         #
         function Cutefc() {
             local SAMPLE_ID=$1
@@ -329,9 +342,9 @@ END
         # genotyper (the re-genotyped VCF is not saved). In this way we do not
         # care if the genotyper removes fields from the input VCF.
         #
-        # TOOL                                  CPU%         RAM        TIME
-        # lrcaller                              300%       30.5G         10m
-        # lrcaller --right_breakpoint           crashes
+        # TOOL                           CPU%         RAM        TIME    NOTES
+        # lrcaller                       300%       30.5G         10m
+        # lrcaller --right_breakpoint                                    Crashes
         #
         function Lrcaller() {
             local SAMPLE_ID=$1
@@ -475,7 +488,7 @@ END
             local INPUT_VCF_GZ=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} python ~{docker_dir}/feature_extraction.py ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa}
+            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa}
             ls -laht
         }
         
