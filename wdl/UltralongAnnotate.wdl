@@ -501,10 +501,10 @@ END
             ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF_GZ} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
             head -n 20 features.csv
             
-            N_DEL=$(bcftools query --format '%ID\n' --include 'SVTYPE="DEL"' | wc -l)
-            N_INS=$(bcftools query --format '%ID\n' --include 'SVTYPE="INS"' | wc -l)
-            N_INV=$(bcftools query --format '%ID\n' --include 'SVTYPE="INV"' | wc -l)
-            N_DUP=$(bcftools query --format '%ID\n' --include 'SVTYPE="DUP"' | wc -l)
+            N_DEL=$(bcftools query --format '%ID\n' --include 'SVTYPE="DEL"' ${INPUT_VCF_GZ} | wc -l)
+            N_INS=$(bcftools query --format '%ID\n' --include 'SVTYPE="INS"' ${INPUT_VCF_GZ} | wc -l)
+            N_INV=$(bcftools query --format '%ID\n' --include 'SVTYPE="INV"' ${INPUT_VCF_GZ} | wc -l)
+            N_DUP=$(bcftools query --format '%ID\n' --include 'SVTYPE="DUP"' ${INPUT_VCF_GZ} | wc -l)
         }
         
         
