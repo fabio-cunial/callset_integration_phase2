@@ -329,6 +329,10 @@ END
         # genotyper (the re-genotyped VCF is not saved). In this way we do not
         # care if the genotyper removes fields from the input VCF.
         #
+        # TOOL                                  CPU%         RAM        TIME
+        # lrcaller                              300%       30.5G         10m
+        # lrcaller --right_breakpoint           crashes
+        #
         function Lrcaller() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -498,8 +502,8 @@ END
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_left.tsv.gz --header-lines lrcaller_header_left.txt --columns ${LRCALLER_COLUMNS_LEFT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_right.tsv.gz --header-lines lrcaller_header_right.txt --columns ${LRCALLER_COLUMNS_RIGHT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            #${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations lrcaller_annotations_right.tsv.gz --header-lines lrcaller_header_right.txt --columns ${LRCALLER_COLUMNS_RIGHT} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            #rm -f ${SAMPLE_ID}_in.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${OUTPUT_VCF_GZ}
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${OUTPUT_VCF_GZ}.tbi
@@ -584,9 +588,9 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             #Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
-            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
-            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 1
-            Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
+            #Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
+            #Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 1
+            #Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             #GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
         
