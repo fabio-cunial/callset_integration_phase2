@@ -627,10 +627,10 @@ END
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 0
             #Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam 1
             Annotate ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_annotated.vcf.gz
-            gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage cp ${SAMPLE_ID}_annotated.vcf.'gz*' ~{remote_outdir}/
             #FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam
             GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_annotated.vcf.gz
-            gcloud storage mv ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage cp ${SAMPLE_ID}_training.vcf.'gz*' ~{remote_outdir}/
             
             # Next iteration
             touch ${SAMPLE_ID}.done
