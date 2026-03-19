@@ -354,7 +354,7 @@ END
             
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_in.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            lrcaller --version 1>&2
+            #lrcaller --version 1>&2
             ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf.gz ${ALIGNMENTS_BAM} ${BREAKPOINT} ~{reference_fa} ${N_THREADS}
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
