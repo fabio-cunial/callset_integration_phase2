@@ -10,7 +10,7 @@ CLASSPATH="."
 N_BINS="10"
 BREAKPOINT_WINDOW_BP="500"
 
-
+TIME_COMMAND="/usr/bin/time --verbose"
 
 
 # --------------------------- Steps of the pipeline ----------------------------
@@ -27,15 +27,22 @@ function AnnotateCoverageBins() {
     ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
     ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
     rm -f ${SAMPLE_ID}_bins.bed
-    ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalAnnotateCoverage ${SAMPLE_ID}_counts.bed ${N_BINS} | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+    ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalAnnotateCoverage ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
     rm -f ${SAMPLE_ID}_counts.bed
+    ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\n' ${INPUT_VCF} | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
+    ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+    rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv
     tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-    echo '##INFO=<ID=BIN_MINUS_1_COVERAGE,Number=1,Type=Float,Description="Coverage of the i-th bin">' > ${SAMPLE_ID}_header.txt
-    COLUMNS='CHROM,POS,~ID,INFO/BIN_MINUS_1_COVERAGE'
-    for i in {1..${N_BINS}}; do
+    echo '##INFO=<ID=BIN_BEFORE_COVERAGE,Number=1,Type=Float,Description="Coverage of the bin before the call">' > ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=BIN_LEFT_COVERAGE,Number=1,Type=Float,Description="Coverage of the left-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
+    COLUMNS='CHROM,POS,~ID,INFO/BIN_BEFORE_COVERAGE,INFO/BIN_LEFT_COVERAGE'
+    for i in $( seq 1 ${N_BINS} ); do
         echo '##INFO=<ID=BIN_'${i}'_COVERAGE,Number=1,Type=Float,Description="Coverage of the i-th bin">' >> ${SAMPLE_ID}_header.txt
         COLUMNS=${COLUMNS}',INFO/BIN_'${i}'_COVERAGE'
     done
+    echo '##INFO=<ID=BIN_RIGHT_COVERAGE,Number=1,Type=Float,Description="Coverage of the right-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=BIN_AFTER_COVERAGE,Number=1,Type=Float,Description="Coverage of the bin after the call">' >> ${SAMPLE_ID}_header.txt
+    COLUMNS=${COLUMNS}',INFO/BIN_RIGHT_COVERAGE,INFO/BIN_AFTER_COVERAGE'
     ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
     rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
 }
@@ -75,8 +82,9 @@ function AnnotateClippedAlignments() {
     done < ${SAMPLE_ID}_variantID_sorted.txt
     rm -f ${SAMPLE_ID}_variantID_sorted.txt
     ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-    ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11); }' > ${SAMPLE_ID}_annotations.tsv
+    ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11); }' | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
     rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
+    tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
     echo '##INFO=<ID=LL,Number=1,Type=Integer,Description="Left window: number of left-clipped alignemnts.">' > ${SAMPLE_ID}_header.txt
     echo '##INFO=<ID=LR,Number=1,Type=Integer,Description="Left window: number of right-clipped alignemnts.">' >> ${SAMPLE_ID}_header.txt
     echo '##INFO=<ID=RL,Number=1,Type=Integer,Description="Right window: number of left-clipped alignemnts.">' >> ${SAMPLE_ID}_header.txt
@@ -99,7 +107,7 @@ cp ${INPUT_VCF_GZ} in.vcf.gz
 cp ${INPUT_VCF_GZ}.tbi in.vcf.gz.tbi
 
 # Annotating DELs
-bcftools filter --threads ${N_THREADS} --include 'SVTYPE=DEL' --output-type v in.vcf.gz --output out.vcf
+bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v in.vcf.gz --output out.vcf
 rm -f in.vcf.gz* ; mv out.vcf in.vcf
 
 AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${INPUT_BAM} ${N_BINS} ${BREAKPOINT_WINDOW_BP}
