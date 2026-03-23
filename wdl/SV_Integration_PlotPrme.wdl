@@ -62,6 +62,20 @@ workflow SV_Integration_PlotPrme {
     
     # 1. Mendelian error analysis
     scatter (i in range(mendelian_error_n_trios)) {
+        call BenchTrio as me_bench_20_50 {
+            input:
+                ped_tsv = mendelian_error_ped,
+                ped_tsv_row = i+1,
+                remote_indir = remote_outdir+"/samples",
+                remote_outdir = remote_outdir+"/mendelian",
+                min_sv_length = 20,
+                max_sv_length = 50,
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
+                in_flag = [split.out_flag],
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
+        }
         call BenchTrio as me_bench_20 {
             input:
                 ped_tsv = mendelian_error_ped,
@@ -94,6 +108,29 @@ workflow SV_Integration_PlotPrme {
     
     # 2. Precision/recall analysis
     scatter (j in range(length(precision_recall_samples))) {
+        call PrecisionRecallAnalysis as pr_analysis_20_50 {
+            input:
+                sample_id = precision_recall_samples[j],
+                sample_dipcall_vcf_gz = precision_recall_samples_dipcall_vcf_gz[j],
+                sample_dipcall_bed = precision_recall_samples_dipcall_bed[j],
+                
+                remote_outdir = remote_outdir,
+            
+                bench_method = precision_recall_bench_method,
+                min_sv_length = 20,
+                max_sv_length = 50,    
+            
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                reference_agp = reference_agp,
+                tandem_bed = ComplementBed.sorted_bed,
+                not_tandem_bed = ComplementBed.complement_bed,
+                
+                in_flag = split.out_flag,
+                
+                docker_image = docker_image,
+                preemptible_number = preemptible_number
+        }
         call PrecisionRecallAnalysis as pr_analysis_20 {
             input:
                 sample_id = precision_recall_samples[j],
