@@ -15,7 +15,8 @@ TIME_COMMAND="/usr/bin/time --verbose"
 
 # --------------------------- Steps of the pipeline ----------------------------
 
-# Annotates an input VCF with coverage measures extracted from a BAM.
+# Annotates an input VCF containing only interval calls, with coverage measures
+# extracted from a BAM.
 #
 function AnnotateCoverageBins() {
     SAMPLE_ID=$1
@@ -27,7 +28,7 @@ function AnnotateCoverageBins() {
     ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
     ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
     rm -f ${SAMPLE_ID}_bins.bed
-    ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalAnnotateCoverage ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
+    ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
     rm -f ${SAMPLE_ID}_counts.bed
     ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\n' ${INPUT_VCF} | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
     ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
@@ -48,7 +49,8 @@ function AnnotateCoverageBins() {
 }
 
 
-# Annotates an input VCF with clipped alignment measures extracted from a BAM.
+# Annotates an input VCF containing only interval calls, with clipped alignment
+# measures extracted from a BAM.
 #
 function AnnotateClippedAlignments() {
     SAMPLE_ID=$1
@@ -61,18 +63,17 @@ function AnnotateClippedAlignments() {
         ${TIME_COMMAND} samtools view --threads ${N_THREADS} ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
         java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${ID}
         rm -f ${ID}.sam
-        sort ${ID}_left.clips > ${ID}_left_sorted.clips
-        sort ${ID}_right.clips > ${ID}_right_sorted.clips
-        rm -f ${ID}_left.clips ${ID}_right.clips
+        sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt
+        sort -k 1,1 ${ID}_rightmaximal.txt > ${ID}_rightmaximal_sorted.txt
+        rm -f ${ID}_leftmaximal.txt ${ID}_rightmaximal.txt
     done < ${SAMPLE_ID}_bins.bed
-    rm -f ${SAMPLE_ID}_variants.txt
     ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
     rm -f ${SAMPLE_ID}_counts.tsv
     while read ID; do
-        LL=$(wc -l < ${ID}_left_left_sorted.clips)
-        LR=$(wc -l < ${ID}_left_right_sorted.clips)
-        RL=$(wc -l < ${ID}_right_left_sorted.clips)
-        RR=$(wc -l < ${ID}_right_right_sorted.clips)
+        LL=$(wc -l < ${ID}_left_leftmaximal_sorted)
+        LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
+        RL=$(wc -l < ${ID}_right_leftmaximal_sorted)
+        RR=$(wc -l < ${ID}_right_rightmaximal_sorted.txt)
         LL_RL=$(comm -1 -2 ${ID}_left_left_sorted.clips ${ID}_right_left_sorted.clips | wc -l)
         LL_RR=$(comm -1 -2 ${ID}_left_left_sorted.clips ${ID}_right_right_sorted.clips | wc -l)
         LR_RL=$(comm -1 -2 ${ID}_left_right_sorted.clips ${ID}_right_left_sorted.clips | wc -l)

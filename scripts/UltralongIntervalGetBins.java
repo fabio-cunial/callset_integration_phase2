@@ -4,22 +4,29 @@ import java.io.*;
 
 
 /**
- * Prints intervals in BED format (zero-based, left-inclusive, right-exclusive).
+ * Given a VCF that contains only interval calls (e.g. DEL, INV, DUP, but not 
+ * INS or BND), the program prints an output BED (zero-based, left-inclusive,
+ * right-exclusive) with 14 bins for each record: 10 equal-sized partitions of
+ * the interval, one bin before and one bin after the interval, and two bins
+ * centered at the interval breakpoints.
  */
 public class UltralongIntervalGetBins {
     
     private static HashMap<String,Integer> fai;
     
     /**
+     * Output format: CHROM,START,END,VCFID_BINID
+     *
      * @param args
-     * 2: if zero, the program only prints the two bins centered around each
-     *    breakpoint.
+     * 2: if zero, the program prints only the two bins centered at the 
+     *    breakpoints;
+     * 3: fixed length of each bin centered at a breakpoint.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String INPUT_FAI = args[1];
         final int N_BINS = Integer.parseInt(args[2]);
-        final int BREAKPOINT_WINDOW_BP = Integer.parseInt(args[3]);
+        final int BREAKPOINT_BIN_LENGTH = Integer.parseInt(args[3]);
         
         int i, p;
         int chromLength, pos, svlen, quantum;
@@ -47,16 +54,16 @@ public class UltralongIntervalGetBins {
                 p=pos-quantum;
                 System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_before");
             }
-            p=pos-BREAKPOINT_WINDOW_BP/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_WINDOW_BP<=chromLength?p+BREAKPOINT_WINDOW_BP:chromLength)+"\t"+id+"_left");
+            p=pos-BREAKPOINT_BIN_LENGTH/2;
+            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"_left");
             if (N_BINS>0) {
                 for (i=0; i<10; i++) {
                     p=pos+i*quantum;
                     System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_bin"+i);
                 }
             }
-            p=pos+svlen-BREAKPOINT_WINDOW_BP/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_WINDOW_BP<=chromLength?p+BREAKPOINT_WINDOW_BP:chromLength)+"\t"+id+"_right");
+            p=pos+svlen-BREAKPOINT_BIN_LENGTH/2;
+            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"_right");
             if (N_BINS>0) {
                 p=pos+svlen;
                 System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_after");

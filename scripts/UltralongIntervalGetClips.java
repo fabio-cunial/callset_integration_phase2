@@ -1,57 +1,90 @@
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 import java.io.*;
 
 
 /**
- * Creates two output files with the read IDs of all reads with a left (resp.
- * right) soft- or hard-clip.
+ * Given a SAM file and a window, the program outputs two files containing the
+ * IDs of all reads that have a left (resp. right) soft- or hard-clip inside the
+ * window. 
+ *
+ * Output format: READ_ID,IS_RC,READ_POS,READ_LENGTH
  */
 public class UltralongIntervalGetClips {
     
     /**
      * @param args 
+     * 1: 0-based, inclusive;
+     * 2: 0-based, exclusive.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_SAM = args[0];
-        final int START = Integer.parseInt(args[1]);  // 0-based, inclusive.
-        final int END = Integer.parseInt(args[2]);  // 0-based, exclusive.
+        final int START = Integer.parseInt(args[1]);
+        final int END = Integer.parseInt(args[2]);
         final String OUTPUT_PREFIX = args[3];
         
-        boolean matchFound;
+        final int RC_MASK = 16;
+        
+        boolean isRc, matchFound;
         char c;
         int i, j;
-        int pos, cigarLength;
-        String str, cigar;
+        int refPos, readPos, cigarLength, readLength, length;
+        String str, cigar, output;
         BufferedReader br;
         BufferedWriter bwLeft, bwRight;
         String[] tokens;
         
-        bwLeft = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_left.clips"));
-        bwRight = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_right.clips"));
+        bwLeft = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_leftmaximal.txt"));
+        bwRight = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_rightmaximal.txt"));
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_SAM)));
         str=br.readLine();
         while (str!=null) {
             tokens=str.split("\t");
-            pos=Integer.parseInt(tokens[3]);  // 1-based, first match.
+            refPos=Integer.parseInt(tokens[3]);  // 1-based, first mapping pos.
             cigar=tokens[5];
             cigarLength=cigar.length();
+            isRc=(Integer.parseInt(tokens[1])&RC_MASK)!=0;
+            readLength=tokens[9].length();
+            readPos=0;  // 0-based, first mapping pos.
             i=0; matchFound=false;
             for (j=1; j<cigarLength; j++) {
                 c=cigar.charAt(j);
-                if (c=='S' || c=='H') {
-                    if (pos-1>=START && pos-1<END) {
-                        if (!matchFound) { bwLeft.write(tokens[0]); bwLeft.newLine(); }
-                        else  { bwRight.write(tokens[0]); bwRight.newLine(); }
+                if (c=='M' || c=='=' || c=='X') {
+                    matchFound=true;
+                    length=Integer.parseInt(cigar.substring(i,j));
+                    refPos+=length; readPos+=length;
+                    i=j+1;
+                }
+                else if (c=='I') {
+                    readPos+=Integer.parseInt(cigar.substring(i,j));
+                    i=j+1;
+                }
+                else if (c=='D' || c=='N') {
+                    matchFound=true;
+                    refPos+=Integer.parseInt(cigar.substring(i,j));
+                    i=j+1;
+                }
+                else if (c=='N') {
+                    refPos+=Integer.parseInt(cigar.substring(i,j));
+                    i=j+1;
+                }
+                if (c=='S') {
+                    if (refPos-1>=START && refPos-1<END) {
+                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
+                        if (!matchFound) bwLeft.write(output);
+                        else bwRight.write(output);
+                    }
+                    readPos+=Integer.parseInt(cigar.substring(i,j));
+                    i=j+1;
+                }
+                else if (c=='H') {
+                    if (refPos-1>=START && refPos-1<END) {
+                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
+                        if (!matchFound) bwLeft.write(output);
+                        else bwRight.write(output);
                     }
                     i=j+1;
                 }
-                else if (c=='M' || c=='D' || c=='N' || c=='=' || c=='X') {
-                    matchFound=true;
-                    pos+=Integer.parseInt(cigar.substring(i,j));
-                    i=j+1;
-                }
-                else if (c=='I' || c=='P') i=j+1;
+                else if (c=='P') i=j+1;
             }
 
             // Next iteration

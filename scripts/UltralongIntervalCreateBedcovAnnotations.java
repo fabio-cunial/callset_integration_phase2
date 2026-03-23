@@ -1,17 +1,17 @@
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 import java.io.*;
 
 
 /**
- * 
+ * Given the BED file created by `samtools bedcov` (with format CHROM,START,END,
+ * ID,BEDCOV), the program writes all the bins of the same VCF record to a
+ * single row with format VCF_ID,BIN_1,BIN_2,...,BIN_N. Output values are 
+ * normalized by SVLEN.
  */
-public class UltralongIntervalAnnotateCoverage {
+public class UltralongIntervalCreateBedcovAnnotations {
     
     /**
-     * Output format: ID,COV_1,COV_2,...,COV_N
-     *
-     * @param args 0: input format: CHROM,START,END,ID,BEDCOV.
+     * @param args
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_BED = args[0];
