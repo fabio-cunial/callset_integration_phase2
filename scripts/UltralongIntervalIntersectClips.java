@@ -20,13 +20,11 @@ public class UltralongIntervalIntersectClips {
         final int N_CLIPS2 = Integer.parseInt(args[4]);
         final boolean CLIPS2_IS_LEFT_MAXIMAL = Integer.parseInt(args[5])==1;
         
-        boolean isRc, matchFound;
-        char c;
-        int i, j;
-        int refPos, readPos, cigarLength, readLength, length;
-        String str, cigar, output;
+        boolean isRc1, isRc2;
+        int i, j, k, n1, n2;
+        int readPos1, readPos2, readLength1, readLength2;
+        String str, readId2, readId2;
         BufferedReader br;
-        BufferedWriter bwLeft, bwRight;
         boolean[] marked1, marked2;
         String[] clips1, clips2;
         
@@ -72,9 +70,15 @@ public class UltralongIntervalIntersectClips {
         }
         
         // Outputting
-        
-        
-        
+        n1=0;
+        for (i=0; i<N_CLIPS1; i++) {
+            if (marked1[i]) n1++;
+        }
+        n2=0;
+        for (i=0; i<N_CLIPS2; i++) {
+            if (marked2[i]) n2++;
+        }
+        System.out.println(n1+","+n2);
     }
     
     
