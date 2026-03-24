@@ -675,7 +675,7 @@ task BenchTrio {
         ls -laht
         
         # Benchmarking: original merged VCF.
-        Benchmark trio.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all
+        Benchmark trio.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_all
         
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz --output tr.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr.vcf.gz
