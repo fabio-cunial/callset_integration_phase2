@@ -3,9 +3,10 @@ import java.io.*;
 
 
 /**
- * Given a SAM file and a window, the program outputs two files containing the
- * IDs of all reads that have a left (resp. right) soft- or hard-clip inside the
- * window. 
+ * Given a SAM file and a window, the program outputs two files containing a
+ * record for every alignment that has a left (resp. right) soft- or hard-clip
+ * at a position inside the window. We call such alignments left- (resp. right-)
+ * maximal.
  *
  * Output format: READ_ID,IS_RC,READ_POS,READ_LENGTH
  */

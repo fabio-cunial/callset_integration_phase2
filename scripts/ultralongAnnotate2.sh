@@ -57,6 +57,7 @@ function AnnotateClippedAlignments() {
     INPUT_VCF=$2
     INPUT_BAM=$3
     BREAKPOINT_WINDOW_BP=$4
+    ADJACENCY_SLACK_BP=$5
     
     ${TIME_COMMAND} java -cp ${CLASSPATH} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} 0 ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
     while read CHROM START END ID; do
@@ -70,14 +71,14 @@ function AnnotateClippedAlignments() {
     ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
     rm -f ${SAMPLE_ID}_counts.tsv
     while read ID; do
-        LL=$(wc -l < ${ID}_left_leftmaximal_sorted)
+        LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
         LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
-        RL=$(wc -l < ${ID}_right_leftmaximal_sorted)
+        RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
         RR=$(wc -l < ${ID}_right_rightmaximal_sorted.txt)
-        LL_RL=$(comm -1 -2 ${ID}_left_left_sorted.clips ${ID}_right_left_sorted.clips | wc -l)
-        LL_RR=$(comm -1 -2 ${ID}_left_left_sorted.clips ${ID}_right_right_sorted.clips | wc -l)
-        LR_RL=$(comm -1 -2 ${ID}_left_right_sorted.clips ${ID}_right_left_sorted.clips | wc -l)
-        LR_RR=$(comm -1 -2 ${ID}_left_right_sorted.clips ${ID}_right_right_sorted.clips | wc -l)
+        LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
+        LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
+        LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
+        LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
         echo "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" >> ${SAMPLE_ID}_counts.tsv
         rm -f ${ID}_*.clips
     done < ${SAMPLE_ID}_variantID_sorted.txt
@@ -90,11 +91,23 @@ function AnnotateClippedAlignments() {
     echo '##INFO=<ID=LR,Number=1,Type=Integer,Description="Left window: number of right-clipped alignemnts.">' >> ${SAMPLE_ID}_header.txt
     echo '##INFO=<ID=RL,Number=1,Type=Integer,Description="Right window: number of left-clipped alignemnts.">' >> ${SAMPLE_ID}_header.txt
     echo '##INFO=<ID=RR,Number=1,Type=Integer,Description="Right window: number of right-clipped alignemnts.">' >> ${SAMPLE_ID}_header.txt
-    echo '##INFO=<ID=LL_RL,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-    echo '##INFO=<ID=LL_RR,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-    echo '##INFO=<ID=LR_RL,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-    echo '##INFO=<ID=LR_RR,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-    COLUMNS='CHROM,POS,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL,INFO/LL_RR,INFO/LR_RL,INFO/LR_RR'
+    echo '##INFO=<ID=LL_RL_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RL_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RL_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RL_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RR_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RR_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RR_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LL_RR_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RL_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RL_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RL_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RL_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RR_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    echo '##INFO=<ID=LR_RR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+    COLUMNS='CHROM,POS,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4'
     ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
     rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
 }
