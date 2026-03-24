@@ -504,7 +504,7 @@ task PrecisionRecallAnalysis {
         rm -f ~{sample_id}.bcf* ; mv out.vcf.gz ~{sample_id}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}.vcf.gz
         
         # Benchmarking
-        Benchmark ~{sample_id} ~{sample_id}.vcf.gz ~{min_sv_length}bp
+        Benchmark ~{sample_id} ~{sample_id}.vcf.gz ~{min_sv_length}bp_~{max_sv_length}bp
         
         # Uploading
         gcloud storage cp '*.txt' ~{remote_outdir}/precision_recall/ 
@@ -679,24 +679,24 @@ task BenchTrio {
         
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz --output tr.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr.vcf.gz
-        Benchmark tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr
+        Benchmark tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_tr
         
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z trio.vcf.gz --output not_tr.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t not_tr.vcf.gz
-        Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr
+        Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_not_tr
         
         # Benchmarking: VCF with missing->ref.
         ${TIME_COMMAND} bcftools +setGT trio.vcf.gz --output-type z -- --target-gt . --new-gt 0 > trio_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t trio_no_missing.vcf.gz
-        Benchmark trio_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all_no_missing
+        Benchmark trio_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_all_no_missing
         
         ${TIME_COMMAND} bcftools +setGT tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr_no_missing.vcf.gz
-        Benchmark tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr_no_missing
+        Benchmark tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_tr_no_missing
         
         ${TIME_COMMAND} bcftools +setGT not_tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > not_tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t not_tr_no_missing.vcf.gz
-        Benchmark not_tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr_no_missing
+        Benchmark not_tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_not_tr_no_missing
         
         rm -f tr*.vcf.gz*
         rm -f not_tr*.vcf.gz*
