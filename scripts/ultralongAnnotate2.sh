@@ -56,11 +56,13 @@ function AnnotateCoverageBins() {
     cat << 'END' > annotate_mapq_secondary.sh
 #!/bin/bash
 set -euxo pipefail
+
 INPUT_BAM=$1
 CHROM=$2
 START=$3
 END=$4
 ID=$5
+
 samtools view ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { print (count>0?sum/count:0) }' > ${ID}_mapq.txt
 samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END} > ${ID}_secondary.txt
 END
@@ -111,12 +113,14 @@ function AnnotateMapqSecondary() {
     cat << 'END' > annotate_clipped_alignments_1.sh
 #!/bin/bash
 set -euxo pipefail
+
 INPUT_BAM=$1
 CLASSPATH=$2
 CHROM=$3
 START=$4
 END=$5
 ID=$6
+
 samtools view ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
 java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${ID}
 rm -f ${ID}.sam
@@ -130,9 +134,11 @@ END
     cat << 'END' > annotate_clipped_alignments_2.sh
 #!/bin/bash
 set -euxo pipefail
+
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
 ID=$3
+
 LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
 RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
