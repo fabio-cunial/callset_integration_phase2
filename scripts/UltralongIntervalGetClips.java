@@ -12,6 +12,14 @@ import java.io.*;
  */
 public class UltralongIntervalGetClips {
     
+    
+    
+    
+    -------> Add a min S/H length? To avoid 100bp clips...
+    
+    
+    
+    
     /**
      * @param args 
      * 1: 0-based, inclusive;
@@ -28,7 +36,7 @@ public class UltralongIntervalGetClips {
         boolean isRc, matchFound;
         char c;
         int i, j;
-        int refPos, readPos, cigarLength, readLength, length;
+        int refPos, readPos, newReadPos, cigarLength, readLength, length;
         String str, cigar, output;
         BufferedReader br;
         BufferedWriter bwLeft, bwRight;
@@ -69,21 +77,22 @@ public class UltralongIntervalGetClips {
                     i=j+1;
                 }
                 if (c=='S') {
+                    newReadPos=readPos+Integer.parseInt(cigar.substring(i,j));
+                    i=j+1;
                     if (refPos-1>=START && refPos-1<END) {
-                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
+                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+(matchFound?readPos:newReadPos)+"\t"+(readLength+"\n");
                         if (!matchFound) bwLeft.write(output);
                         else bwRight.write(output);
                     }
-                    readPos+=Integer.parseInt(cigar.substring(i,j));
-                    i=j+1;
+                    readPos=newReadPos;
                 }
                 else if (c=='H') {
+                    i=j+1;
                     if (refPos-1>=START && refPos-1<END) {
                         output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
                         if (!matchFound) bwLeft.write(output);
                         else bwRight.write(output);
                     }
-                    i=j+1;
                 }
                 else if (c=='P') i=j+1;
             }

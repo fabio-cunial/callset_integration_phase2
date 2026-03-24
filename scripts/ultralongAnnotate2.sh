@@ -9,14 +9,15 @@ N_THREADS="4"
 CLASSPATH="."
 N_BINS="10"
 BREAKPOINT_WINDOW_BP="500"
+ADJACENCY_SLACK_BP="200"
 
 TIME_COMMAND="/usr/bin/time --verbose"
 
 
 # --------------------------- Steps of the pipeline ----------------------------
 
-# Annotates an input VCF containing only interval calls, with coverage measures
-# extracted from a BAM.
+# Given an input VCF containing only interval calls, the procedure annotates it
+# with coverage measures extracted from a BAM.
 #
 function AnnotateCoverageBins() {
     SAMPLE_ID=$1
@@ -49,8 +50,8 @@ function AnnotateCoverageBins() {
 }
 
 
-# Annotates an input VCF containing only interval calls, with clipped alignment
-# measures extracted from a BAM.
+# Given an input VCF containing only interval calls, the procedure annotates it
+# with clipped alignment measures extracted from a BAM.
 #
 function AnnotateClippedAlignments() {
     SAMPLE_ID=$1
@@ -79,12 +80,12 @@ function AnnotateClippedAlignments() {
         LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
         LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
         LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} | tr ',' '\t')
-        echo "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" >> ${SAMPLE_ID}_counts.tsv
-        rm -f ${ID}_*.clips
+        echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" >> ${SAMPLE_ID}_counts.tsv
+        rm -f ${ID}_*maximal_sorted.txt
     done < ${SAMPLE_ID}_variantID_sorted.txt
     rm -f ${SAMPLE_ID}_variantID_sorted.txt
     ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-    ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+    ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
     rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
     tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
     echo '##INFO=<ID=LL,Number=1,Type=Integer,Description="Left window: number of left-clipped alignemnts.">' > ${SAMPLE_ID}_header.txt
@@ -126,7 +127,7 @@ rm -f in.vcf.gz* ; mv out.vcf in.vcf
 
 AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${INPUT_BAM} ${N_BINS} ${BREAKPOINT_WINDOW_BP}
 rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${INPUT_BAM} ${BREAKPOINT_WINDOW_BP}
+AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${INPUT_BAM} ${BREAKPOINT_WINDOW_BP} ${ADJACENCY_SLACK_BP}
 rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
 
 bcftools view --threads ${N_THREADS} --output-type z in.vcf --output ${SAMPLE_ID}_del_annotated.vcf.gz

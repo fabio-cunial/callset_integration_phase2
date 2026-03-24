@@ -35,11 +35,14 @@ public class UltralongIntervalIntersectClips {
         boolean[][] marked1, marked2;
         String[][] clips1, clips2;
         
-        // Loading both files
+        // Returning immediately if the input files are empty
+        n10=0; n11=0; n20=0; n21=0;
         if (N_CLIPS1==0 || N_CLIPS2==0) {
-            System.out.println("0");
+            System.out.println(n10+","+n11+","+n20+","+n21);
             System.exit(0);
         }
+        
+        // Loading both files
         clips1 = new String[N_CLIPS1][4]; marked1 = new boolean[2][N_CLIPS1];
         br = new BufferedReader(new InputStreamReader(new FileInputStream(CLIPS1_FILE)));
         str=br.readLine(); i=-1;
@@ -57,7 +60,7 @@ public class UltralongIntervalIntersectClips {
         }
         br.close();
         
-        // Naive implementation that performs all pairwise comparisons
+        // Naive implementation (all pairwise comparisons).
         Arrays.fill(marked1[0],false); Arrays.fill(marked1[1],false); 
         Arrays.fill(marked2[0],false); Arrays.fill(marked2[1],false);
         j=0;
@@ -80,19 +83,15 @@ public class UltralongIntervalIntersectClips {
         }
         
         // Outputting
-        n10=0;
         for (i=0; i<N_CLIPS1; i++) {
             if (marked1[0][i]) n10++;
         }
-        n11=0;
         for (i=0; i<N_CLIPS1; i++) {
             if (marked1[1][i]) n11++;
         }
-        n20=0;
         for (i=0; i<N_CLIPS2; i++) {
             if (marked2[0][i]) n20++;
         }
-        n21=0;
         for (i=0; i<N_CLIPS2; i++) {
             if (marked2[1][i]) n21++;
         }
