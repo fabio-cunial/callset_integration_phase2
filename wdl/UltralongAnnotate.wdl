@@ -411,7 +411,7 @@ END
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             
             # Uploading
-            bcftools view --output-type z ${SAMPLE_ID}_del.vcf --output ${SAMPLE_ID}_del.vcf.gz
+            bcftools view --output-type z in.vcf --output ${SAMPLE_ID}_del.vcf.gz
             bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_del.vcf.gz
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ${SAMPLE_ID}_training_ids.txt ~{remote_outdir}/
         }
