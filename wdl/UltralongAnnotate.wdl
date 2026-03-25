@@ -189,7 +189,7 @@ task Impl {
             for i in $(seq 1 ${N_ROWS}); do
                 head -n ${i} ${SAMPLE_ID}_bins.bed | tail -n 1 > tmp.bed
                 cat tmp.bed 1>&2
-                ${TIME_COMMAND} samtools bedcov tmp.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
+                ${TIME_COMMAND} samtools bedcov tmp.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed || echo "BAM corrupted at the interval?"
             done
 
             
