@@ -39,8 +39,10 @@ public class CleanRefAltQual {
             tokens=str.split("\t");
             replaceNonstandardChars(tokens[3].toUpperCase(),buffer);
             tokens[3]=buffer.toString();
-            replaceNonstandardChars(tokens[4].toUpperCase(),buffer);
-            tokens[4]=buffer.toString();
+            if (tokens[4].charAt(0)!='<') {
+                replaceNonstandardChars(tokens[4].toUpperCase(),buffer);
+                tokens[4]=buffer.toString();
+            }
             tokens[5]=FORCE_QUAL;
             tokens[6]="PASS";
             
