@@ -400,7 +400,9 @@ END
         # ---------------------------- Main program ----------------------------
         
         INFINITY="1000000000"
-        truvari --help 1>&2
+        samtools --version 1>&2
+        bcftools --version 1>&2
+        #truvari --help 1>&2
         df -h 1>&2
         
         while read LINE; do

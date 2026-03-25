@@ -64,7 +64,7 @@ RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud
 ENV PATH=${work_dir}/google-cloud-sdk/bin:${PATH}
 
 # HTSLIB
-ARG htslib_version=1.21
+ARG htslib_version=1.18
 RUN wget https://github.com/samtools/htslib/releases/download/${htslib_version}/htslib-${htslib_version}.tar.bz2 \
     && tar xjf htslib-${htslib_version}.tar.bz2 \
     && rm htslib-${htslib_version}.tar.bz2 \
@@ -77,7 +77,7 @@ RUN wget https://github.com/samtools/htslib/releases/download/${htslib_version}/
     && bgzip --help
 
 # SAMTOOLS
-ARG samtools_version=1.21
+ARG samtools_version=1.18
 RUN wget https://github.com/samtools/samtools/releases/download/${samtools_version}/samtools-${samtools_version}.tar.bz2 \
     && tar xjf samtools-${samtools_version}.tar.bz2 \
     && rm samtools-${samtools_version}.tar.bz2 \
@@ -90,7 +90,7 @@ RUN wget https://github.com/samtools/samtools/releases/download/${samtools_versi
     && samtools --help
 
 # BCFTOOLS
-ARG bcftools_version=1.21
+ARG bcftools_version=1.18
 RUN wget https://github.com/samtools/bcftools/releases/download/${bcftools_version}/bcftools-${bcftools_version}.tar.bz2 \
     && tar xjf bcftools-${bcftools_version}.tar.bz2 \
     && rm bcftools-${bcftools_version}.tar.bz2 \
@@ -109,43 +109,43 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_versio
     && mv bedtools /usr/local/bin \
     && bedtools --help
 
-# TRUVARI
-ARG truvari_version=5.4.0
-RUN pip install truvari==${truvari_version} \
-    && truvari --help
+# # TRUVARI
+# ARG truvari_version=5.4.0
+# RUN pip install truvari==${truvari_version} \
+#     && truvari --help
 
-# SNIFFLES
-# Remark: the latest version is currently 2.7.3, but it throws errors on our
-# ultralong VCFs. E.g.:
+# # SNIFFLES
+# # Remark: the latest version is currently 2.7.3, but it throws errors on our
+# # ultralong VCFs. E.g.:
+# #
+# # Sniffles2 Error: Error parsing input VCF: Line 1:
+# # 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
+# # exiting.)
+# #
+# # The following is currently the latest release that doesn't throw errors.
+# ARG sniffles_version=2.7.3
+# RUN python -m venv /opt/sniffles_env
+# RUN /opt/sniffles_env/bin/pip install sniffles==${sniffles_version}
 #
-# Sniffles2 Error: Error parsing input VCF: Line 1:
-# 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
-# exiting.)
+# # CUTEFC
+# ARG cutefc_version=1.0.2
+# RUN python -m venv /opt/cutefc_env
+# RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
+#     && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
+#     && rm -f cuteFC-v${cutefc_version}.tar.gz \
+#     && cd cuteFC-cuteFC-v${cutefc_version} \
+#     && /opt/cutefc_env/bin/python setup.py install
 #
-# The following is currently the latest release that doesn't throw errors.
-ARG sniffles_version=2.7.3
-RUN python -m venv /opt/sniffles_env
-RUN /opt/sniffles_env/bin/pip install sniffles==${sniffles_version}
+# # LRCALLER
+# ARG lrcaller_version=1.0
+# RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcaller_version}/lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+#     && tar -xzvf lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+#     && chmod +x lrcaller-${lrcaller_version}/bin/* \
+#     && mv lrcaller-${lrcaller_version}/bin/* /usr/local/bin \
+#     && lrcaller --help || echo "LRcaller returns an error code when called"
 
-# CUTEFC
-ARG cutefc_version=1.0.2
-RUN python -m venv /opt/cutefc_env
-RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
-    && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
-    && rm -f cuteFC-v${cutefc_version}.tar.gz \
-    && cd cuteFC-cuteFC-v${cutefc_version} \
-    && /opt/cutefc_env/bin/python setup.py install
-
-# LRCALLER
-ARG lrcaller_version=1.0
-RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcaller_version}/lrcaller-${lrcaller_version}_linux-x86-64.tgz \
-    && tar -xzvf lrcaller-${lrcaller_version}_linux-x86-64.tgz \
-    && chmod +x lrcaller-${lrcaller_version}/bin/* \
-    && mv lrcaller-${lrcaller_version}/bin/* /usr/local/bin \
-    && lrcaller --help || echo "LRcaller returns an error code when called"
-
-# AD HOC SCRIPTS
-RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy 
+# # AD HOC SCRIPTS
+# RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy
 COPY *.java .
 RUN javac *.java
 COPY *.r .
