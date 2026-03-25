@@ -12,14 +12,6 @@ import java.io.*;
  */
 public class UltralongIntervalGetClips {
     
-    
-    
-    
-    -------> Add a min S/H length? To avoid 100bp clips...
-    
-    
-    
-    
     /**
      * @param args 
      * 1: 0-based, inclusive;
@@ -29,7 +21,8 @@ public class UltralongIntervalGetClips {
         final String INPUT_SAM = args[0];
         final int START = Integer.parseInt(args[1]);
         final int END = Integer.parseInt(args[2]);
-        final String OUTPUT_PREFIX = args[3];
+        final int MIN_CLIP_LENGTH = Integer.parseInt(args[3]);
+        final String OUTPUT_PREFIX = args[4];
         
         final int RC_MASK = 16;
         
@@ -79,7 +72,9 @@ public class UltralongIntervalGetClips {
                 if (c=='S') {
                     newReadPos=readPos+Integer.parseInt(cigar.substring(i,j));
                     i=j+1;
-                    if (refPos-1>=START && refPos-1<END) {
+                    if ( refPos-1>=START && refPos-1<END &&
+                         ( (matchFound && readLength-readPos>=MIN_CLIP_LENGTH) || (!matchFound && newReadPos>=MIN_CLIP_LENGTH) )
+                       ) {
                         output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+(matchFound?readPos:newReadPos)+"\t"+(readLength+"\n");
                         if (!matchFound) bwLeft.write(output);
                         else bwRight.write(output);
@@ -88,7 +83,9 @@ public class UltralongIntervalGetClips {
                 }
                 else if (c=='H') {
                     i=j+1;
-                    if (refPos-1>=START && refPos-1<END) {
+                    if ( refPos-1>=START && refPos-1<END &&
+                         ( (matchFound && readLength-readPos>=MIN_CLIP_LENGTH) || (!matchFound && readPos>=MIN_CLIP_LENGTH) )
+                       ) {
                         output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
                         if (!matchFound) bwLeft.write(output);
                         else bwRight.write(output);

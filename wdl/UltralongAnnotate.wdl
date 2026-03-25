@@ -8,12 +8,14 @@ workflow UltralongAnnotate {
         File chunk_csv
         String remote_outdir
         
+        File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
         
         Int n_coverage_bins = 10
         Int breakpoint_window_bp = 500
+        Int min_clip_length = 200
         Int adjacency_slack_bp = 300
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
@@ -28,13 +30,15 @@ workflow UltralongAnnotate {
         input:
             chunk_csv = chunk_csv,
             remote_outdir = remote_outdir,
-    
+            
+            reference_fai = reference_fai,
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
             ultralong_training_resource_tbi = ultralong_training_resource_tbi,
     
             n_coverage_bins = n_coverage_bins,
             breakpoint_window_bp = breakpoint_window_bp,
+            min_clip_length = min_clip_length,
             adjacency_slack_bp = adjacency_slack_bp,
     
             docker_image = docker_image,
@@ -61,13 +65,15 @@ task Impl {
         File chunk_csv
         String remote_outdir
         
+        File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
         
-        Int n_coverage_bins = 10
-        Int breakpoint_window_bp = 500
-        Int adjacency_slack_bp = 200
+        Int n_coverage_bins
+        Int breakpoint_window_bp
+        Int min_clip_length
+        Int adjacency_slack_bp
         
         String docker_image
         Int n_cpu = 4
@@ -118,7 +124,7 @@ task Impl {
             rm -f ${SAMPLE_ID}.bcf*
             
             # Checking the integrity of the BAM
-            ${TIME_COMMAND} samtools quickcheck -v ${SAMPLE_ID}.bam && echo "" || echo "ERROR: the BAM is corrupted."
+            ${TIME_COMMAND} samtools quickcheck -v ${SAMPLE_ID}.bam || { echo "ERROR: BAM corrupted"; exit 1; }
         }
         
         
@@ -143,8 +149,8 @@ task Impl {
             # - We force every record to PASS, to rule out any filter-dependent
             #   effect in downstream tools.
             DEFAULT_QUAL="60"   # Arbitrary
-            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_in.vcf ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${INPUT_VCF_GZ} ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
+            rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # 2.1 Removing END, since its values may be inconsistent and make
             # GATK crash downstream.
@@ -167,13 +173,13 @@ task Impl {
         # set: UNMAP, SECONDARY, QCFAIL, DUP
         #
         function AnnotateCoverageBins() {
-            SAMPLE_ID=$1
-            INPUT_VCF=$2
-            INPUT_BAM=$3
-            N_BINS=$4
-            BREAKPOINT_WINDOW_BP=$5
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local INPUT_BAM=$3
+            local N_BINS=$4
+            local BREAKPOINT_WINDOW_BP=$5
 
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
@@ -223,12 +229,12 @@ END
         # `AnnotateClippedAlignments()`.
         #
         function AnnotateMapqSecondary() {
-            SAMPLE_ID=$1
-            INPUT_VCF=$2
-            INPUT_BAM=$3
-            BREAKPOINT_WINDOW_BP=$4
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local INPUT_BAM=$3
+            local BREAKPOINT_WINDOW_BP=$4
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_mapq_secondary.sh ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
@@ -239,8 +245,9 @@ END
                 SECONDARY_LEFT=$(cat ${ID}_left_secondary.txt)
                 SECONDARY_RIGHT=$(cat ${ID}_right_secondary.txt)
                 echo -e "${ID}\t${MAPQ_LEFT}\t${MAPQ_RIGHT}\t${SECONDARY_LEFT}\t${SECONDARY_RIGHT}" >> ${SAMPLE_ID}_counts.tsv
+                rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
             done < ${SAMPLE_ID}_variantID_sorted.txt
-            rm -f ${SAMPLE_ID}_variantID_sorted.txt ${ID}_*_mapq.txt ${ID}_*_secondary.txt
+            rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%f\t%f\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
@@ -261,13 +268,14 @@ set -euxo pipefail
 
 INPUT_BAM=$1
 CLASSPATH=$2
-CHROM=$3
-START=$4
-END=$5
-ID=$6
+MIN_CLIP_LENGTH=$3
+CHROM=$4
+START=$5
+END=$6
+ID=$7
 
 samtools view ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
-java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${ID}
+java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${ID}
 rm -f ${ID}.sam
 sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt
 sort -k 1,1 ${ID}_rightmaximal.txt > ${ID}_rightmaximal_sorted.txt
@@ -302,14 +310,14 @@ END
         # annotates it with clipped alignment measures extracted from a BAM.
         #
         function AnnotateClippedAlignments() {
-            SAMPLE_ID=$1
-            INPUT_VCF=$2
-            INPUT_BAM=$3
-            BREAKPOINT_WINDOW_BP=$4
-            ADJACENCY_SLACK_BP=$5
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local INPUT_BAM=$3
+            local BREAKPOINT_WINDOW_BP=$4
+            local ADJACENCY_SLACK_BP=$5
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ${INPUT_FAI} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir}
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ~{min_clip_length}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.tsv
@@ -347,21 +355,6 @@ END
         }
         
         
-        cat << 'END' > truvari_bench_interval.sh
-#!/bin/bash
-set -euxo pipefail
-
-TRAINING_RESOURCE_VCF_GZ=$1
-INFINITY=$2
-INPUT_VCF_GZ=$3
-
-CHUNK_ID=${INPUT_VCF_GZ#chunk_}
-CHUNK_ID=${CHUNK_ID%.vcf.gz}
-
-END
-        chmod +x truvari_bench_interval.sh
-        
-        
         # Extracts every record that has a stringent `truvari bench` match with
         # some records in the resource.
         #
@@ -382,6 +375,7 @@ END
         #
         function ProcessDels() {
             local INPUT_VCF_GZ=$1
+            local SAMPLE_ID=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output out.vcf
             mv out.vcf in.vcf
@@ -396,7 +390,7 @@ END
             bcftools view --output-type z in.vcf --output ${SAMPLE_ID}_del.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del.vcf.gz
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
-            GetTrainingRecords ${SAMPLE_ID} ${SAMPLE_ID}_del.vcf.gz
+            GetTrainingIntervals ${SAMPLE_ID} ${SAMPLE_ID}_del.vcf.gz
             gcloud storage mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_del_training.vcf.gz
             gcloud storage mv ${SAMPLE_ID}_training.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_del_training.vcf.gz.tbi
         }
@@ -420,7 +414,7 @@ END
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            ProcessDels ${SAMPLE_ID}.vcf.gz
+            ProcessDels ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}
             # Other SV types are omitted for now
             
             # Next iteration
