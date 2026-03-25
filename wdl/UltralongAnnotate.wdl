@@ -183,12 +183,12 @@ task Impl {
             
             
             
-            rm -f ${INPUT_BAM}.bai
-            ${TIME_COMMAND} samtools index --threads ${N_THREADS} --bai ${INPUT_BAM}
+            #rm -f ${INPUT_BAM}.bai
+            #${TIME_COMMAND} samtools index --threads ${N_THREADS} --bai ${INPUT_BAM}
             N_ROWS=$(wc -l < ${SAMPLE_ID}_bins.bed)
             for i in $(seq 1 ${N_ROWS}); do
                 head -n ${i} ${SAMPLE_ID}_bins.bed | tail -n 1 > tmp.bed
-                cat tmp.bed
+                cat tmp.bed 1>&2
                 ${TIME_COMMAND} samtools bedcov tmp.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             done
 
