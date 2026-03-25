@@ -355,6 +355,26 @@ END
         }
         
         
+        # Removes SVLEN from symbolic ALTs, in order not to interfere with
+        # `truvari bench`.
+        #
+        function ResetAlts() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            local SUFFIX=$3
+            
+            date 1>&2
+            ( bcftools view --header-only ${INPUT_VCF_GZ} ; bcftools view --no-header ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' ) | bcftools view --output-type z --output ${SAMPLE_ID}_out.vcf.gz
+            date 1>&2
+            rm -f ${INPUT_VCF_GZ}.vcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_${SUFFIX}.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SUFFIX}.vcf.gz
+        }
+        
+        
         # Extracts every record that has a stringent `truvari bench` match with
         # some records in the resource.
         #
@@ -387,8 +407,7 @@ END
             AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             
-            bcftools view --output-type z in.vcf --output ${SAMPLE_ID}_del.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del.vcf.gz
+            ResetAlts ${SAMPLE_ID} in.vcf del
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
             GetTrainingIntervals ${SAMPLE_ID} ${SAMPLE_ID}_del.vcf.gz
             gcloud storage mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_del_training.vcf.gz
