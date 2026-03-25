@@ -359,35 +359,34 @@ END
         # `truvari bench`.
         #
         function ResetAlts() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF_GZ=$2
-            local SUFFIX=$3
+            local INPUT_VCF=$1
+            local PREFIX=$2
             
             date 1>&2
-            ( bcftools view --header-only ${INPUT_VCF_GZ} ; bcftools view --no-header ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            ( bcftools view --header-only ${INPUT_VCF} ; bcftools view --no-header ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
                 printf("%s",$1); \
                 for (i=2; i<=NF; i++) printf("\t%s",$i); \
                 printf("\n"); \
-            }' ) | bcftools view --output-type z --output ${SAMPLE_ID}_out.vcf.gz
+            }' ) > ${PREFIX}.vcf
             date 1>&2
-            rm -f ${INPUT_VCF_GZ}.vcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_${SUFFIX}.vcf.gz ; bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SUFFIX}.vcf.gz
         }
         
         
-        # Extracts every record that has a stringent `truvari bench` match with
-        # some records in the resource.
+        # Extracts every interval-type record that has a stringent `truvari
+        # bench` match with some records in the resource.
         #
         # Remark: sequence similarity is not used to decide a match.
         #
         function GetTrainingIntervals() {
             local SAMPLE_ID=$1
-            local INPUT_VCF_GZ=$2
+            local INPUT_VCF=$2
             
-            ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
-            mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_training.vcf.gz
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
-            rm -rf ./truvari_${SAMPLE_ID}/
+            bcftools view --output-type z ${INPUT_VCF} --output ${SAMPLE_ID}_in.vcf.gz
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_in.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            bcftools query --format '%ID\n' truvari_${SAMPLE_ID}/tp-comp.vcf.gz > ${SAMPLE_ID}_training_ids.txt
+            rm -rf ${SAMPLE_ID}_in.vcf.gz* ./truvari_${SAMPLE_ID}/
         }
         
         
@@ -398,8 +397,12 @@ END
             local SAMPLE_ID=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output out.vcf
-            mv out.vcf in.vcf
-        
+            ResetAlts out.vcf in.vcf
+            
+            # Getting the IDs of all training records
+            GetTrainingIntervals ${SAMPLE_ID} in.vcf
+            
+            # Annotating
             AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             AnnotateMapqSecondary ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
@@ -407,12 +410,12 @@ END
             AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             
-            ResetAlts ${SAMPLE_ID} in.vcf del
-            gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
-            GetTrainingIntervals ${SAMPLE_ID} ${SAMPLE_ID}_del.vcf.gz
-            gcloud storage mv ${SAMPLE_ID}_training.vcf.gz ~{remote_outdir}/${SAMPLE_ID}_del_training.vcf.gz
-            gcloud storage mv ${SAMPLE_ID}_training.vcf.gz.tbi ~{remote_outdir}/${SAMPLE_ID}_del_training.vcf.gz.tbi
+            # Uploading
+            bcftools view --output-type z ${SAMPLE_ID}_del.vcf --output ${SAMPLE_ID}_del.vcf.gz
+            bcftools index --threads ${N_THREADS} -t ${SAMPLE_ID}_del.vcf.gz
+            gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ${SAMPLE_ID}_training_ids.txt ~{remote_outdir}/
         }
+        
         
         
         
