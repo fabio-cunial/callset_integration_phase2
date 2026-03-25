@@ -109,10 +109,10 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_versio
     && mv bedtools /usr/local/bin \
     && bedtools --help
 
-# # TRUVARI
-# ARG truvari_version=5.4.0
-# RUN pip install truvari==${truvari_version} \
-#     && truvari --help
+# TRUVARI
+ARG truvari_version=5.4.0
+RUN pip install truvari==${truvari_version} \
+    && truvari --help
 
 # # SNIFFLES
 # # Remark: the latest version is currently 2.7.3, but it throws errors on our

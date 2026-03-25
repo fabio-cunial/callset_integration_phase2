@@ -180,20 +180,6 @@ task Impl {
             local BREAKPOINT_WINDOW_BP=$5
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
-            
-            
-            
-            #rm -f ${INPUT_BAM}.bai
-            #${TIME_COMMAND} samtools index --threads ${N_THREADS} --bai ${INPUT_BAM}
-            N_ROWS=$(wc -l < ${SAMPLE_ID}_bins.bed)
-            for i in $(seq 1 ${N_ROWS}); do
-                head -n ${i} ${SAMPLE_ID}_bins.bed | tail -n 1 > tmp.bed
-                cat tmp.bed 1>&2
-                ${TIME_COMMAND} samtools bedcov tmp.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed || echo "BAM corrupted at the interval?"
-            done
-
-            
-            
             ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
@@ -416,7 +402,7 @@ END
         INFINITY="1000000000"
         samtools --version 1>&2
         bcftools --version 1>&2
-        #truvari --help 1>&2
+        truvari --help 1>&2
         df -h 1>&2
         
         while read LINE; do
