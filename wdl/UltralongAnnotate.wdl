@@ -116,7 +116,7 @@ task Impl {
             date 1>&2
             gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
             gcloud storage cp ${ULTRALONG_BCF} ./${SAMPLE_ID}.bcf
-            gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.csi
+            gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.bcf.csi
             
             # Converting to .vcf.gz for the genotypers
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
@@ -227,7 +227,7 @@ START=$3
 END=$4
 ID=$5
 
-samtools view ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { print (count>0?sum/count:0) }' > ${ID}_mapq.txt
+samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { print (count>0?sum/count:0) }' > ${ID}_mapq.txt
 samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END} > ${ID}_secondary.txt
 END
         chmod +x annotate_mapq_secondary.sh
@@ -288,7 +288,7 @@ START=$5
 END=$6
 ID=$7
 
-samtools view ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
+samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
 java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${ID}
 rm -f ${ID}.sam
 sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt

@@ -66,7 +66,7 @@ public class UltralongIntervalIntersectClips {
         j=0;
         for (i=0; i<N_CLIPS1; i++) {
             readId1=clips1[i][0];
-            isRc1=clips1[i][1].charAt(0)==1;
+            isRc1=clips1[i][1].charAt(0)=='1';
             readPos1=Integer.parseInt(clips1[i][2]);
             readLength1=Integer.parseInt(clips1[i][3]);
             for (; j<N_CLIPS2; j++) {
@@ -75,7 +75,7 @@ public class UltralongIntervalIntersectClips {
                 if (k<0) continue;
                 else if (k>0) break;
                 marked1[0][i]=true; marked2[0][j]=true;
-                isRc2=clips2[j][1].charAt(0)==1;
+                isRc2=clips2[j][1].charAt(0)=='1';
                 readPos2=Integer.parseInt(clips2[j][2]);
                 readLength2=Integer.parseInt(clips2[j][3]);
                 if (areAdjacent(isRc1,readPos1,readLength1,CLIPS1_IS_LEFT_MAXIMAL,isRc2,readPos2,readLength2,CLIPS2_IS_LEFT_MAXIMAL,ADJACENCY_SLACK_BP)) { marked1[1][i]=true; marked2[1][j]=true; }

@@ -60,7 +60,7 @@ public class UltralongIntervalGetClips {
                     readPos+=Integer.parseInt(cigar.substring(i,j));
                     i=j+1;
                 }
-                else if (c=='D' || c=='N') {
+                else if (c=='D') {
                     matchFound=true;
                     refPos+=Integer.parseInt(cigar.substring(i,j));
                     i=j+1;
@@ -82,11 +82,12 @@ public class UltralongIntervalGetClips {
                     readPos=newReadPos;
                 }
                 else if (c=='H') {
+                    newReadPos=readPos+Integer.parseInt(cigar.substring(i,j));
                     i=j+1;
                     if ( refPos-1>=START && refPos-1<END &&
-                         ( (matchFound && readLength-readPos>=MIN_CLIP_LENGTH) || (!matchFound && readPos>=MIN_CLIP_LENGTH) )
+                         ( (matchFound && readLength-readPos>=MIN_CLIP_LENGTH) || (!matchFound && newReadPos>=MIN_CLIP_LENGTH) )
                        ) {
-                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+readPos+"\t"+(readLength+"\n");
+                        output=tokens[0]+"\t"+(isRc?"1\t":"0\t")+(matchFound?readPos:newReadPos)+"\t"+(readLength+"\n");
                         if (!matchFound) bwLeft.write(output);
                         else bwRight.write(output);
                     }

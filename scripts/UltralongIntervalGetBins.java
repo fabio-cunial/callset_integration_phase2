@@ -57,7 +57,7 @@ public class UltralongIntervalGetBins {
             p=pos-BREAKPOINT_BIN_LENGTH/2;
             System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"_left");
             if (N_BINS>0) {
-                for (i=0; i<10; i++) {
+                for (i=0; i<N_BINS; i++) {
                     p=pos+i*quantum;
                     System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_bin"+i);
                 }
