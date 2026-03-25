@@ -184,7 +184,7 @@ task Impl {
             
             N_ROWS=$(wc -l < ${SAMPLE_ID}_bins.bed)
             for i in $(seq 1 ${N_ROWS}); do
-                head -n ${i} | tail -n 1 > tmp.bed
+                head -n ${i} ${SAMPLE_ID}_bins.bed | tail -n 1 > tmp.bed
                 cat tmp.bed
                 ${TIME_COMMAND} samtools bedcov tmp.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             done
