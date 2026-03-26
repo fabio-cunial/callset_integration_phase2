@@ -8,6 +8,7 @@ workflow UltralongAnnotate {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -31,6 +32,7 @@ workflow UltralongAnnotate {
             chunk_csv = chunk_csv,
             remote_outdir = remote_outdir,
             
+            reference_fa = reference_fa,
             reference_fai = reference_fai,
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
@@ -65,6 +67,7 @@ task Impl {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -387,7 +390,7 @@ END
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             rm -f ${INPUT_VCF}
             
-            ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            ${TIME_COMMAND} truvari bench --reference ~{reference_fa} -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
             
             mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
