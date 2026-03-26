@@ -360,7 +360,7 @@ END
         #
         function ResetAlts() {
             local INPUT_VCF=$1
-            local PREFIX=$2
+            local OUTPUT_VCF=$2
             
             date 1>&2
             ( bcftools view --header-only ${INPUT_VCF} ; bcftools view --no-header ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
@@ -368,7 +368,7 @@ END
                 printf("%s",$1); \
                 for (i=2; i<=NF; i++) printf("\t%s",$i); \
                 printf("\n"); \
-            }' ) > ${PREFIX}.vcf
+            }' ) > ${OUTPUT_VCF}
             date 1>&2
         }
         
