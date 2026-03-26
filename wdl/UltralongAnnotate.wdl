@@ -8,7 +8,6 @@ workflow UltralongAnnotate {
         File chunk_csv
         String remote_outdir
         
-        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -67,7 +66,6 @@ task Impl {
         File chunk_csv
         String remote_outdir
         
-        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -370,15 +368,14 @@ END
         function GetTrainingRecords() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
-            local SUFFIX=$3
+            local TRAINING_RESOURCE_VCF_GZ=$3
+            local SUFFIX=$4
             
             bcftools view --output-type z ${INPUT_VCF} --output ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             rm -f ${INPUT_VCF}
             
-            #${TIME_COMMAND} truvari bench --reference ~{reference_fa} -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --max-resolve ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
-            
-            ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            ${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
             
             mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
@@ -404,7 +401,7 @@ END
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             
             # Computing training records
-            GetTrainingRecords ${SAMPLE_ID} in.vcf del
+            GetTrainingRecords ${SAMPLE_ID} in.vcf training_resource_del.vcf.gz del
             
             # Uploading
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ${SAMPLE_ID}_del_training.vcf.'gz*' ~{remote_outdir}/
@@ -421,6 +418,11 @@ END
         truvari --help 1>&2
         df -h 1>&2
         
+        # Stratifying the training resource
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type z ~{ultralong_training_resource_vcf_gz} --output training_resource_del.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t training_resource_del.vcf.gz
+        
+        # Processing samples
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
