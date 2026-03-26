@@ -31,7 +31,6 @@ workflow UltralongAnnotate {
             chunk_csv = chunk_csv,
             remote_outdir = remote_outdir,
             
-            reference_fa = reference_fa,
             reference_fai = reference_fai,
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
