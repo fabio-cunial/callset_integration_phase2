@@ -373,6 +373,9 @@ END
         }
         
         
+        # Given an interval-only input VCF, the procedure compresses it and
+        # computes its records with a stringent match to the training resource.
+        #
         # Remark: sequence similarity is not used to decide a match.
         #
         function GetTrainingRecords() {
@@ -382,9 +385,13 @@ END
             
             bcftools view --output-type z ${INPUT_VCF} --output ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}.vcf.gz
+            rm -f ${INPUT_VCF}
+            
             ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            
             mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
+            rm -rf truvari_${SAMPLE_ID}/
         }
         
         
