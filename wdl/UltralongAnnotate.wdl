@@ -140,8 +140,7 @@ task Impl {
         }
         
         
-        # Ensures that the VCF is correctly formatted. This is needed e.g. for
-        # `truvari bench` to work.
+        # Ensures that the VCF is correctly formatted.
         #
         function CanonizeVcf() {
             local SAMPLE_ID=$1
@@ -149,7 +148,8 @@ task Impl {
             
             DEFAULT_QUAL="60"   # Arbitrary
             
-            # 1. Removing SVLEN from symbolic ALTs. Fixing END.
+            # 1. Removing SVLEN from symbolic ALTs and fixing END.
+            # This is necessary for `truvari bench` to work on symbolic records.
             java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} > ${SAMPLE_ID}_out.vcf
             rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
@@ -362,24 +362,6 @@ END
         }
         
         
-        # Removes SVLEN from symbolic ALTs, in order not to interfere with
-        # `truvari bench`.
-        #
-        function ResetAlts() {
-            local INPUT_VCF=$1
-            local OUTPUT_VCF=$2
-            
-            date 1>&2
-            ( bcftools view --header-only ${INPUT_VCF} ; bcftools view --no-header ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' ) > ${OUTPUT_VCF}
-            date 1>&2
-        }
-        
-        
         # Given an interval-only input VCF, the procedure compresses it and
         # computes its records with a stringent match to the training resource.
         #
@@ -394,7 +376,9 @@ END
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             rm -f ${INPUT_VCF}
             
-            ${TIME_COMMAND} truvari bench --reference ~{reference_fa} -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --max-resolve ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            #${TIME_COMMAND} truvari bench --reference ~{reference_fa} -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --max-resolve ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
+            
+            ${TIME_COMMAND} truvari bench -b ~{ultralong_training_resource_vcf_gz} -c ${SAMPLE_ID}_${SUFFIX}.vcf.gz --includebed ~{ultralong_training_resource_bed} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0 --pick single -o ./truvari_${SAMPLE_ID}/
             
             mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
@@ -409,7 +393,7 @@ END
             local SAMPLE_ID=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output out.vcf
-            ResetAlts out.vcf in.vcf
+            mv out.vcf in.vcf
             
             # Annotating
             AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
