@@ -140,32 +140,36 @@ task Impl {
         }
         
         
-        # Ensures that the VCF is correctly formatted
+        # Ensures that the VCF is correctly formatted. This is needed e.g. for
+        # `truvari bench` to work.
         #
         function CanonizeVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             
-            # 1. Cleaning REF, ALT, QUAL, FILTER.
+            DEFAULT_QUAL="60"   # Arbitrary
+            
+            # 1. Removing SVLEN from symbolic ALTs. Fixing END.
+            java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} > ${SAMPLE_ID}_out.vcf
+            rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 2. Cleaning REF, ALT, QUAL, FILTER.
             # - REF and ALT must be uppercase for XGBoost scoring downstream to
             #   work.
             # - We force every record to PASS, to rule out any filter-dependent
             #   effect in downstream tools.
-            DEFAULT_QUAL="60"   # Arbitrary
-            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${INPUT_VCF_GZ} ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
-            rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} CleanRefAltQual ${SAMPLE_ID}_in.vcf ${DEFAULT_QUAL} > ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            # 2.1 Removing END, since its values may be inconsistent and make
-            # GATK crash downstream.
-            # 2.2 Making sure IDs are distinct at the inter-sample level (they
+            # 3. Making sure IDs are distinct at the inter-sample level (they
             # are already distinct at the intra-sample level thanks to the 
             # steps upstream).
-            ${TIME_COMMAND} bcftools annotate --remove INFO/END --set-id ${SAMPLE_ID}'_%ID' --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools annotate --set-id ${SAMPLE_ID}'_%ID' --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_canonized.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_canonized.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf
         }
         
         
@@ -385,18 +389,6 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local SUFFIX=$3
-            
-            
-            
-            
-            bcftools view --header-only ${INPUT_VCF} > test.vcf
-            bcftools view --no-header ${INPUT_VCF} | head -n 10 >> test.vcf
-            gcloud storage cp test.vcf ~{remote_outdir}
-            
-            
-            
-            
-            
             
             bcftools view --output-type z ${INPUT_VCF} --output ${SAMPLE_ID}_${SUFFIX}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}.vcf.gz

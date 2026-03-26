@@ -16,7 +16,6 @@ public class FixUltralongRecords {
     
     /**
      * @param args
-     * 0: assumed not to contain ultra-long calls or BND calls.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
