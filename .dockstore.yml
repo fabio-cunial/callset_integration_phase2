@@ -585,3 +585,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongMerge.wdl
   testParameterFiles:
+- name: UltralongScore
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongScore.wdl
+  testParameterFiles:
