@@ -82,8 +82,8 @@ task Impl {
         GSUTIL_DELAY_S="600"
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
-
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ~{input_vcf_gz} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}
+        EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ~{input_vcf_gz} ${EXCLUDE_CHROMOSOMES} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}        
         ls -laht
         # Output:
         # extract.annot.hdf5
