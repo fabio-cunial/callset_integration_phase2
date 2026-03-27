@@ -13,7 +13,7 @@ workflow UltralongScore {
                 
         File training_resource_bed
 
-        Array[String] annotations = ["SVLEN","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1","BIN_2","BIN_3","BIN_4","BIN_5","BIN_6","BIN_7","BIN_8","BIN_9","BIN_10","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"]
+        Array[String] annotations = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1","BIN_2","BIN_3","BIN_4","BIN_5","BIN_6","BIN_7","BIN_8","BIN_9","BIN_10","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"]
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
@@ -64,7 +64,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 3
+        Int ram_size_gb = 16
         Int disk_size_gb = 20
     }
     parameter_meta {
@@ -90,11 +90,11 @@ task Impl {
         # extract.unlabeled.annot.hdf5
         # extract.vcf.gz
         # extract.vcf.gz.tbi
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 extract.annot.hdf5 --unlabeled-annotations-hdf5 extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O ${SAMPLE_ID}.train --mode INDEL --verbosity DEBUG
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 extract.annot.hdf5 --unlabeled-annotations-hdf5 extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O train.train --mode INDEL --verbosity DEBUG
         ls -laht
         # Output: 
-        # ${SAMPLE_ID}.train.*
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ~{input_vcf_gz} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --resource:extracted,extracted=true extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
+        # train.train.*
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ~{input_vcf_gz} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --resource:extracted,extracted=true extract.vcf.gz --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
         ls -laht
         # Output:
         # score.vcf.gz
