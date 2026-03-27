@@ -50,15 +50,17 @@ workflow UltralongAnnotate {
 }
 
 
+# Performance on a 4-core, 8GB VM:
+#
 # TOOL                                                CPU     RAM     TIME
-# samtools bedcov           
-# samtools view
-# bcftools annotate
-# truvari bench    
-# java UltralongIntervalGetBins
-# java UltralongIntervalCreateBedcovAnnotations
-# java UltralongIntervalGetClips
-# java UltralongIntervalIntersectClips
+# samtools bedcov                                     70%    500M       3m
+# annotate_mapq_secondary.sh                         400%     15M      10s
+# bcftools annotate                                  100%     15M      50s
+# truvari bench                                      100%    200M      10s
+# java UltralongIntervalGetBins                      200%     50M       1s
+# java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
+# annotate_clipped_alignments_1.sh                   400%    200M       1m
+# annotate_clipped_alignments_2.sh                   400%     50M       1m
 #
 task Impl {
     input {
@@ -77,7 +79,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
         Int disk_size_gb = 50
         Int preemptible_number
     }
@@ -118,7 +120,7 @@ task Impl {
             gcloud storage cp ${ULTRALONG_BCF} ./${SAMPLE_ID}.bcf
             gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.bcf.csi
             
-            # Converting to .vcf.gz for the genotypers
+            # Converting to .vcf.gz for downstream tools
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
             rm -f ${SAMPLE_ID}.bcf*
@@ -146,7 +148,8 @@ task Impl {
             DEFAULT_QUAL="60"   # Arbitrary
             
             # 1. Removing SVLEN from symbolic ALTs and fixing END.
-            # This is necessary for `truvari bench` to work on symbolic records.
+            # This is necessary for `truvari bench` to work on symbolic records:
+            # https://github.com/ACEnglish/truvari/issues/290
             java -cp ~{docker_dir} FixUltralongRecords ${INPUT_VCF_GZ} ~{reference_fai} > ${SAMPLE_ID}_out.vcf
             rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
@@ -159,7 +162,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # 3. Making sure IDs are distinct at the inter-sample level (they
-            # are already distinct at the intra-sample level thanks to the 
+            # are already distinct at the intra-sample level, thanks to the 
             # steps upstream).
             ${TIME_COMMAND} bcftools annotate --set-id ${SAMPLE_ID}'_%ID' --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
