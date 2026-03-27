@@ -580,3 +580,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongAnnotate.wdl
   testParameterFiles:
+- name: UltralongMerge
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongMerge.wdl
+  testParameterFiles:
