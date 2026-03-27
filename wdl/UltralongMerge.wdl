@@ -31,8 +31,7 @@ workflow UltralongMerge {
 # Performance on a 4-core, 4GB VM:
 #
 # TOOL                                                CPU     RAM     TIME
-# bcftools merge
-# bcftools norm
+# bcftools concat
 #
 task Impl {
     input {
@@ -59,6 +58,23 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
+        
+        # ----------------------- Steps of the pipeline ------------------------
+        
+        cat << 'END' > fix_sample.sh
+#!/bin/bash
+INPUT_VCF_GZ=$1
+
+bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}.reheader
+rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
+mv ${INPUT_VCF_GZ}.reheader ${INPUT_VCF_GZ}
+bcftools index -f -t ${INPUT_VCF_GZ}
+END
+        chmod +x fix_sample.sh
+        
+        
+        # ---------------------------- Main program ----------------------------
+        
         # Simple concatenation, without any duplicate removal. In the future we
         # may run truvari collapse to remove approximate duplicates.
         df -h 1>&2
@@ -66,11 +82,13 @@ task Impl {
         df -h 1>&2
         ls *_~{svtype}.vcf.gz > list1.txt
         ls *_~{svtype}_training.vcf.gz > list2.txt
+        ${TIME_COMMAND} xargs --arg-file=list1.txt --max-lines=1 --max-procs=${N_THREADS} fix_sample.sh
+        ${TIME_COMMAND} xargs --arg-file=list2.txt --max-lines=1 --max-procs=${N_THREADS} fix_sample.sh
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list1.txt --output-type z --output ~{svtype}_merged.vcf.gz &
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list2.txt --output-type z --output ~{svtype}_training_merged.vcf.gz &
         wait
-        ${TIME_COMMAND} bcftools index --threads 2 -f ~{svtype}_merged.vcf.gz &
-        ${TIME_COMMAND} bcftools index --threads 2 -f ~{svtype}_training_merged.vcf.gz &
+        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}_merged.vcf.gz &
+        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}_training_merged.vcf.gz &
         wait
         ls -laht 1>&2
         
