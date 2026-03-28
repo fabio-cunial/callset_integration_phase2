@@ -14,6 +14,8 @@ workflow UltralongAnnotate {
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
         
+        File feature_extraction_py
+        
         Int n_coverage_bins = 10
         Int breakpoint_window_bp = 500
         Int min_clip_length = 200
@@ -37,7 +39,9 @@ workflow UltralongAnnotate {
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
             ultralong_training_resource_tbi = ultralong_training_resource_tbi,
-    
+            
+            feature_extraction_py = feature_extraction_py,
+            
             n_coverage_bins = n_coverage_bins,
             breakpoint_window_bp = breakpoint_window_bp,
             min_clip_length = min_clip_length,
@@ -64,6 +68,11 @@ workflow UltralongAnnotate {
 # annotate_clipped_alignments_1.sh                   400%    200M       1m
 # annotate_clipped_alignments_2.sh                   400%     50M       1m
 #
+# sniffles 2.7.3                                      30%    500M      40m
+# cutefc                                              30%    1.5G      50m
+# lrcaller left                                       30%    200M      50m
+# lrcaller right                                     300%    200M       4s
+#
 task Impl {
     input {
         File chunk_csv
@@ -74,6 +83,8 @@ task Impl {
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
         File ultralong_training_resource_tbi
+        
+        File feature_extraction_py
         
         Int n_coverage_bins
         Int breakpoint_window_bp
@@ -374,9 +385,6 @@ END
         
         # ------------------ Annotations from genotypers -----------------------
         
-        # TOOL                     CPU%         RAM        TIME     NOTES
-        # sniffles 2.7.3
-        #
         function Sniffles() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -413,9 +421,6 @@ END
         }
         
         
-        # TOOL                  CPU%      RAM        TIME       NOTES
-        # cuteFC
-        #
         function Cutefc() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -533,10 +538,6 @@ END
         chmod +x lrcaller.sh
         
         
-        # TOOL                           CPU%         RAM        TIME    NOTES
-        # lrcaller                       
-        # lrcaller --right_breakpoint
-        #
         function Lrcaller() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -692,6 +693,20 @@ END
         }
         
         
+        # TOOL                           CPU%         RAM        TIME    NOTES
+        # feature_extraction.py          100%        3.5G         10s
+        #
+        function FeatureExtraction() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+            
+            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
+            head -n 20 features.csv 1>&2
+exit 1
+        }
+        
+        
         # DEL-focused workflow.
         #
         function ProcessDels() {
@@ -711,12 +726,16 @@ END
             
             Sniffles ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            #Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            #Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            #Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            FeatureExtraction ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
+            
+            
+            
             
             # Computing training records
             GetTrainingRecords ${SAMPLE_ID} in.vcf training_resource_del.vcf.gz del
@@ -724,6 +743,9 @@ END
             # Uploading
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ${SAMPLE_ID}_del_training.vcf.'gz*' ~{remote_outdir}/
         }
+        
+        
+        
         
         
         
@@ -762,7 +784,7 @@ END
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
-            ls -laht
+            ls -laht 1>&2
         done < ~{chunk_csv}
     >>>
     

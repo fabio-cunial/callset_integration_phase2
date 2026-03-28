@@ -118,11 +118,20 @@ RUN pip install truvari==${truvari_version} \
 # Remark: the latest version is currently 2.7.3, but it throws errors on our
 # ultralong VCFs. E.g.:
 #
-# Sniffles2 Error: Error parsing input VCF: Line 1:
-# 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
-# exiting.)
+# 2026-03-28 17:11:22,734 ERROR sniffles.worker (323): Error in worker process
+# while executing Task #22
+# Traceback (most recent call last):
+#   File "/opt/conda/lib/python3.11/site-packages/sniffles/parallel.py", line
+#   655, in run_worker
+#     result = task.execute(self)
+#              ^^^^^^^^^^^^^^^^^^
+#   File "/opt/conda/lib/python3.11/site-packages/sniffles/parallel.py", line
+#   249, in execute
+#     if bin not in genotype_svs_svtypes_bins[cand.svtype]:
+#                   ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+# KeyError: 'SINGLE_LEFT'
 #
-ARG sniffles_version=2.7.3
+ARG sniffles_version=2.7.0
 RUN pip install sniffles==${sniffles_version}
 
 # CUTEFC
