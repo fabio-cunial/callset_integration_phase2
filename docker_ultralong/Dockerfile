@@ -114,39 +114,38 @@ ARG truvari_version=5.4.0
 RUN pip install truvari==${truvari_version} \
     && truvari --help
 
-# # SNIFFLES
-# # Remark: the latest version is currently 2.7.3, but it throws errors on our
-# # ultralong VCFs. E.g.:
-# #
-# # Sniffles2 Error: Error parsing input VCF: Line 1:
-# # 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
-# # exiting.)
-# #
-# # The following is currently the latest release that doesn't throw errors.
-# ARG sniffles_version=2.7.3
-# RUN python -m venv /opt/sniffles_env
-# RUN /opt/sniffles_env/bin/pip install sniffles==${sniffles_version}
+# SNIFFLES
+# Remark: the latest version is currently 2.7.3, but it throws errors on our
+# ultralong VCFs. E.g.:
 #
-# # CUTEFC
-# ARG cutefc_version=1.0.2
-# RUN python -m venv /opt/cutefc_env
-# RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
-#     && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
-#     && rm -f cuteFC-v${cutefc_version}.tar.gz \
-#     && cd cuteFC-cuteFC-v${cutefc_version} \
-#     && /opt/cutefc_env/bin/python setup.py install
+# Sniffles2 Error: Error parsing input VCF: Line 1:
+# 'pysam.libcbcf.VariantRecord' object has no attribute 'strip' (Fatal error,
+# exiting.)
 #
-# # LRCALLER
-# ARG lrcaller_version=1.0
-# RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcaller_version}/lrcaller-${lrcaller_version}_linux-x86-64.tgz \
-#     && tar -xzvf lrcaller-${lrcaller_version}_linux-x86-64.tgz \
-#     && chmod +x lrcaller-${lrcaller_version}/bin/* \
-#     && mv lrcaller-${lrcaller_version}/bin/* /usr/local/bin \
-#     && lrcaller --help || echo "LRcaller returns an error code when called"
+ARG sniffles_version=2.7.3
+RUN pip install sniffles==${sniffles_version}
 
-# # AD HOC SCRIPTS
-# RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy
+# CUTEFC
+ARG cutefc_version=1.0.2
+RUN wget https://github.com/Meltpinkg/cuteFC/archive/refs/tags/cuteFC-v${cutefc_version}.tar.gz \
+    && tar -xzf cuteFC-v${cutefc_version}.tar.gz \
+    && rm -f cuteFC-v${cutefc_version}.tar.gz \
+    && cd cuteFC-cuteFC-v${cutefc_version} \
+    && python setup.py install
+
+# LRCALLER
+ARG lrcaller_version=1.0
+RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcaller_version}/lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+    && tar -xzvf lrcaller-${lrcaller_version}_linux-x86-64.tgz \
+    && chmod +x lrcaller-${lrcaller_version}/bin/* \
+    && mv lrcaller-${lrcaller_version}/bin/* /usr/local/bin \
+    && lrcaller --help || echo "LRcaller returns an error code when called"
+
+# FEATURE EXTRACTION
+RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy
+COPY *.py .
+
+# AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java
 COPY *.r .
-COPY *.py .

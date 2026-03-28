@@ -8,6 +8,7 @@ workflow UltralongAnnotate {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -31,6 +32,7 @@ workflow UltralongAnnotate {
             chunk_csv = chunk_csv,
             remote_outdir = remote_outdir,
             
+            reference_fa = reference_fa,
             reference_fai = reference_fai,
             ultralong_training_resource_bed = ultralong_training_resource_bed,
             ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
@@ -67,6 +69,7 @@ task Impl {
         File chunk_csv
         String remote_outdir
         
+        File reference_fa
         File reference_fai
         File ultralong_training_resource_bed
         File ultralong_training_resource_vcf_gz
@@ -95,6 +98,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         
         
         
@@ -172,6 +176,10 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf
         }
         
+        
+        
+        
+        # ------------------------- Custom annotations -------------------------
         
         # Given an input VCF containing only interval records, the procedure
         # annotates each record with coverage measures extracted from a BAM.
@@ -362,6 +370,305 @@ END
         }
         
         
+        
+        
+        # ------------------ Annotations from genotypers -----------------------
+        
+        # TOOL                     CPU%         RAM        TIME     NOTES
+        # sniffles 2.7.3
+        #
+        function Sniffles() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+            
+            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --reference ~{reference_fa} --genotype-vcf ${INPUT_VCF} --vcf ${SAMPLE_ID}_out.vcf
+            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                \
+                if ($5==".") GQ=-1; \
+                else GQ=$5; \
+                \
+                if ($6==".") DR=-1; \
+                else DR=$6; \
+                \
+                if ($7==".") DV=-1; \
+                else DV=$7; \
+                \
+                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\n",$1,$2,$3,GT_COUNT,GQ,DR,DV); \
+            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_in.vcf
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=SNIFFLES_GT_COUNT,Number=1,Type=Integer,Description="Sniffles GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=SNIFFLES_GQ,Number=1,Type=Integer,Description="Genotype quality according to sniffles">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=SNIFFLES_DR,Number=1,Type=Integer,Description="Number of reference reads according to sniffles">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=SNIFFLES_DV,Number=1,Type=Integer,Description="Number of variant reads according to sniffles">' >> ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+        }
+        
+        
+        # TOOL                  CPU%      RAM        TIME       NOTES
+        # cuteFC
+        #
+        function Cutefc() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+                
+            mkdir ./cutefc_dir/
+            ${TIME_COMMAND} cuteFC --threads ${N_THREADS} --genotype --max_size -1 --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_out.vcf ./cutefc_dir
+            rm -rf ./cutefc_dir ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\t[%PL]\t%INFO/CIPOS\t%INFO/CILEN\t%INFO/RE\t%INFO/STRAND\n' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                \
+                if ($5==".") GQ=-1; \
+                else GQ=$5; \
+                \
+                if ($6==".") DR=-1; \
+                else DR=$6; \
+                \
+                if ($7==".") DV=-1; \
+                else DV=$7; \
+                \
+                PL_1=-1; PL_2=-1; PL_3=-1; \
+                p=0; \
+                for (i=1; i<=length($8); i++) { \
+                    if (substr($8,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    PL_1=substr($8,1,p-1); \
+                    q=0; \
+                    for (i=p+1; i<=length($8); i++) { \
+                        if (substr($8,i,1)==",") { q=i; break; } \
+                    } \
+                    if (q>0) { \
+                        PL_2=substr($8,p+1,q-1-p); \
+                        PL_3=substr($8,q+1); \
+                    } \
+                    else { PL_2=substr($8,p+1); } \
+                } \
+                else { PL_1=$8; }
+                \
+                CIPOS_1=-1; CIPOS_2=-1; \
+                p=0; \
+                for (i=1; i<=length($9); i++) { \
+                    if (substr($9,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CIPOS_1=substr($9,1,p-1); \
+                    CIPOS_2=substr($9,p+1); \
+                } \
+                else { CIPOS_1=$9; } \
+                \
+                CILEN_1=-1; CILEN_2=-1; \
+                p=0; \
+                for (i=1; i<=length($10); i++) { \
+                    if (substr($10,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CILEN_1=substr($10,1,p-1); \
+                    CILEN_2=substr($10,p+1); \
+                } \
+                else { CILEN_1=$10; } \
+                \
+                if ($11==".") RE=-1; \
+                else RE=$11; \
+                \
+                STRAND=-1; \
+                if ($12=="--") STRAND=0; \
+                else if ($12=="-+") STRAND=1; \
+                else if ($12=="+-") STRAND=2; \
+                else if ($12=="++") STRAND=3; \
+                \
+                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
+            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_in.vcf
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=CUTEFC_GT_COUNT,Number=1,Type=Integer,Description="Cutefc GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_GQ,Number=1,Type=Integer,Description="Genotype quality according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Integer,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Integer,Description="High-quality variant reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_1,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_2,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_PL_3,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_CIPOS_1,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_CIPOS_2,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_CILEN_1,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_CILEN_2,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+        }
+        
+        
+        cat << 'END' > lrcaller.sh
+#!/bin/bash
+set -euxo pipefail
+
+SAMPLE_ID=$1
+INPUT_VCF_GZ=$2
+ALIGNMENTS_BAM=$3
+BREAKPOINT=$4
+REFERENCE_FA=$5
+N_THREADS=$6
+
+if [ ${BREAKPOINT} -eq 0 ]; then
+    BREAKPOINT_FLAG=" "
+else
+    BREAKPOINT_FLAG="--right_breakpoint"
+fi
+lrcaller --number_of_threads ${N_THREADS} --dyn-w-size ${BREAKPOINT_FLAG} --fa ${REFERENCE_FA} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf 2> /dev/null
+END
+        chmod +x lrcaller.sh
+        
+        
+        # TOOL                           CPU%         RAM        TIME    NOTES
+        # lrcaller                       
+        # lrcaller --right_breakpoint
+        #
+        function Lrcaller() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+            local BREAKPOINT=$4
+            
+            bcftools view --threads ${N_THREADS} --drop-genotypes --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${ALIGNMENTS_BAM} ${BREAKPOINT} ~{reference_fa} ${N_THREADS}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            if [ ${BREAKPOINT} -eq 0 ]; then
+                SUFFIX="left"
+            else
+                SUFFIX="right"
+            fi
+            grep '^[^#]' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                printf("%s",$1); \
+                for (i=2; i<=3; i++) printf("\t%s",$i); \
+                for (i=10; i<=14; i++) { \
+                    gsub(/[:,]/,"\t",$i); \
+                    printf("\t%s",$i); \
+                } \
+                printf("\n"); \
+            }' | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                $4=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($14=="0/0" || $14=="0|0" || $14=="./."  || $14==".|." || $14=="./0" || $14==".|0" || $14=="0/." || $14=="0|." || $14=="0" || $14==".") GT_COUNT=0; \
+                else if ($14=="0/1" || $14=="0|1" || $14=="1/0" || $14=="1|0" || $14=="./1" || $14==".|1" || $14=="1/." || $14=="1|." || $14=="1") GT_COUNT=1; \
+                else if ($14=="1/1" || $14=="1|1") GT_COUNT=2; \
+                $14=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($24=="0/0" || $24=="0|0" || $24=="./."  || $24==".|." || $24=="./0" || $24==".|0" || $24=="0/." || $24=="0|." || $24=="0" || $24==".") GT_COUNT=0; \
+                else if ($24=="0/1" || $24=="0|1" || $24=="1/0" || $24=="1|0" || $24=="./1" || $24==".|1" || $24=="1/." || $24=="1|." || $24=="1") GT_COUNT=1; \
+                else if ($24=="1/1" || $24=="1|1") GT_COUNT=2; \
+                $24=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($34=="0/0" || $34=="0|0" || $34=="./."  || $34==".|." || $34=="./0" || $34==".|0" || $34=="0/." || $34=="0|." || $34=="0" || $34==".") GT_COUNT=0; \
+                else if ($34=="0/1" || $34=="0|1" || $34=="1/0" || $34=="1|0" || $34=="./1" || $34==".|1" || $34=="1/." || $34=="1|." || $34=="1") GT_COUNT=1; \
+                else if ($34=="1/1" || $34=="1|1") GT_COUNT=2; \
+                $34=GT_COUNT; \
+                \
+                GT_COUNT=-1; \
+                if ($44=="0/0" || $44=="0|0" || $44=="./."  || $44==".|." || $44=="./0" || $44==".|0" || $44=="0/." || $44=="0|." || $44=="0" || $44==".") GT_COUNT=0; \
+                else if ($44=="0/1" || $44=="0|1" || $44=="1/0" || $44=="1|0" || $44=="./1" || $44==".|1" || $44=="1/." || $44=="1|." || $44=="1") GT_COUNT=1; \
+                else if ($44=="1/1" || $44=="1|1") GT_COUNT=2; \
+                $44=GT_COUNT; \
+                \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' | bgzip -c > ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz
+            zcat ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz | head -n 10 1>&2 || echo "0"
+            rm -f ${SAMPLE_ID}_in.vcf
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz
+            echo '##INFO=<ID=LRCALLER_GTCOUNT1_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' > ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_GTCOUNT2_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_GTCOUNT3_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_GTCOUNT4_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_GTCOUNT5_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_AD11_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD12_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD13_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_AD21_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD22_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD23_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_AD31_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD32_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD33_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_AD41_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD42_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD43_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_AD51_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD52_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_AD53_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from alignment supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_VA11_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA12_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA13_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_VA21_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA22_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA23_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_VA31_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA32_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA33_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_VA41_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA42_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA43_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_VA51_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA52_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_VA53_'${SUFFIX}',Number=1,Type=Integer,Description="Allelic depths from bam file supporting ref and alt allele and total number of reads">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_PL11_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL12_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL13_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_PL21_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL22_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL23_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_PL31_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL32_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL33_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_PL41_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL42_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL43_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            echo '##INFO=<ID=LRCALLER_PL51_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL52_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            echo '##INFO=<ID=LRCALLER_PL53_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_${SUFFIX}.txt
+            
+            COLUMNS='CHROM,POS,~ID,INFO/LRCALLER_GTCOUNT1_'${SUFFIX}',INFO/LRCALLER_AD11_'${SUFFIX}',INFO/LRCALLER_AD12_'${SUFFIX}',INFO/LRCALLER_AD13_'${SUFFIX}',INFO/LRCALLER_VA11_'${SUFFIX}',INFO/LRCALLER_VA12_'${SUFFIX}',INFO/LRCALLER_VA13_'${SUFFIX}',INFO/LRCALLER_PL11_'${SUFFIX}',INFO/LRCALLER_PL12_'${SUFFIX}',INFO/LRCALLER_PL13_'${SUFFIX}',INFO/LRCALLER_GTCOUNT2_'${SUFFIX}',INFO/LRCALLER_AD21_'${SUFFIX}',INFO/LRCALLER_AD22_'${SUFFIX}',INFO/LRCALLER_AD23_'${SUFFIX}',INFO/LRCALLER_VA21_'${SUFFIX}',INFO/LRCALLER_VA22_'${SUFFIX}',INFO/LRCALLER_VA23_'${SUFFIX}',INFO/LRCALLER_PL21_'${SUFFIX}',INFO/LRCALLER_PL22_'${SUFFIX}',INFO/LRCALLER_PL23_'${SUFFIX}',INFO/LRCALLER_GTCOUNT3_'${SUFFIX}',INFO/LRCALLER_AD31_'${SUFFIX}',INFO/LRCALLER_AD32_'${SUFFIX}',INFO/LRCALLER_AD33_'${SUFFIX}',INFO/LRCALLER_VA31_'${SUFFIX}',INFO/LRCALLER_VA32_'${SUFFIX}',INFO/LRCALLER_VA33_'${SUFFIX}',INFO/LRCALLER_PL31_'${SUFFIX}',INFO/LRCALLER_PL32_'${SUFFIX}',INFO/LRCALLER_PL33_'${SUFFIX}',INFO/LRCALLER_GTCOUNT4_'${SUFFIX}',INFO/LRCALLER_AD41_'${SUFFIX}',INFO/LRCALLER_AD42_'${SUFFIX}',INFO/LRCALLER_AD43_'${SUFFIX}',INFO/LRCALLER_VA41_'${SUFFIX}',INFO/LRCALLER_VA42_'${SUFFIX}',INFO/LRCALLER_VA43_'${SUFFIX}',INFO/LRCALLER_PL41_'${SUFFIX}',INFO/LRCALLER_PL42_'${SUFFIX}',INFO/LRCALLER_PL43_'${SUFFIX}',INFO/LRCALLER_GTCOUNT5_'${SUFFIX}',INFO/LRCALLER_AD51_'${SUFFIX}',INFO/LRCALLER_AD52_'${SUFFIX}',INFO/LRCALLER_AD53_'${SUFFIX}',INFO/LRCALLER_VA51_'${SUFFIX}',INFO/LRCALLER_VA52_'${SUFFIX}',INFO/LRCALLER_VA53_'${SUFFIX}',INFO/LRCALLER_PL51_'${SUFFIX}',INFO/LRCALLER_PL52_'${SUFFIX}',INFO/LRCALLER_PL53_'${SUFFIX}
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz --header-lines ${SAMPLE_ID}_header_${SUFFIX}.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz ${SAMPLE_ID}_header_${SUFFIX}.txt
+        }
+        
+        
         # Given an interval-only input VCF, the procedure compresses it and
         # computes its records with a stringent match to the training resource.
         #
@@ -395,11 +702,20 @@ END
             mv out.vcf in.vcf
             
             # Annotating
-            AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            #AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            #AnnotateMapqSecondary ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            #AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            #rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            
+            Sniffles ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            AnnotateMapqSecondary ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0
+            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1
             rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
             
             # Computing training records
@@ -415,9 +731,12 @@ END
         # ---------------------------- Main program ----------------------------
         
         INFINITY="1000000000"
-        samtools --version 1>&2
-        bcftools --version 1>&2
-        truvari --help 1>&2
+        samtools --version 1>&2 || echo "?"
+        bcftools --version 1>&2 || echo "?"
+        truvari --help 1>&2 || echo "?"
+        sniffles --version 1>&2 || echo "?"
+        cuteFC --version 1>&2 || echo "?"
+        lrcaller --version 1>&2 || echo "?"
         df -h 1>&2
         
         # Stratifying the training resource
