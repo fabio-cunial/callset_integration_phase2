@@ -116,7 +116,7 @@ RUN pip install truvari==${truvari_version} \
 
 # SNIFFLES
 # Remark: the latest version is currently 2.7.3, but it throws errors on our
-# ultralong VCFs. E.g.:
+# ultralong VCFs, so we move to the last previous major release. Example error:
 #
 # 2026-03-28 17:11:22,734 ERROR sniffles.worker (323): Error in worker process
 # while executing Task #22

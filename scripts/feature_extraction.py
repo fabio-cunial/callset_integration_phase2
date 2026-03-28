@@ -80,7 +80,8 @@ def load_variants_with_filtering(vcf_path, label, existing_variants):
             'pos': variant.POS,
             'end': variant.end if hasattr(variant, 'end') else variant.POS + 1,
             'svlen': variant.INFO.get('SVLEN', 0),
-            'svtype': variant.INFO.get('SVTYPE', 'UNK')
+            'svtype': variant.INFO.get('SVTYPE', 'UNK'),
+            'id': variant.ID
         }
 
         variant_id = f"{var_info['chrom']}:{var_info['pos']}:{var_info['end']}:{label}"
@@ -303,6 +304,7 @@ def compute_all_features_for_variant(variant, bam_file, ref_file):
     # Basic variant info
     chrom = variant.CHROM
     start = variant.POS
+    variantid = variant.ID
     end = variant.end if hasattr(variant, 'end') and variant.end else start + 1
     svlen = variant.INFO.get('SVLEN', end - start)
     svtype = variant.INFO.get('SVTYPE', 'UNK')
@@ -310,7 +312,8 @@ def compute_all_features_for_variant(variant, bam_file, ref_file):
     # Initialize features
     features = {
         'chrom': chrom, 'pos': start, 'end': end,
-        'svlen': svlen, 'svtype': svtype
+        'svlen': svlen, 'svtype': svtype,
+        'id': variantid
     }
 
     # Compute feature categories

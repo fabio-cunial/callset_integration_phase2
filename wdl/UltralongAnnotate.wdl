@@ -72,6 +72,7 @@ workflow UltralongAnnotate {
 # cutefc                                              30%    1.5G      50m
 # lrcaller left                                       30%    200M      50m
 # lrcaller right                                     300%    200M       4s
+# feature_extraction.py                              100%    3.5G       2m
 #
 task Impl {
     input {
@@ -390,7 +391,7 @@ END
             local INPUT_VCF=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --reference ~{reference_fa} --genotype-vcf ${INPUT_VCF} --vcf ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} sniffles --threads ${N_THREADS} --input ${ALIGNMENTS_BAM} --reference ~{reference_fa} --genotype-vcf ${INPUT_VCF} --vcf ${SAMPLE_ID}_out.vcf 1>&2
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
@@ -595,7 +596,6 @@ END
                 for (i=2; i<=NF; i++) printf("\t%s",$i); \
                 printf("\n"); \
             }' | bgzip -c > ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz
-            zcat ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz | head -n 10 1>&2 || echo "0"
             rm -f ${SAMPLE_ID}_in.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations_${SUFFIX}.tsv.gz
             echo '##INFO=<ID=LRCALLER_GTCOUNT1_'${SUFFIX}',Number=1,Type=Integer,Description="Genotype count">' > ${SAMPLE_ID}_header_${SUFFIX}.txt
@@ -670,6 +670,33 @@ END
         }
         
         
+        function FeatureExtraction() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+            
+            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
+            head -n 10 features.csv 1>&2 || echo "0"
+            tail -n +2 features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=FEX_DEPTH_RATIO,Number=1,Type=Float,Description="depth_ratio from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_DEPTH_MAD,Number=1,Type=Float,Description="depth_mad from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_AB,Number=1,Type=Float,Description="ab from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_CN_SLOP,Number=1,Type=Float,Description="cn_slop from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_MQ_DROP,Number=1,Type=Float,Description="mq_drop from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_CLIP_FRAC,Number=1,Type=Float,Description="clip_frac from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Integer,Description="split_reads from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_READ_LEN_MED,Number=1,Type=Float,Description="read_len_med from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_STRAND_BIAS,Number=1,Type=Float,Description="strand_bias from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_GC_FRAC,Number=1,Type=Float,Description="gc_frac from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+        }
+        
+        
         # Given an interval-only input VCF, the procedure compresses it and
         # computes its records with a stringent match to the training resource.
         #
@@ -690,20 +717,6 @@ END
             mv truvari_${SAMPLE_ID}/tp-comp.vcf.gz ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SUFFIX}_training.vcf.gz
             rm -rf truvari_${SAMPLE_ID}/
-        }
-        
-        
-        # TOOL                           CPU%         RAM        TIME    NOTES
-        # feature_extraction.py          100%        3.5G         10s
-        #
-        function FeatureExtraction() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF=$2
-            local ALIGNMENTS_BAM=$3
-            
-            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
-            head -n 20 features.csv 1>&2
-exit 1
         }
         
         
