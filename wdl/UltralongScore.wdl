@@ -46,6 +46,12 @@ workflow UltralongScore {
 }
 
 
+# Performane on a 2-core, 16GB VM, all HPRC+HGSVC samples:
+#
+# TOOL                                  CPU            RAM              TIME
+# ExtractVariantAnnotations                             8G               20s
+# TrainVariantAnnotationsModel                        200M               10s
+# ScoreVariantAnnotations                             800M               20s
 #
 task Impl {
     input {
@@ -64,7 +70,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 16
+        Int ram_size_gb = 10
         Int disk_size_gb = 20
     }
     parameter_meta {
