@@ -95,7 +95,7 @@ task Impl {
         Int adjacency_slack_bp
         
         String docker_image
-        Int n_cpu = 8
+        Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number
@@ -267,14 +267,14 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read ID; do
+            while read -u 4 ID; do
                 MAPQ_LEFT=$(cat ${ID}_left_mapq.txt)
                 MAPQ_RIGHT=$(cat ${ID}_right_mapq.txt)
                 SECONDARY_LEFT=$(cat ${ID}_left_secondary.txt)
                 SECONDARY_RIGHT=$(cat ${ID}_right_secondary.txt)
                 echo -e "${ID}\t${MAPQ_LEFT}\t${MAPQ_RIGHT}\t${SECONDARY_LEFT}\t${SECONDARY_RIGHT}" >> ${SAMPLE_ID}_counts.tsv
                 rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
-            done < ${SAMPLE_ID}_variantID_sorted.txt
+            done 4< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%f\t%f\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
