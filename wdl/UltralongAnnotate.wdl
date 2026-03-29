@@ -452,7 +452,7 @@ END
             echo '##INFO=<ID=SNIFFLES_GQ,Number=1,Type=Integer,Description="Genotype quality according to sniffles">' >> ${SAMPLE_ID}_header_sniffles.txt
             echo '##INFO=<ID=SNIFFLES_DR,Number=1,Type=Integer,Description="Number of reference reads according to sniffles">' >> ${SAMPLE_ID}_header_sniffles.txt
             echo '##INFO=<ID=SNIFFLES_DV,Number=1,Type=Integer,Description="Number of variant reads according to sniffles">' >> ${SAMPLE_ID}_header_sniffles.txt
-            COLUMNS_SNIFFLES='CHROM,POS,~ID,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
+            echo 'CHROM,POS,~ID,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV' > ${SAMPLE_ID}_columns_sniffles.txt
         }
         
         
@@ -548,7 +548,7 @@ END
             echo '##INFO=<ID=CUTEFC_CILEN_2,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header_cutefc.txt
             echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> ${SAMPLE_ID}_header_cutefc.txt
             echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> ${SAMPLE_ID}_header_cutefc.txt
-            COLUMNS_CUTEFC='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
+            echo 'CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND' > ${SAMPLE_ID}_columns_cutefc.txt
         }
         
         
@@ -610,7 +610,7 @@ END
                 printf("%s",$1); \
                 for (i=2; i<=NF; i++) printf("\t%s",$i); \
                 printf("\n"); \
-            }' | bgzip -c > ${SAMPLE_ID}_annotations_lraller_${BREAKPOINT}.tsv.gz
+            }' | bgzip -c > ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz
             rm -f ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz
             if [ ${BREAKPOINT} -eq 0 ]; then
@@ -686,9 +686,9 @@ END
             echo '##INFO=<ID=LRCALLER_PL53_'${SUFFIX}',Number=1,Type=Integer,Description="PHRED-scaled genotype likelihoods">' >> ${SAMPLE_ID}_header_lrcaller_${BREAKPOINT}.txt
             
             if [ ${BREAKPOINT} -eq 0 ]; then
-                COLUMNS_LRCALLER_0='CHROM,POS,~ID,INFO/LRCALLER_GTCOUNT1_'${SUFFIX}',INFO/LRCALLER_AD11_'${SUFFIX}',INFO/LRCALLER_AD12_'${SUFFIX}',INFO/LRCALLER_AD13_'${SUFFIX}',INFO/LRCALLER_VA11_'${SUFFIX}',INFO/LRCALLER_VA12_'${SUFFIX}',INFO/LRCALLER_VA13_'${SUFFIX}',INFO/LRCALLER_PL11_'${SUFFIX}',INFO/LRCALLER_PL12_'${SUFFIX}',INFO/LRCALLER_PL13_'${SUFFIX}',INFO/LRCALLER_GTCOUNT2_'${SUFFIX}',INFO/LRCALLER_AD21_'${SUFFIX}',INFO/LRCALLER_AD22_'${SUFFIX}',INFO/LRCALLER_AD23_'${SUFFIX}',INFO/LRCALLER_VA21_'${SUFFIX}',INFO/LRCALLER_VA22_'${SUFFIX}',INFO/LRCALLER_VA23_'${SUFFIX}',INFO/LRCALLER_PL21_'${SUFFIX}',INFO/LRCALLER_PL22_'${SUFFIX}',INFO/LRCALLER_PL23_'${SUFFIX}',INFO/LRCALLER_GTCOUNT3_'${SUFFIX}',INFO/LRCALLER_AD31_'${SUFFIX}',INFO/LRCALLER_AD32_'${SUFFIX}',INFO/LRCALLER_AD33_'${SUFFIX}',INFO/LRCALLER_VA31_'${SUFFIX}',INFO/LRCALLER_VA32_'${SUFFIX}',INFO/LRCALLER_VA33_'${SUFFIX}',INFO/LRCALLER_PL31_'${SUFFIX}',INFO/LRCALLER_PL32_'${SUFFIX}',INFO/LRCALLER_PL33_'${SUFFIX}',INFO/LRCALLER_GTCOUNT4_'${SUFFIX}',INFO/LRCALLER_AD41_'${SUFFIX}',INFO/LRCALLER_AD42_'${SUFFIX}',INFO/LRCALLER_AD43_'${SUFFIX}',INFO/LRCALLER_VA41_'${SUFFIX}',INFO/LRCALLER_VA42_'${SUFFIX}',INFO/LRCALLER_VA43_'${SUFFIX}',INFO/LRCALLER_PL41_'${SUFFIX}',INFO/LRCALLER_PL42_'${SUFFIX}',INFO/LRCALLER_PL43_'${SUFFIX}',INFO/LRCALLER_GTCOUNT5_'${SUFFIX}',INFO/LRCALLER_AD51_'${SUFFIX}',INFO/LRCALLER_AD52_'${SUFFIX}',INFO/LRCALLER_AD53_'${SUFFIX}',INFO/LRCALLER_VA51_'${SUFFIX}',INFO/LRCALLER_VA52_'${SUFFIX}',INFO/LRCALLER_VA53_'${SUFFIX}',INFO/LRCALLER_PL51_'${SUFFIX}',INFO/LRCALLER_PL52_'${SUFFIX}',INFO/LRCALLER_PL53_'${SUFFIX}
+                echo 'CHROM,POS,~ID,INFO/LRCALLER_GTCOUNT1_'${SUFFIX}',INFO/LRCALLER_AD11_'${SUFFIX}',INFO/LRCALLER_AD12_'${SUFFIX}',INFO/LRCALLER_AD13_'${SUFFIX}',INFO/LRCALLER_VA11_'${SUFFIX}',INFO/LRCALLER_VA12_'${SUFFIX}',INFO/LRCALLER_VA13_'${SUFFIX}',INFO/LRCALLER_PL11_'${SUFFIX}',INFO/LRCALLER_PL12_'${SUFFIX}',INFO/LRCALLER_PL13_'${SUFFIX}',INFO/LRCALLER_GTCOUNT2_'${SUFFIX}',INFO/LRCALLER_AD21_'${SUFFIX}',INFO/LRCALLER_AD22_'${SUFFIX}',INFO/LRCALLER_AD23_'${SUFFIX}',INFO/LRCALLER_VA21_'${SUFFIX}',INFO/LRCALLER_VA22_'${SUFFIX}',INFO/LRCALLER_VA23_'${SUFFIX}',INFO/LRCALLER_PL21_'${SUFFIX}',INFO/LRCALLER_PL22_'${SUFFIX}',INFO/LRCALLER_PL23_'${SUFFIX}',INFO/LRCALLER_GTCOUNT3_'${SUFFIX}',INFO/LRCALLER_AD31_'${SUFFIX}',INFO/LRCALLER_AD32_'${SUFFIX}',INFO/LRCALLER_AD33_'${SUFFIX}',INFO/LRCALLER_VA31_'${SUFFIX}',INFO/LRCALLER_VA32_'${SUFFIX}',INFO/LRCALLER_VA33_'${SUFFIX}',INFO/LRCALLER_PL31_'${SUFFIX}',INFO/LRCALLER_PL32_'${SUFFIX}',INFO/LRCALLER_PL33_'${SUFFIX}',INFO/LRCALLER_GTCOUNT4_'${SUFFIX}',INFO/LRCALLER_AD41_'${SUFFIX}',INFO/LRCALLER_AD42_'${SUFFIX}',INFO/LRCALLER_AD43_'${SUFFIX}',INFO/LRCALLER_VA41_'${SUFFIX}',INFO/LRCALLER_VA42_'${SUFFIX}',INFO/LRCALLER_VA43_'${SUFFIX}',INFO/LRCALLER_PL41_'${SUFFIX}',INFO/LRCALLER_PL42_'${SUFFIX}',INFO/LRCALLER_PL43_'${SUFFIX}',INFO/LRCALLER_GTCOUNT5_'${SUFFIX}',INFO/LRCALLER_AD51_'${SUFFIX}',INFO/LRCALLER_AD52_'${SUFFIX}',INFO/LRCALLER_AD53_'${SUFFIX}',INFO/LRCALLER_VA51_'${SUFFIX}',INFO/LRCALLER_VA52_'${SUFFIX}',INFO/LRCALLER_VA53_'${SUFFIX}',INFO/LRCALLER_PL51_'${SUFFIX}',INFO/LRCALLER_PL52_'${SUFFIX}',INFO/LRCALLER_PL53_'${SUFFIX} > ${SAMPLE_ID}_columns_lrcaller_0.txt
             else
-                COLUMNS_LRCALLER_1='CHROM,POS,~ID,INFO/LRCALLER_GTCOUNT1_'${SUFFIX}',INFO/LRCALLER_AD11_'${SUFFIX}',INFO/LRCALLER_AD12_'${SUFFIX}',INFO/LRCALLER_AD13_'${SUFFIX}',INFO/LRCALLER_VA11_'${SUFFIX}',INFO/LRCALLER_VA12_'${SUFFIX}',INFO/LRCALLER_VA13_'${SUFFIX}',INFO/LRCALLER_PL11_'${SUFFIX}',INFO/LRCALLER_PL12_'${SUFFIX}',INFO/LRCALLER_PL13_'${SUFFIX}',INFO/LRCALLER_GTCOUNT2_'${SUFFIX}',INFO/LRCALLER_AD21_'${SUFFIX}',INFO/LRCALLER_AD22_'${SUFFIX}',INFO/LRCALLER_AD23_'${SUFFIX}',INFO/LRCALLER_VA21_'${SUFFIX}',INFO/LRCALLER_VA22_'${SUFFIX}',INFO/LRCALLER_VA23_'${SUFFIX}',INFO/LRCALLER_PL21_'${SUFFIX}',INFO/LRCALLER_PL22_'${SUFFIX}',INFO/LRCALLER_PL23_'${SUFFIX}',INFO/LRCALLER_GTCOUNT3_'${SUFFIX}',INFO/LRCALLER_AD31_'${SUFFIX}',INFO/LRCALLER_AD32_'${SUFFIX}',INFO/LRCALLER_AD33_'${SUFFIX}',INFO/LRCALLER_VA31_'${SUFFIX}',INFO/LRCALLER_VA32_'${SUFFIX}',INFO/LRCALLER_VA33_'${SUFFIX}',INFO/LRCALLER_PL31_'${SUFFIX}',INFO/LRCALLER_PL32_'${SUFFIX}',INFO/LRCALLER_PL33_'${SUFFIX}',INFO/LRCALLER_GTCOUNT4_'${SUFFIX}',INFO/LRCALLER_AD41_'${SUFFIX}',INFO/LRCALLER_AD42_'${SUFFIX}',INFO/LRCALLER_AD43_'${SUFFIX}',INFO/LRCALLER_VA41_'${SUFFIX}',INFO/LRCALLER_VA42_'${SUFFIX}',INFO/LRCALLER_VA43_'${SUFFIX}',INFO/LRCALLER_PL41_'${SUFFIX}',INFO/LRCALLER_PL42_'${SUFFIX}',INFO/LRCALLER_PL43_'${SUFFIX}',INFO/LRCALLER_GTCOUNT5_'${SUFFIX}',INFO/LRCALLER_AD51_'${SUFFIX}',INFO/LRCALLER_AD52_'${SUFFIX}',INFO/LRCALLER_AD53_'${SUFFIX}',INFO/LRCALLER_VA51_'${SUFFIX}',INFO/LRCALLER_VA52_'${SUFFIX}',INFO/LRCALLER_VA53_'${SUFFIX}',INFO/LRCALLER_PL51_'${SUFFIX}',INFO/LRCALLER_PL52_'${SUFFIX}',INFO/LRCALLER_PL53_'${SUFFIX}
+                echo 'CHROM,POS,~ID,INFO/LRCALLER_GTCOUNT1_'${SUFFIX}',INFO/LRCALLER_AD11_'${SUFFIX}',INFO/LRCALLER_AD12_'${SUFFIX}',INFO/LRCALLER_AD13_'${SUFFIX}',INFO/LRCALLER_VA11_'${SUFFIX}',INFO/LRCALLER_VA12_'${SUFFIX}',INFO/LRCALLER_VA13_'${SUFFIX}',INFO/LRCALLER_PL11_'${SUFFIX}',INFO/LRCALLER_PL12_'${SUFFIX}',INFO/LRCALLER_PL13_'${SUFFIX}',INFO/LRCALLER_GTCOUNT2_'${SUFFIX}',INFO/LRCALLER_AD21_'${SUFFIX}',INFO/LRCALLER_AD22_'${SUFFIX}',INFO/LRCALLER_AD23_'${SUFFIX}',INFO/LRCALLER_VA21_'${SUFFIX}',INFO/LRCALLER_VA22_'${SUFFIX}',INFO/LRCALLER_VA23_'${SUFFIX}',INFO/LRCALLER_PL21_'${SUFFIX}',INFO/LRCALLER_PL22_'${SUFFIX}',INFO/LRCALLER_PL23_'${SUFFIX}',INFO/LRCALLER_GTCOUNT3_'${SUFFIX}',INFO/LRCALLER_AD31_'${SUFFIX}',INFO/LRCALLER_AD32_'${SUFFIX}',INFO/LRCALLER_AD33_'${SUFFIX}',INFO/LRCALLER_VA31_'${SUFFIX}',INFO/LRCALLER_VA32_'${SUFFIX}',INFO/LRCALLER_VA33_'${SUFFIX}',INFO/LRCALLER_PL31_'${SUFFIX}',INFO/LRCALLER_PL32_'${SUFFIX}',INFO/LRCALLER_PL33_'${SUFFIX}',INFO/LRCALLER_GTCOUNT4_'${SUFFIX}',INFO/LRCALLER_AD41_'${SUFFIX}',INFO/LRCALLER_AD42_'${SUFFIX}',INFO/LRCALLER_AD43_'${SUFFIX}',INFO/LRCALLER_VA41_'${SUFFIX}',INFO/LRCALLER_VA42_'${SUFFIX}',INFO/LRCALLER_VA43_'${SUFFIX}',INFO/LRCALLER_PL41_'${SUFFIX}',INFO/LRCALLER_PL42_'${SUFFIX}',INFO/LRCALLER_PL43_'${SUFFIX}',INFO/LRCALLER_GTCOUNT5_'${SUFFIX}',INFO/LRCALLER_AD51_'${SUFFIX}',INFO/LRCALLER_AD52_'${SUFFIX}',INFO/LRCALLER_AD53_'${SUFFIX}',INFO/LRCALLER_VA51_'${SUFFIX}',INFO/LRCALLER_VA52_'${SUFFIX}',INFO/LRCALLER_VA53_'${SUFFIX}',INFO/LRCALLER_PL51_'${SUFFIX}',INFO/LRCALLER_PL52_'${SUFFIX}',INFO/LRCALLER_PL53_'${SUFFIX} > ${SAMPLE_ID}_columns_lrcaller_1.txt
             fi
         }
         
@@ -700,24 +700,29 @@ END
             local INPUT_VCF=$2
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS_SNIFFLES} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            
+            COLUMNS=$(cat ${SAMPLE_ID}_columns_sniffles.txt | head -n 1)
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_cutefc.tsv.gz --header-lines ${SAMPLE_ID}_header_cutefc.txt --columns ${COLUMNS_CUTEFC} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            COLUMNS=$(cat ${SAMPLE_ID}_columns_cutefc.txt | head -n 1)
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_cutefc.tsv.gz --header-lines ${SAMPLE_ID}_header_cutefc.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
+            COLUMNS=$(cat ${SAMPLE_ID}_columns_lrcaller_0.txt | head -n 1)
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_0.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
+            COLUMNS=$(cat ${SAMPLE_ID}_columns_lrcaller_1.txt | head -n 1)
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_1.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_annotated.vcf
             
-            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz ${SAMPLE_ID}_header_sniffles.txt
-            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz ${SAMPLE_ID}_header_cutefc.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz ${SAMPLE_ID}_header_lrcaller_0.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz ${SAMPLE_ID}_header_lrcaller_1.txt
+            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz ${SAMPLE_ID}_header_sniffles.txt ${SAMPLE_ID}_columns_sniffles.txt
+            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz ${SAMPLE_ID}_header_cutefc.txt ${SAMPLE_ID}_columns_cutefc.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz ${SAMPLE_ID}_header_lrcaller_0.txt ${SAMPLE_ID}_columns_lrcaller_0.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz ${SAMPLE_ID}_header_lrcaller_1.txt ${SAMPLE_ID}_columns_lrcaller_1.txt
         }
         
         
@@ -749,8 +754,8 @@ END
         
         
         function AnnotateDels() {
-            local INPUT_VCF_GZ=$1
-            local SAMPLE_ID=$2
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -768,10 +773,10 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
             # 3. Adding features from genotypers (slow).
-            Sniffles ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam &
-            Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam &
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0 &
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1 &
+            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1 &
             wait
             TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf            
@@ -813,7 +818,7 @@ END
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            AnnotateDels ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}
+            AnnotateDels ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
             # Other SV types are omitted for now
             
             # Next iteration
