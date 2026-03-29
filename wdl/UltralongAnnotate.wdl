@@ -22,7 +22,7 @@ workflow UltralongAnnotate {
         Int adjacency_slack_bp = 300
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
-        Int preemptible_number = 4
+        Int preemptible_number = 10
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam,csi,bcf"
@@ -59,6 +59,8 @@ workflow UltralongAnnotate {
 # Performance on a 4-core, 8GB VM:
 #
 # TOOL                                                CPU     RAM     TIME
+# BAM download                                                          5m
+#
 # samtools bedcov                                     70%    500M       3m
 # annotate_mapq_secondary.sh                         400%     15M      10s
 # bcftools annotate                                  100%     15M      50s
@@ -794,12 +796,12 @@ END
         # ---------------------------- Main program ----------------------------
         
         INFINITY="1000000000"
-        samtools --version 1>&2 || echo "?"
-        bcftools --version 1>&2 || echo "?"
-        truvari --help 1>&2 || echo "?"
-        sniffles --version 1>&2 || echo "?"
-        cuteFC --version 1>&2 || echo "?"
-        lrcaller --version 1>&2 || echo "?"
+        samtools --version 1>&2
+        bcftools --version 1>&2
+        truvari --help 1>&2
+        sniffles --version 1>&2
+        cuteFC --version 1>&2
+        lrcaller --version 1>&2
         df -h 1>&2
         
         # Stratifying the training resource
@@ -817,6 +819,7 @@ END
             fi
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
+            df -h 1>&2
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             AnnotateDels ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
             # Other SV types are omitted for now
