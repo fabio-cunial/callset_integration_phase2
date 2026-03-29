@@ -21,7 +21,7 @@ workflow UltralongAnnotate {
         Int min_clip_length = 200
         Int adjacency_slack_bp = 300
         
-        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
         Int preemptible_number = 10
     }
     parameter_meta {
@@ -568,7 +568,8 @@ END
                 BREAKPOINT_FLAG="--right_breakpoint"
             fi
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
-            ${TIME_COMMAND} lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf 2> /dev/null
+            ${TIME_COMMAND} lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf
+                            #2> /dev/null
             rm -f ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ; mv ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
             grep '^[^#]' ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
@@ -719,10 +720,10 @@ END
             
             mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_annotated.vcf
             
-            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz ${SAMPLE_ID}_header_sniffles.txt ${SAMPLE_ID}_columns_sniffles.txt
-            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz ${SAMPLE_ID}_header_cutefc.txt ${SAMPLE_ID}_columns_cutefc.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz ${SAMPLE_ID}_header_lrcaller_0.txt ${SAMPLE_ID}_columns_lrcaller_0.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz ${SAMPLE_ID}_header_lrcaller_1.txt ${SAMPLE_ID}_columns_lrcaller_1.txt
+            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz* ${SAMPLE_ID}_header_sniffles.txt ${SAMPLE_ID}_columns_sniffles.txt
+            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz* ${SAMPLE_ID}_header_cutefc.txt ${SAMPLE_ID}_columns_cutefc.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz* ${SAMPLE_ID}_header_lrcaller_0.txt ${SAMPLE_ID}_columns_lrcaller_0.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz* ${SAMPLE_ID}_header_lrcaller_1.txt ${SAMPLE_ID}_columns_lrcaller_1.txt
         }
         
         
