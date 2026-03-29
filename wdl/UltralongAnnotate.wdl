@@ -93,8 +93,8 @@ task Impl {
         Int adjacency_slack_bp
         
         String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 4
+        Int n_cpu = 8
+        Int ram_size_gb = 8
         Int disk_size_gb = 50
         Int preemptible_number
     }
@@ -109,8 +109,7 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
         
@@ -384,8 +383,46 @@ END
         
         
         
-        # ------------------ Annotations from genotypers -----------------------
+        # ------------------- Annotations from Kalra et al. --------------------
         
+        # Runs a slightly modified version of the code from:
+        #
+        # Kalra, Paulin, Sedlazeck. "A systematic assessment of machine
+        # learning for structural variant filtering." bioRxiv (2026): 2026-01.
+        #
+        function FeatureExtraction() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local ALIGNMENTS_BAM=$3
+            
+            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
+            head -n 10 features.csv 1>&2 || echo "0"
+            tail -n +2 features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=FEX_DEPTH_RATIO,Number=1,Type=Float,Description="depth_ratio from feature_extraction">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_DEPTH_MAD,Number=1,Type=Float,Description="depth_mad from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_AB,Number=1,Type=Float,Description="ab from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_CN_SLOP,Number=1,Type=Float,Description="cn_slop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_MQ_DROP,Number=1,Type=Float,Description="mq_drop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_CLIP_FRAC,Number=1,Type=Float,Description="clip_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Integer,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_READ_LEN_MED,Number=1,Type=Float,Description="read_len_med from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_STRAND_BIAS,Number=1,Type=Float,Description="strand_bias from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_GC_FRAC,Number=1,Type=Float,Description="gc_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+        }
+        
+        
+        
+        
+        # -------------------- Annotations from genotypers ---------------------
+        
+        # Single-core
+        #
         function Sniffles() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -419,6 +456,8 @@ END
         }
         
         
+        # Single-core
+        #
         function Cutefc() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -513,6 +552,8 @@ END
         }
         
         
+        # Single-core
+        #
         function Lrcaller() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -652,55 +693,44 @@ END
         }
         
         
-        # Sequential...
-        function AnnotateWithGenotypers() {
-        
-            ------------>
-        
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz ${SAMPLE_ID}_header_sniffles.txt
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_cutefc.tsv.gz --header-lines ${SAMPLE_ID}_header_cutefc.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz ${SAMPLE_ID}_header_cutefc.txt
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_${BREAKPOINT}.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz ${SAMPLE_ID}_header_lrcaller_${BREAKPOINT}.txt
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_${BREAKPOINT}.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_${BREAKPOINT}.tsv.gz ${SAMPLE_ID}_header_lrcaller_${BREAKPOINT}.txt
-        }
-        
-        
-        function FeatureExtraction() {
+        # Sequentially adds the annotations from every genotyper to a VCF.
+        #
+        function TransferGenotypersAnnotations() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
-            local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
-            head -n 10 features.csv 1>&2 || echo "0"
-            tail -n +2 features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=FEX_DEPTH_RATIO,Number=1,Type=Float,Description="depth_ratio from feature_extraction">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_DEPTH_MAD,Number=1,Type=Float,Description="depth_mad from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_AB,Number=1,Type=Float,Description="ab from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_CN_SLOP,Number=1,Type=Float,Description="cn_slop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_MQ_DROP,Number=1,Type=Float,Description="mq_drop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_CLIP_FRAC,Number=1,Type=Float,Description="clip_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Integer,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_READ_LEN_MED,Number=1,Type=Float,Description="read_len_med from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_STRAND_BIAS,Number=1,Type=Float,Description="strand_bias from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_GC_FRAC,Number=1,Type=Float,Description="gc_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            COLUMNS='CHROM,POS,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS_SNIFFLES} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_cutefc.tsv.gz --header-lines ${SAMPLE_ID}_header_cutefc.txt --columns ${COLUMNS_CUTEFC} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_0.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_1.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_annotated.vcf
+            
+            rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz ${SAMPLE_ID}_header_sniffles.txt
+            rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz ${SAMPLE_ID}_header_cutefc.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz ${SAMPLE_ID}_header_lrcaller_0.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz ${SAMPLE_ID}_header_lrcaller_1.txt
         }
         
+        
+        
+        
+        # -------------------- Pipelines for each SV type ----------------------
         
         # Given an interval-only input VCF, the procedure compresses it and
         # computes its records with a stringent match to the training resource.
         #
         # Remark: sequence similarity is not used to decide a match.
         #
-        function GetTrainingRecords() {
+        function GetTrainingIntervals() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local TRAINING_RESOURCE_VCF_GZ=$3
@@ -718,52 +748,40 @@ END
         }
         
         
-        # DEL-focused workflow.
-        #
-        function ProcessDels() {
+        function AnnotateDels() {
             local INPUT_VCF_GZ=$1
             local SAMPLE_ID=$2
             
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output out.vcf
-            mv out.vcf in.vcf
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
+            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            # Annotating
-            AnnotateCoverageBins ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            AnnotateMapqSecondary ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            AnnotateClippedAlignments ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            # 1. Adding custom features (fast).
+            AnnotateCoverageBins ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateMapqSecondary ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
-            FeatureExtraction ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
+            # 2. Adding features from Kalra et al. (fast).
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
-            
-            
------------> Geenotypers should be run in parallel!!!!!!!!!
-            Sniffles ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1
-            rm -f in.vcf ; mv ${SAMPLE_ID}_annotated.vcf in.vcf
-            
-            
-            AnnotateWithGenotypers ..................
-            
-            
+            # 3. Adding features from genotypers (slow).
+            Sniffles ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam &
+            Cutefc ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam &
+            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 0 &
+            Lrcaller ${SAMPLE_ID} in.vcf ${SAMPLE_ID}.bam 1 &
+            wait
+            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf            
             
             # Computing training records
-            GetTrainingRecords ${SAMPLE_ID} in.vcf training_resource_del.vcf.gz del
+            GetTrainingIntervals ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf training_resource_del.vcf.gz del
             
             # Uploading
             gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ${SAMPLE_ID}_del_training.vcf.'gz*' ~{remote_outdir}/
         }
-        
-        
-        
         
         
         
@@ -795,7 +813,7 @@ END
             
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            ProcessDels ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}
+            AnnotateDels ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}
             # Other SV types are omitted for now
             
             # Next iteration
