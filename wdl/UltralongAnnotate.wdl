@@ -701,10 +701,8 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             
-            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
-            
             COLUMNS=$(cat ${SAMPLE_ID}_columns_sniffles.txt | head -n 1)
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             COLUMNS=$(cat ${SAMPLE_ID}_columns_cutefc.txt | head -n 1)
