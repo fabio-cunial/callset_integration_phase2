@@ -554,6 +554,26 @@ END
         }
         
         
+        cat << 'END' > lrcaller.sh
+#!/bin/bash
+set -euxo pipefail
+
+SAMPLE_ID=$1
+INPUT_VCF_GZ=$2
+ALIGNMENTS_BAM=$3
+BREAKPOINT=$4
+REFERENCE_FA=$5
+
+if [ ${BREAKPOINT} -eq 0 ]; then
+    BREAKPOINT_FLAG=" "
+else
+    BREAKPOINT_FLAG="--right_breakpoint"
+fi
+lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ${REFERENCE_FA} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf 2> /dev/null
+END
+        chmod +x lrcaller.sh
+        
+        
         # Single-core
         #
         function Lrcaller() {
@@ -562,14 +582,8 @@ END
             local ALIGNMENTS_BAM=$3
             local BREAKPOINT=$4
             
-            if [ ${BREAKPOINT} -eq 0 ]; then
-                BREAKPOINT_FLAG=" "
-            else
-                BREAKPOINT_FLAG="--right_breakpoint"
-            fi
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
-            ${TIME_COMMAND} lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ~{reference_fa} ${ALIGNMENTS_BAM} ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf
-                            #2> /dev/null
+            ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} {SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${ALIGNMENTS_BAM} ${BREAKPOINT} ~{reference_fa}
             rm -f ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ; mv ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
             grep '^[^#]' ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
@@ -808,7 +822,7 @@ END
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t training_resource_del.vcf.gz
         
         # Processing samples
-        while read LINE; do
+        while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
@@ -828,7 +842,7 @@ END
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht 1>&2
-        done < ~{chunk_csv}
+        done 3< ~{chunk_csv}
     >>>
     
     output {
