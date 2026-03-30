@@ -569,7 +569,7 @@ if [ ${BREAKPOINT} -eq 0 ]; then
 else
     BREAKPOINT_FLAG="--right_breakpoint"
 fi
-lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ${REFERENCE_FA} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_out.vcf 2> /dev/null
+lrcaller --number_of_threads 1 --dyn-w-size ${BREAKPOINT_FLAG} --fa ${REFERENCE_FA} ${ALIGNMENTS_BAM} ${INPUT_VCF_GZ} ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf 2> /dev/null
 END
         chmod +x lrcaller.sh
         
