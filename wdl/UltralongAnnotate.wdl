@@ -584,7 +584,7 @@ END
             local BREAKPOINT=$4
             
             bcftools view --threads ${N_THREADS} --drop-genotypes --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
-            ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} {SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${ALIGNMENTS_BAM} ${BREAKPOINT} ~{reference_fa}
+            ${TIME_COMMAND} ./lrcaller.sh ${SAMPLE_ID} ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ${ALIGNMENTS_BAM} ${BREAKPOINT} ~{reference_fa}
             rm -f ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf ; mv ${SAMPLE_ID}_lrcaller_${BREAKPOINT}_out.vcf ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf
             grep '^[^#]' ${SAMPLE_ID}_lrcaller_${BREAKPOINT}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
