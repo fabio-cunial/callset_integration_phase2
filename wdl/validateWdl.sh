@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l UltralongCanonizeDipcall.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongScore.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongMerge.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongAnnotate.wdl

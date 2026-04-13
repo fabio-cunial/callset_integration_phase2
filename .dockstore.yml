@@ -590,3 +590,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongScore.wdl
   testParameterFiles:
+- name: UltralongCanonizeDipcall
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongCanonzieDipcall.wdl
+  testParameterFiles:
+
