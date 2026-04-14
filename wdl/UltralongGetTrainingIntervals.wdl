@@ -90,7 +90,12 @@ task Impl {
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
                 
-                # Downloading the annotated VCF
+                # Downloading the annotated VCF, skipping the sample if it was
+                # not annotated.
+                TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "0" )
+                if [ ${TEST} != "0" ]; then
+                    continue
+                fi
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
                 
