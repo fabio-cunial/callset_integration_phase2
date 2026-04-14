@@ -11,7 +11,7 @@ workflow UltralongScore {
         File resource_vcf_gz_tbi
         String remote_outdir
                 
-        File training_resource_bed
+        File? training_resource_bed
 
         Array[String] annotations_custom = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"]
         Array[String] annotations_fex = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"]
@@ -186,7 +186,7 @@ task Score {
         File resource_vcf_gz_tbi
         String remote_outdir
                 
-        File training_resource_bed
+        File? training_resource_bed
 
         Array[String] annotations
         File training_python_script
@@ -210,7 +210,13 @@ task Score {
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
         EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ~{input_vcf_gz} ${EXCLUDE_CHROMOSOMES} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}
+        if ~{defined(training_resource_bed)}
+        then
+            BED_FLAG="-L ~{training_resource_bed}"
+        else
+            BED_FLAG=""
+        fi
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ~{input_vcf_gz} ${EXCLUDE_CHROMOSOMES} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL ${BED_FLAG}
         ls -laht
         # Output:
         # extract.annot.hdf5
