@@ -9,6 +9,7 @@ workflow UltralongMerge {
         String remote_outdir
         
         String svtype
+        String suffix
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
     }
@@ -20,6 +21,7 @@ workflow UltralongMerge {
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             svtype = svtype,
+            suffix = suffix,
             docker_image = docker_image
     }
     
@@ -39,6 +41,7 @@ task Impl {
         String remote_outdir
         
         String svtype
+        String suffix
         
         String docker_image
         Int n_cpu = 4
@@ -79,22 +82,16 @@ END
         # may run truvari collapse to remove approximate duplicates.
         df -h 1>&2
         ls -laht 1>&2
-        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/'*_'~{svtype}'.vcf.gz*' ~{remote_indir}/'*_'~{svtype}'_training.vcf.gz*' .
+        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/'*_'~{svtype}~{suffix}'.vcf.gz*' .
         df -h 1>&2
-        ls *_~{svtype}.vcf.gz > list1.txt
-        ls *_~{svtype}_training.vcf.gz > list2.txt
-        ${TIME_COMMAND} xargs --arg-file=list1.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
-        ${TIME_COMMAND} xargs --arg-file=list2.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list1.txt --output-type z --output ~{svtype}_merged.vcf.gz &
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list2.txt --output-type z --output ~{svtype}_training_merged.vcf.gz &
-        wait
-        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}_merged.vcf.gz &
-        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}_training_merged.vcf.gz &
-        wait
+        ls *.vcf.gz > list.txt
+        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
         
         # Uploading
-        ${TIME_COMMAND} gcloud storage mv ~{svtype}'*_merged.vcf.gz*' ~{remote_outdir}/
+        ${TIME_COMMAND} gcloud storage mv ~{svtype}~{suffix}'*_merged.vcf.gz*' ~{remote_outdir}/
     >>>
     
     output {
