@@ -92,8 +92,8 @@ task Impl {
                 
                 # Downloading the annotated VCF, skipping the sample if it was
                 # not annotated.
-                TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "0" )
-                if [ ${TEST} != "0" ]; then
+                TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
+                if [ ${TEST} == "1" ]; then
                     continue
                 fi
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
