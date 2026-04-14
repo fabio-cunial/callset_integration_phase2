@@ -1,7 +1,12 @@
 version 1.0
 
 
-# 
+# Given an existing set of per-sample, filtered and annotated query VCFs, and
+# a set of corresponding filtered and canonized dipcall VCFs and BEDs, the
+# program selects, for each sample, the query records that match dipcall in the
+# confident BED.
+#
+# Remark: sequence similarity is not used to decide a match.
 #
 workflow UltralongGetTrainingIntervals {
     input {
@@ -12,14 +17,19 @@ workflow UltralongGetTrainingIntervals {
         String remote_indir_truth
         String remote_outdir
         
-        Int truvari_refdist = 1000
-        Float truvari_pctsize = 0.8
+        Int truvari_refdist = 10000000
         Float truvari_pctovl = 0.8
+        Float truvari_pctsize = 0.8
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
-        chunk_csv: "Format: ID, .bed"
+        samples_tsv: "Format: ID, DIPCALL_BED"
+        remote_indir_annotated: "Without final slash. Contains per-sample annotated VCFs."
+        remote_indir_truth: "Without final slash. Contains per-sample canonized and filtered dipcall VCFs."
+        truvari_refdist: "For interval records we set it to a large value to disable the check."
+        truvari_pctovl: "For interval records we enable this (it is disabled by default by truvari)."
+        truvari_pctsize: "A non-stringent value"
     }
     
     call Impl {
@@ -78,11 +88,6 @@ task Impl {
         
         # ----------------------- Steps of the pipeline ------------------------
         
-        # For every interval-only input VCF, the procedure computes its TPs
-        # wrt the corresponding dipcall VCF in its confident BED.
-        #
-        # Remark: sequence similarity is not used to decide a match.
-        #
         function GetTrainingIntervalsThread() {
             local CHUNK_CSV=$1
             
@@ -111,7 +116,13 @@ task Impl {
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
                 
                 # Computing matches
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                if [ ~{truvari_refdist} -gt 1000 ]; then
+                    # To avoid ERROR:root:--chunksize must be >= --refdist
+                    CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
+                else
+                    CHUNKSIZE_FLAG=""
+                fi
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_~{suffix}_training.vcf.gz
                 rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari/
