@@ -595,4 +595,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongCanonizeDipcall.wdl
   testParameterFiles:
+- name: UltralongGetTrainingIntervals
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongGetTrainingIntervals.wdl
+  testParameterFiles:
 
