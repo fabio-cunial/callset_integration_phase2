@@ -10,9 +10,6 @@ workflow UltralongAnnotate {
         
         File reference_fa
         File reference_fai
-        File ultralong_training_resource_bed
-        File ultralong_training_resource_vcf_gz
-        File ultralong_training_resource_tbi
         
         File feature_extraction_py
         
@@ -36,9 +33,6 @@ workflow UltralongAnnotate {
             
             reference_fa = reference_fa,
             reference_fai = reference_fai,
-            ultralong_training_resource_bed = ultralong_training_resource_bed,
-            ultralong_training_resource_vcf_gz = ultralong_training_resource_vcf_gz,
-            ultralong_training_resource_tbi = ultralong_training_resource_tbi,
             
             feature_extraction_py = feature_extraction_py,
             
@@ -83,9 +77,6 @@ task Impl {
         
         File reference_fa
         File reference_fai
-        File ultralong_training_resource_bed
-        File ultralong_training_resource_vcf_gz
-        File ultralong_training_resource_tbi
         
         File feature_extraction_py
         
@@ -147,12 +138,12 @@ task Impl {
         }
         
         
-        # Deletes all and only the files downloaded by `LocalizeSample()`.
+        # Deletes all files related to the given sample
         #
         function DelocalizeSample() {
             local SAMPLE_ID=$1
             
-            rm -f ${SAMPLE_ID}*.bam* ${SAMPLE_ID}*.bcf* ${SAMPLE_ID}*.vcf.gz*
+            rm -f ${SAMPLE_ID}*.bam* ${SAMPLE_ID}*.bcf* ${SAMPLE_ID}*.vcf* ${SAMPLE_ID}*.tsv* ${SAMPLE_ID}*.csv*
         }
         
         
@@ -911,7 +902,8 @@ END
             # Uploading
             bcftools view --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del.vcf.gz
-            gcloud storage cp ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
+            rm -f ${SAMPLE_ID}_in.vcf
+            gcloud storage mv ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
         }
         
         
@@ -945,7 +937,8 @@ END
             # Uploading
             bcftools view --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
-            gcloud storage cp ${SAMPLE_ID}_ins.vcf.'gz*' ~{remote_outdir}/
+            rm -f ${SAMPLE_ID}_in.vcf
+            gcloud storage mv ${SAMPLE_ID}_ins.vcf.'gz*' ~{remote_outdir}/
         }
         
         
