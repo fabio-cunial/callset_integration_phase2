@@ -18,6 +18,7 @@ public class UltralongIntervalIntersectClips {
     /**
      * @param args 
      * 0,3: assumed to be sorted by read ID.
+     * 7: 0=adjacent only; 1=spaced, not adjacent.
      */
     public static void main(String[] args) throws IOException {
         final String CLIPS1_FILE = args[0];
@@ -27,6 +28,7 @@ public class UltralongIntervalIntersectClips {
         final int N_CLIPS2 = Integer.parseInt(args[4]);
         final boolean CLIPS2_IS_LEFT_MAXIMAL = Integer.parseInt(args[5])==1;
         final int ADJACENCY_SLACK_BP = Integer.parseInt(args[6]);
+        final int MODE = Integer.parseInt(args[7]);
         
         boolean isRc1, isRc2;
         int i, j, k, n10, n11, n20, n21;
@@ -79,7 +81,9 @@ public class UltralongIntervalIntersectClips {
                 isRc2=clips2[j][1].charAt(0)=='1';
                 readPos2=Integer.parseInt(clips2[j][2]);
                 readLength2=Integer.parseInt(clips2[j][3]);
-                if (areAdjacent(isRc1,readPos1,readLength1,CLIPS1_IS_LEFT_MAXIMAL,isRc2,readPos2,readLength2,CLIPS2_IS_LEFT_MAXIMAL,ADJACENCY_SLACK_BP)) { marked1[1][i]=true; marked2[1][j]=true; }
+                if ( (MODE==0 && areAdjacent(isRc1,readPos1,readLength1,CLIPS1_IS_LEFT_MAXIMAL,isRc2,readPos2,readLength2,CLIPS2_IS_LEFT_MAXIMAL,ADJACENCY_SLACK_BP)) ||
+                     (MODE==1 && areSpaced(isRc1,readPos1,readLength1,CLIPS1_IS_LEFT_MAXIMAL,isRc2,readPos2,readLength2,CLIPS2_IS_LEFT_MAXIMAL,ADJACENCY_SLACK_BP))
+                    ) { marked1[1][i]=true; marked2[1][j]=true; }
             }
         }
         
@@ -123,6 +127,30 @@ public class UltralongIntervalIntersectClips {
             else {
                 if (isLeftMaximal2) return isRc2 && pos2<=pos1+slack && pos2>=pos1-slack;
                 else return !isRc2 && (pos2<=length1-pos1+slack && pos2>=length1-pos1-slack);
+            }
+        }
+    }
+    
+    
+    private static final boolean areSpaced(boolean isRc1, int pos1, int length1, boolean isLeftMaximal1, boolean isRc2, int pos2, int length2, boolean isLeftMaximal2, int slack) {
+        if (!isRc1) {
+            if (isLeftMaximal1) {
+                if (isLeftMaximal2) return isRc2 && length2-pos2<pos1-slack;
+                else return !isRc2 && pos2<pos1-slack;
+            }
+            else {
+                if (isLeftMaximal2) return !isRc2 && pos2>pos1+slack;
+                else return isRc2 && length2-pos2>pos1+slack;
+            }
+        }
+        else {
+            if (isLeftMaximal1) {
+                if (isLeftMaximal2) return !isRc2 && pos2>length1-pos1+slack;
+                else return isRc2 && pos2<pos1-slack;
+            }
+            else {
+                if (isLeftMaximal2) return isRc2 && pos2>pos1+slack;
+                else return !isRc2 && pos2<length1-pos1-slack;
             }
         }
     }
