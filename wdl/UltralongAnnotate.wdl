@@ -848,6 +848,7 @@ END
         function TransferGenotypersAnnotations() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
+            local LRCALLER_USE_RIGHT=$3
             
             COLUMNS=$(cat ${SAMPLE_ID}_columns_sniffles.txt | head -n 1)
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_sniffles.tsv.gz --header-lines ${SAMPLE_ID}_header_sniffles.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_out.vcf
@@ -861,16 +862,17 @@ END
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_0.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            COLUMNS=$(cat ${SAMPLE_ID}_columns_lrcaller_1.txt | head -n 1)
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_1.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
-            
+            if [ ${LRCALLER_USE_RIGHT} -eq 1 ]; then
+                COLUMNS=$(cat ${SAMPLE_ID}_columns_lrcaller_1.txt | head -n 1)
+                ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz --header-lines ${SAMPLE_ID}_header_lrcaller_1.txt --columns ${COLUMNS} --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            fi
+
             mv ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}_annotated.vcf
             
             rm -f ${SAMPLE_ID}_annotations_sniffles.tsv.gz* ${SAMPLE_ID}_header_sniffles.txt ${SAMPLE_ID}_columns_sniffles.txt
             rm -f ${SAMPLE_ID}_annotations_cutefc.tsv.gz* ${SAMPLE_ID}_header_cutefc.txt ${SAMPLE_ID}_columns_cutefc.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_0.tsv.gz* ${SAMPLE_ID}_header_lrcaller_0.txt ${SAMPLE_ID}_columns_lrcaller_0.txt
-            rm -f ${SAMPLE_ID}_annotations_lrcaller_1.tsv.gz* ${SAMPLE_ID}_header_lrcaller_1.txt ${SAMPLE_ID}_columns_lrcaller_1.txt
+            rm -f ${SAMPLE_ID}_annotations_lrcaller_*.tsv.gz* ${SAMPLE_ID}_header_lrcaller_*.txt ${SAMPLE_ID}_columns_lrcaller_*.txt
         }
         
         
@@ -903,7 +905,7 @@ END
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1 &
             wait
-            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf 1
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf            
             
             # Uploading
@@ -936,9 +938,8 @@ END
             Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
             Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
-            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1 &
             wait
-            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf 0
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
             # Uploading
