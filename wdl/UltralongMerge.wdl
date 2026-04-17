@@ -86,7 +86,7 @@ END
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         rm -f list.txt
         while read LINE; do
-            SAMPLE_ID=$(cut -d , -f 1)
+            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz" >> list.txt
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz.tbi" >> list.txt
         done < samples.csv
