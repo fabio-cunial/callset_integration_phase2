@@ -109,6 +109,8 @@ task Impl {
                 SVTYPE=""
                 if [ ~{suffix} = "del" ]; then
                     SVTYPE="DEL"
+                elif [ ~{suffix} = "ins" ]; then
+                    SVTYPE="INS"
                 fi
                 bcftools filter --include 'SVTYPE=="'${SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
                 rm -f ${SAMPLE_ID}_canonized.vcf.gz*

@@ -698,7 +698,9 @@ END
         chmod +x lrcaller.sh
         
         
-        # Single-core
+        # Single-core.
+        #
+        # Remark: LRcaller can crash on some INS.
         #
         function Lrcaller() {
             local SAMPLE_ID=$1
@@ -970,6 +972,11 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             #AnnotateDels ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
             AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
+            
+            
+# -----------> Each genotyper should be called just once on all records, since its annotations do not depend on SVTYPE. So we should first annotate each SVTYPE with our custom code in isolation per type, then concatenate the annotated VCFs, and then run the genotypers on all calls.
+            
+            
             # Other SV types are omitted for now
             
             # Next iteration
