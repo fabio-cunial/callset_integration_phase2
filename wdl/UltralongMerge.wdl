@@ -84,16 +84,12 @@ END
         # Simple concatenation, with only exact duplicate removal. In the
         # future we may run truvari collapse to remove approximate duplicates.
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
-        rm -f list.txt
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz" >> list.txt
-            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz.tbi" >> list.txt
+            gcloud storage cp ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz*' . || echo "${SAMPLE_ID} not found in remote dir"
         done < samples.csv
         df -h 1>&2
         ls -laht 1>&2
-        cat list.txt | gcloud storage cp -I .
-        df -h 1>&2
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
