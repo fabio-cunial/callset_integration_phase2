@@ -5,6 +5,7 @@ version 1.0
 #
 workflow UltralongMerge {
     input {
+        File samples_tsv
         String remote_indir
         String remote_outdir
         
@@ -18,6 +19,7 @@ workflow UltralongMerge {
     
     call Impl {
         input:
+            samples_tsv = samples_tsv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             svtype = svtype,
@@ -37,6 +39,7 @@ workflow UltralongMerge {
 #
 task Impl {
     input {
+        File samples_tsv
         String remote_indir
         String remote_outdir
         
@@ -80,9 +83,15 @@ END
         
         # Simple concatenation, with only exact duplicate removal. In the
         # future we may run truvari collapse to remove approximate duplicates.
+        rm -f list.txt
+        while read LINE; do
+            SAMPLE_ID=$(echo ${LINE} | tr '\t' ',' | cut -d , -f 1)
+            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz" >> list.txt
+            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz.tbi" >> list.txt
+        done < ~{samples_tsv}
         df -h 1>&2
         ls -laht 1>&2
-        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/'*_'~{svtype}~{suffix}'.vcf.gz*' .
+        cat list.txt | gcloud storage cp -I .
         df -h 1>&2
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
