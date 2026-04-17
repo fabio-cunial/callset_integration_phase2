@@ -78,15 +78,15 @@ END
         
         # ---------------------------- Main program ----------------------------
         
-        # Simple concatenation, without any duplicate removal. In the future we
-        # may run truvari collapse to remove approximate duplicates.
+        # Simple concatenation, with only exact duplicate removal. In the
+        # future we may run truvari collapse to remove approximate duplicates.
         df -h 1>&2
         ls -laht 1>&2
         ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/'*_'~{svtype}~{suffix}'.vcf.gz*' .
         df -h 1>&2
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
         ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
         
