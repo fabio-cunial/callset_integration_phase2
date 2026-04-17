@@ -83,12 +83,13 @@ END
         
         # Simple concatenation, with only exact duplicate removal. In the
         # future we may run truvari collapse to remove approximate duplicates.
+        cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         rm -f list.txt
         while read LINE; do
-            SAMPLE_ID=$(echo ${LINE} | tr '\t' ',' | cut -d , -f 1)
+            SAMPLE_ID=$(cut -d , -f 1)
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz" >> list.txt
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}".vcf.gz.tbi" >> list.txt
-        done < ~{samples_tsv}
+        done < samples.csv
         df -h 1>&2
         ls -laht 1>&2
         cat list.txt | gcloud storage cp -I .
