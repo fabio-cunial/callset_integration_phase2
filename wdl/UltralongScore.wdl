@@ -12,6 +12,8 @@ workflow UltralongScore {
         String remote_outdir
                 
         File? training_resource_bed
+        File reference_fa
+        File reference_fai
 
         Array[String] annotations_custom = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"]
         Array[String] annotations_fex = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"]
@@ -53,6 +55,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -68,6 +72,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -83,6 +89,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -98,6 +106,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -113,6 +123,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -128,6 +140,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -143,6 +157,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -158,6 +174,8 @@ workflow UltralongScore {
             resource_vcf_gz_tbi = resource_vcf_gz_tbi,
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
             training_python_script = training_python_script,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
@@ -185,8 +203,10 @@ task Score {
         File resource_vcf_gz
         File resource_vcf_gz_tbi
         String remote_outdir
-                
+        
         File? training_resource_bed
+        File reference_fa
+        File reference_fai
 
         Array[String] annotations
         File training_python_script
@@ -209,6 +229,16 @@ task Score {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
+        # 1. Ensuring that the input VCFs have the correct format
+        bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{input_vcf_gz} --output input_cleaned.vcf.gz
+        bcftools index -f -t input_cleaned.vcf.gz
+        rm -f ~{input_vcf_gz}
+    
+        bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
+        bcftools index -f -t resource_cleaned.vcf.gz
+        rm -f ~{resource_vcf_gz}
+        
+        # 2. Scoring
         EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
         if ~{defined(training_resource_bed)}
         then
@@ -216,7 +246,7 @@ task Score {
         else
             BED_FLAG=""
         fi
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ~{input_vcf_gz} ${EXCLUDE_CHROMOSOMES} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL ${BED_FLAG}
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V input_cleaned.vcf.gz ${EXCLUDE_CHROMOSOMES} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL ${BED_FLAG}
         ls -laht
         # Output:
         # extract.annot.hdf5
@@ -227,7 +257,7 @@ task Score {
         ls -laht
         # Output: 
         # train.train.*
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ~{input_vcf_gz} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ~{resource_vcf_gz} --resource:extracted,extracted=true extract.vcf.gz --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V input_cleaned.vcf.gz -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --resource:extracted,extracted=true extract.vcf.gz --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
         ls -laht
         # Output:
         # score.vcf.gz
