@@ -878,6 +878,9 @@ END
             local INPUT_VCF_GZ=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DEL"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
+            if [ $(bcftools view -H ${SAMPLE_ID}_out.vcf | head -n 1 | wc -l) -eq 0 ]; then
+                return
+            fi
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # 1. Adding custom features (fast).
@@ -907,6 +910,84 @@ END
             rm -f ${SAMPLE_ID}_in.vcf
             gcloud storage mv ${SAMPLE_ID}_del.vcf.'gz*' ~{remote_outdir}/
         }
+
+
+        function AnnotateInvs() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="INV"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
+            if [ $(bcftools view -H ${SAMPLE_ID}_out.vcf | head -n 1 | wc -l) -eq 0 ]; then
+                return
+            fi
+            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 1. Adding custom features (fast).
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 2. Adding features from Kalra et al. (fast).
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 3. Adding features from genotypers (slow).
+            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1 &
+            wait
+            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf 1
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf            
+            
+            # Uploading
+            bcftools view --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf
+            gcloud storage mv ${SAMPLE_ID}_inv.vcf.'gz*' ~{remote_outdir}/
+        }
+
+
+        function AnnotateDups() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF_GZ=$2
+            
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="DUP"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
+            if [ $(bcftools view -H ${SAMPLE_ID}_out.vcf | head -n 1 | wc -l) -eq 0 ]; then
+                return
+            fi
+            mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 1. Adding custom features (fast).
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 2. Adding features from Kalra et al. (fast).
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            
+            # 3. Adding features from genotypers (slow).
+            Sniffles ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
+            Lrcaller ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1 &
+            wait
+            TransferGenotypersAnnotations ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf 1
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf            
+            
+            # Uploading
+            bcftools view --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dup.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf
+            gcloud storage mv ${SAMPLE_ID}_dup.vcf.'gz*' ~{remote_outdir}/
+        }
         
         
         function AnnotateIns() {
@@ -914,6 +995,9 @@ END
             local INPUT_VCF_GZ=$2
             
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="INS"' --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf
+            if [ $(bcftools view -H ${SAMPLE_ID}_out.vcf | head -n 1 | wc -l) -eq 0 ]; then
+                return
+            fi
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             # 1. Adding custom features (fast).
@@ -971,7 +1055,9 @@ END
             df -h 1>&2
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             #AnnotateDels ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
-            AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
+            #AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
+            AnnotateInvs ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
+            AnnotateDups ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz
             
             
 # -----------> Each genotyper should be called just once on all records, since its annotations do not depend on SVTYPE. So we should first annotate each SVTYPE with our custom code in isolation per type, then concatenate the annotated VCFs, and then run the genotypers on all calls.
