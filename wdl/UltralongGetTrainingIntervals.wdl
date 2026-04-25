@@ -120,7 +120,7 @@ task Impl {
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
                 if [ ~{suffix} = "dup" ]; then
-                    java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bgzip -c > ${SAMPLE_ID}_query_add.vcf.gz
+                    java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bcftools sort --output-type z --output ${SAMPLE_ID}_query_add.vcf.gz
                     bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_query_add.vcf.gz
                 fi
                 
@@ -136,8 +136,7 @@ task Impl {
                 fi
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
                 
-                # Computing matches, both with the original query VCF and with 
-                # the one where DUPs are translated.
+                # Computing matches
                 # Remark: sequence similarity is not used.
                 if [ ~{truvari_refdist} -gt 1000 ]; then
                     # To avoid ERROR:root:--chunksize must be >= --refdist
@@ -149,9 +148,8 @@ task Impl {
                 if [ ~{suffix} = "dup" ]; then
                     ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/
                     # Taking the union of the TPs from both comparisons.
-                    # Remark: removing duplicates is not needed, since the 
-                    # length of an ultralong call is much greater than truvari's
-                    # --refdist
+                    # Removing duplicates is not needed, since the length of an 
+                    # ultralong call is much greater than truvari's --refdist
                     java -cp ~{docker_dir} UltralongDupSubtract ${SAMPLE_ID}_truvari_add/tp-comp.vcf.gz | bgzip -c > ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
                     bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
                     bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz --output ${SAMPLE_ID}_~{suffix}_training.vcf.gz

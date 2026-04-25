@@ -51,8 +51,6 @@ workflow UltralongAnnotate {
 
 
 # Performance on a 4-core, 8GB VM.
-# Remark: each genotyper was run on a single-core and in parallel with 
-# all the others.
 #
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m
@@ -65,11 +63,10 @@ workflow UltralongAnnotate {
 # java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
 # annotate_clipped_alignments_1.sh                   400%    200M       1m
 # annotate_clipped_alignments_2.sh                   400%     50M       1m
-#
-# sniffles 2.7.3                                      30%    500M      40m
-# cutefc                                              30%    1.5G      50m
-# lrcaller left                                       30%    200M      50m
-# lrcaller right                                     300%    200M       4s
+# sniffles 2.7.3 (1 thread)                           30%    500M      40m
+# cutefc (1 thread)                                   30%    1.5G      50m
+# lrcaller left (1 thread)                            30%    200M      50m
+# lrcaller right (1 thread)                           30%    200M       4s
 # feature_extraction.py                              100%    3.5G       2m
 #
 task Impl {
