@@ -102,7 +102,8 @@ task SingleChromosome {
         #
         function GetNMaleSamples() {
             gcloud storage cp ~{remote_workpackages1_dir}/workpackage1'_*' .
-            N_MALE_SAMPLES="0"
+            local N_MALE_SAMPLES="0"
+            local FILE
             for FILE in $(ls workpackage1_* | sort -V); do
                 N=$(cut -f 2 ${FILE} | grep M | wc -l)
                 N_MALE_SAMPLES=$(( ${N_MALE_SAMPLES} + ${N} ))
@@ -232,7 +233,7 @@ task AllChromosomes {
         CHROMOSOMES=~{sep=',' chromosomes}
         echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
         rm -f file_list1.txt file_list2.txt file_list3.txt
-        while read CHROMOSOME; do
+        while read -u 3 CHROMOSOME; do
             TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo 1 )
             if [ ${TEST} -eq 1 ]; then
                 echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
@@ -248,7 +249,7 @@ task AllChromosomes {
             echo ${CHROMOSOME}_truvari_collapsed.bcf >> file_list1.txt
             echo ${CHROMOSOME}_frequent.bcf >> file_list2.txt
             echo ${CHROMOSOME}_infrequent.bcf >> file_list3.txt
-        done < chr_list.txt
+        done 3< chr_list.txt
         
         # Concatenating
         if [ ~{naive} -eq 1 ]; then

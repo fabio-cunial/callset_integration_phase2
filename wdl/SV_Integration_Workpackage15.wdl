@@ -178,7 +178,7 @@ task AllChromosomes {
         CHROMOSOMES=~{sep=',' chromosomes}
         echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
         rm -f file_list.txt
-        while read CHROMOSOME; do
+        while read -u 3 CHROMOSOME; do
             TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo 1 )
             if [ ${TEST} -eq 1 ]; then
                 echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
@@ -188,7 +188,7 @@ task AllChromosomes {
             mv truvari_collapsed.bcf ${CHROMOSOME}_truvari_collapsed.bcf
             mv truvari_collapsed.bcf.csi ${CHROMOSOME}_truvari_collapsed.bcf.csi
             echo ${CHROMOSOME}_truvari_collapsed.bcf >> file_list.txt
-        done < chr_list.txt
+        done 3< chr_list.txt
         
         # Concatenating
         if [ ~{naive} -eq 1 ]; then

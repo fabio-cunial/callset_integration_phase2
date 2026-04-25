@@ -773,8 +773,8 @@ task PrecisionRecallAnalysis {
             
             # Remark: we restrict to the dipcall BED in chrY too, even though
             # the number of calls becomes very small.
-            BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
-            BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
+            local BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
+            local BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
             if [ ${INPUT_VCF#*.} = vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
@@ -961,8 +961,8 @@ task BenchTrio {
             
             # 2.1 +trio-dnm2
             ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_annotated.vcf.gz
-            NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
-            DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            local NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            local DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
             echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
             

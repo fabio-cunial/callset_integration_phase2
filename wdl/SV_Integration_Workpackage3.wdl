@@ -189,15 +189,15 @@ task Impl {
             local INPUT_BCF=$2
             
             rm -rf ${SAMPLE_ID}_xgboost.csv
-            N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
+            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
             for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
-                N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
-                PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
+                local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_xgboost.csv
             done
             if [ "~{filter_string}" != "none" ]; then
-                N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID'--include "~{filter_string}" ${INPUT_BCF} | wc -l )
-                PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID'--include "~{filter_string}" ${INPUT_BCF} | wc -l )
+                local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records that pass the specified filter" >> ${SAMPLE_ID}_xgboost.csv
             fi
         }
@@ -210,7 +210,8 @@ task Impl {
             local INPUT_BCF=$2
             
             i="0"
-            while read INTERVAL; do
+            local INTERVAL
+            while read -u 4 INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 if [ "~{filter_string}" != "none" ]; then
                     # Remark: we use `targets` rather than `regions` because
@@ -223,7 +224,7 @@ task Impl {
                 gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf
                 gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
                 i=$(( ${i} + 1 ))
-            done < ~{split_for_bcftools_merge_csv}
+            done 4< ~{split_for_bcftools_merge_csv}
             touch ${SAMPLE_ID}.done
             gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
@@ -235,7 +236,7 @@ task Impl {
         
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         N_OUTPUT_CHUNKS=$(wc -l < ~{split_for_bcftools_merge_csv})
-        while read LINE; do
+        while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
@@ -252,7 +253,7 @@ task Impl {
             FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
-        done < chunk.csv
+        done 3< chunk.csv
     >>>
     
     output {

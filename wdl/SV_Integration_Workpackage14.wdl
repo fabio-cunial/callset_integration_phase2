@@ -199,7 +199,7 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        while read CHUNK_ID; do
+        while read -u 3 CHUNK_ID; do
             # Skipping the chunk if it has already been processed
             TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
@@ -218,7 +218,7 @@ task Impl {
             gcloud storage mv chunk_${CHUNK_ID}.done ~{remote_outdir}/~{chromosome_id}/
             rm -rf chunk_${CHUNK_ID}*
             ls -laht 1>&2
-        done < ~{chunks_ids}
+        done 3< ~{chunks_ids}
     >>>
     
     output {

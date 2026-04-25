@@ -137,6 +137,9 @@ task Impl {
         #
         function LocalizeChunkFiles() {
             touch all_remote_files.txt
+
+            local N_FILES
+            local SLACK_GB="5"
             
             # Ensuring that every input dataset has the expected number of
             # samples in the chunk.
@@ -215,11 +218,10 @@ task Impl {
             # Failing immediately if the files are too large WRT the available
             # disk. Otherwise the VM may get stuck forever, and this gets worse
             # with preemption.
-            AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
+            local AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
-            REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
-            SLACK_GB="5"
+            local REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
             REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
             if [ ${REMOTE_GB} -gt ${AVAILABLE_GB} ]; then
                 echo "ERROR: the remote files are larger than the available disk space. Remote files + slack: ${REMOTE_GB}GB. Available disk: ${AVAILABLE_GB}GB."
@@ -240,10 +242,11 @@ task Impl {
             if [ ~{n_expected_samples_bi} -gt 0 -a ~{n_expected_samples_ha} -gt 0 ]; then
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
                 rm -f list.txt
-                while read SAMPLE_ID; do
+                local SAMPLE_ID
+                while read -u 3 SAMPLE_ID; do
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf" >> list.txt
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf.csi" >> list.txt
-                done < bi_samples_to_prefer_over_ha.txt                
+                done 3< bi_samples_to_prefer_over_ha.txt                
                 cat list.txt | gcloud storage cp -I ./input_files/
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
@@ -259,8 +262,8 @@ task Impl {
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/chunk_~{chunk_id}/'*' ./input_files/
             fi
             date 1>&2
-            N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
-            N_SAMPLES=$(cat ~{sample_ids} | wc -l)
+            local N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
+            local N_SAMPLES=$(cat ~{sample_ids} | wc -l)
             if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
                 echo "ERROR: The number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
                 exit 1
@@ -272,6 +275,7 @@ task Impl {
         # Trivial "hierarchical" merge with just two steps.
         #
         function MergeChunkFiles() {
+            local MERGE_FLAG
             if [ ~{merge_mode} -eq 1 ]; then
                 MERGE_FLAG="none"
             elif [ ~{merge_mode} -eq 2 ]; then
@@ -283,11 +287,13 @@ task Impl {
             
             # Step 1
             rm -f list.txt
-            while read SAMPLE_ID; do
+            local SAMPLE_ID
+            while read -u 4 SAMPLE_ID; do
                 echo ./input_files/${SAMPLE_ID}.bcf >> list.txt
-            done < ~{sample_ids}
+            done 4< ~{sample_ids}
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_
-            N_LIST_FILES=$(ls list_* | wc -l)
+            local N_LIST_FILES=$(ls list_* | wc -l)
+            local LIST_FILE
             for LIST_FILE in $(ls list_* | sort -V); do
                 ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
@@ -323,9 +329,9 @@ task Impl {
             if [ ~{merge_mode} -eq 2 ]; then
                 ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type b ~{chunk_id}_merged.bcf --output ~{chunk_id}_cleaned.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_cleaned.bcf
-                N_RECORDS=$(bcftools index --nrecords ~{chunk_id}_merged.bcf)
-                N_ALT_RECORDS=$(bcftools index --nrecords ~{chunk_id}_cleaned.bcf)
-                PERCENT=$( echo "scale=2; 100 * ${N_ALT_RECORDS} / ${N_RECORDS}" | bc )
+                local N_RECORDS=$(bcftools index --nrecords ~{chunk_id}_merged.bcf)
+                local N_ALT_RECORDS=$(bcftools index --nrecords ~{chunk_id}_cleaned.bcf)
+                local PERCENT=$( echo "scale=2; 100 * ${N_ALT_RECORDS} / ${N_RECORDS}" | bc )
                 echo "${N_ALT_RECORDS},${N_RECORDS},${PERCENT},Number of cohort-VCF records that are marked as ALT in >=1 sample by kanpig" > ~{chunk_id}_n_alt.csv
                 rm -f ~{chunk_id}_merged.bcf* ; mv ~{chunk_id}_cleaned.bcf ~{chunk_id}_merged.bcf ; mv ~{chunk_id}_cleaned.bcf.csi ~{chunk_id}_merged.bcf.csi
             fi

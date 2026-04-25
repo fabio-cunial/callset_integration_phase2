@@ -84,8 +84,9 @@ task Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
-            DIPCALL_VCF_GZ=$(echo ${LINE} | cut -d , -f 3)
+            local DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
+            local DIPCALL_VCF_GZ=$(echo ${LINE} | cut -d , -f 3)
+            local TEST
             while : ; do
                 TEST=$(gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}.bed && echo 0 || echo 1)
                 if [ ${TEST} -eq 1 ]; then
@@ -211,6 +212,8 @@ task Impl {
             local THREAD_ID=$1
             local CHUNK_CSV=$2
             
+            local LINE
+            local SAMPLE_ID
             while read LINE; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 LocalizeSample ${SAMPLE_ID} ${LINE}

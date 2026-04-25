@@ -129,6 +129,8 @@ task Impl {
         
         function LocalizeFiles() {
             touch all_remote_files.txt
+
+            local N_FILES
             
             # Ensuring that every input dataset has the expected number of
             # samples in the chunk.
@@ -207,11 +209,11 @@ task Impl {
             # Failing immediately if the files are too large WRT the available
             # disk. Otherwise the VM may get stuck forever, and this gets worse
             # with preemption.
-            AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
+            local AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
-            REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
-            SLACK_GB="5"
+            local REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
+            local SLACK_GB="5"
             REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
             if [ ${REMOTE_GB} -gt ${AVAILABLE_GB} ]; then
                 echo "ERROR: the remote files are larger than the available disk space. Remote files + slack: ${REMOTE_GB}GB. Available disk: ${AVAILABLE_GB}GB."
@@ -232,10 +234,11 @@ task Impl {
             if [ ~{n_expected_samples_bi} -gt 0 -a ~{n_expected_samples_ha} -gt 0 ]; then
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
                 rm -f list.txt
-                while read SAMPLE_ID; do
+                local SAMPLE_ID
+                while read -u 5 SAMPLE_ID; do
                     echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf" >> list.txt
                     echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf.csi" >> list.txt
-                done < bi_samples_to_prefer_over_ha.txt
+                done 5< bi_samples_to_prefer_over_ha.txt
                 cat list.txt | gcloud storage cp -I ./input_files/
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
@@ -251,8 +254,8 @@ task Impl {
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/'*_'~{suffix}'.bcf*' ./input_files/
             fi
             date 1>&2
-            N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
-            N_SAMPLES=$(cat ~{sample_ids} | wc -l)
+            local N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
+            local N_SAMPLES=$(cat ~{sample_ids} | wc -l)
             if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
                 echo "ERROR: The number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
                 exit 1
@@ -282,9 +285,9 @@ END
         # Trivial "hierarchical" bcftools merge with just two steps.
         # Step 1: merging a few samples at a time over the whole genome.
         rm -f list.txt
-        while read SAMPLE_ID; do
+        while read -u 3 SAMPLE_ID; do
             echo ./input_files/${SAMPLE_ID}_~{suffix}.bcf >> list.txt
-        done < ~{sample_ids}
+        done 3< ~{sample_ids}
         split -l ~{n_files_per_merge} -d -a 4 list.txt list_
         N_LIST_FILES=$(ls list_* | wc -l)
         for LIST_FILE in $(ls list_* | sort -V); do
@@ -302,7 +305,7 @@ END
         
         # Step 2: merging all samples over each chromosome.
         rm -f files_list.txt
-        while read CHROMOSOME; do
+        while read -u 4 CHROMOSOME; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/merged.bcf
@@ -313,7 +316,7 @@ END
             echo "${CHROMOSOME}.bcf" >> files_list.txt
             echo "${CHROMOSOME}.bcf.csi" >> files_list.txt
             rm -rf ./${CHROMOSOME}/
-        done < chromosomes.txt
+        done 4< chromosomes.txt
         df -h 1>&2
         ls -laht 1>&2
         

@@ -171,15 +171,15 @@ task Impl {
             local MODE=$2
             local LINE=$3
             
-            ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
-            ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
-            PAV_BED=$(echo ${LINE} | cut -d , -f 5)
-            PAV_TBI=$(echo ${LINE} | cut -d , -f 6)
-            PAV_VCF_GZ=$(echo ${LINE} | cut -d , -f 7)
-            PBSV_TBI=$(echo ${LINE} | cut -d , -f 8)
-            PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 9)
-            SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 10)
-            SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 11)
+            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
+            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+            local PAV_BED=$(echo ${LINE} | cut -d , -f 5)
+            local PAV_TBI=$(echo ${LINE} | cut -d , -f 6)
+            local PAV_VCF_GZ=$(echo ${LINE} | cut -d , -f 7)
+            local PBSV_TBI=$(echo ${LINE} | cut -d , -f 8)
+            local PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 9)
+            local SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 10)
+            local SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 11)
             
             if [ ${MODE} -eq 2 ]; then
                 date 1>&2
@@ -224,8 +224,9 @@ task Impl {
             # Intersecting non-gap regions with the training BED
             bedtools sort -i ~{training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed
             rm -f training_not_gaps_beds.wsv
-            ID="0"
-            while read ROW; do
+            local ID="0"
+            local ROW
+            while read -u 4 ROW; do
                 ID=$(( ${ID} + 1 ))
                 echo "${ROW}" > ${ID}.bed
                 bedtools intersect -a ${ID}.bed -b training_resource_sorted.bed -sorted -g ~{reference_fai} > training_not_gaps_${ID}.bed
@@ -235,7 +236,7 @@ task Impl {
                     rm -f training_not_gaps_${ID}.bed
                 fi
                 rm -f ${ID}.bed
-            done < not_gaps.bed
+            done 4< not_gaps.bed
             ls -lht *.bed 1>&2
             
             # Removing temporary files
@@ -269,11 +270,11 @@ task Impl {
             # assign values based on which representations we observed to be
             # more accurate in a few test examples.
             if [ ${CALLER_ID} = 'pav' ]; then
-                QUAL="4"
+                local QUAL="4"
             elif [ ${CALLER_ID} = 'pbsv' ]; then
-                QUAL="3"
+                local QUAL="3"
             elif [ ${CALLER_ID} = 'sniffles' ]; then
-                QUAL="2"
+                local QUAL="2"
             fi
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_${CALLER_ID}_in.vcf.gz
@@ -483,6 +484,7 @@ task Impl {
             
             # Removing SVLEN from symbolic ALTs, in order not to interfere with
             # `truvari collapse`.
+            local PCTSEQ_VALUE
             if [ ~{ultralong_collapse_mode} -eq 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
                 ${TIME_COMMAND} bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
@@ -624,20 +626,20 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Discarding records that are not marked as present by kanpig
-            N_RECORDS_BEFORE_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
+            local N_RECORDS_BEFORE_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            N_RECORDS_AFTER_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
+            local N_RECORDS_AFTER_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_kanpig.vcf.gz
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
             
             # Printing debug information
-            PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_KANPIG} / ${N_RECORDS_BEFORE_KANPIG}" | bc )
+            local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_KANPIG} / ${N_RECORDS_BEFORE_KANPIG}" | bc )
             echo "${N_RECORDS_AFTER_KANPIG},${N_RECORDS_BEFORE_KANPIG},${PERCENT},Number of records that are marked as ALT by kanpig" > ${SAMPLE_ID}_kanpig.csv
-            N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
+            local N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local N_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_RECORDS_IN_AUTOSOMES}" | bc )
             echo "${N_HETS_IN_AUTOSOMES},${N_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
         }
@@ -764,10 +766,10 @@ END
             
             # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
-            while read ROW; do
+            while read -u 4 ROW; do
                 ID=$(echo ${ROW} | cut -d ' ' -f 1)
                 echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
-            done < training_not_gaps_beds.wsv
+            done 4< training_not_gaps_beds.wsv
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list ${SAMPLE_ID}_outputs.txt --output-type z --output ${SAMPLE_ID}_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_training.vcf.gz
             
@@ -786,7 +788,7 @@ END
         
         GetReferenceGaps ~{reference_agp} not_gaps.bed
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
-        while read LINE; do
+        while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
@@ -829,7 +831,7 @@ END
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
-        done < chunk.csv
+        done 3< chunk.csv
     >>>
     
     output {

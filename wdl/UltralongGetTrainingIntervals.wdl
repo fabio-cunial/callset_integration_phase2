@@ -18,9 +18,9 @@ workflow UltralongGetTrainingIntervals {
         String remote_indir_truth
         String remote_outdir
         
-        Int truvari_refdist = 10000000
-        Float truvari_pctovl = 0.8
-        Float truvari_pctsize = 0.8
+        Int truvari_refdist = 500
+        Float truvari_pctovl = 0
+        Float truvari_pctsize = 0.9
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
@@ -106,14 +106,23 @@ task Impl {
             elif [ ~{suffix} = "inv" ]; then
                 TRUVARI_EXTRA_FLAGS="--typeignore"
             fi
+            local CHUNKSIZE_FLAG=""
+            if [ ~{truvari_refdist} -gt 1000 ]; then
+                # To avoid ERROR:root:--chunksize must be >= --refdist
+                CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
+            fi
             
+            local LINE
+            local TEST
+            local SAMPLE_ID
+            local DIPCALL_BED
             while read -u 3 LINE; do
-                local SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-                local DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
+                SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+                DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
                 
                 # Downloading the annotated VCF, skipping the sample if it was
                 # not annotated.
-                local TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
+                TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
                 if [ ${TEST} == "1" ]; then
                     continue
                 fi
@@ -138,12 +147,6 @@ task Impl {
                 
                 # Computing matches
                 # Remark: sequence similarity is not used.
-                if [ ~{truvari_refdist} -gt 1000 ]; then
-                    # To avoid ERROR:root:--chunksize must be >= --refdist
-                    local CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
-                else
-                    local CHUNKSIZE_FLAG=""
-                fi
                 ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
                 if [ ~{suffix} = "dup" ]; then
                     ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/

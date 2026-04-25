@@ -105,17 +105,17 @@ task Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
-            ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
+            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
             
             # Failing immediately if the BAM is too large. Otherwise the VM
             # may get stuck forever, and this is even worse with preemption.
-            AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
+            local AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
-            BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | sed 's/^[ ]*//' | tr -s ' ' | cut -d ' ' -f 1)
+            local BAM_GB=$(gsutil ls -lh ${ALIGNED_BAM} | head -n 1 | sed 's/^[ ]*//' | tr -s ' ' | cut -d ' ' -f 1)
             BAM_GB=${BAM_GB%.*}
-            SLACK_GB="5"
+            local SLACK_GB="5"
             BAM_GB=$(( ${BAM_GB} + ${SLACK_GB} ))
             if [ ${BAM_GB} -gt ${AVAILABLE_GB} ]; then
                 echo "ERROR: the BAM is larger than the available disk space. BAM size + slack: ${BAM_GB}GB. Available disk: ${AVAILABLE_GB}GB."
@@ -144,6 +144,7 @@ task Impl {
             local SAMPLE_ID=$1
             local SEX=$2
 
+            local PLOIDY_BED
             if [ ${SEX} == "M" ]; then
                 PLOIDY_BED=$(echo ~{ploidy_bed_male})
             else
@@ -162,12 +163,12 @@ task Impl {
             mv ${SAMPLE_ID}_in.vcf.gz.tbi ${SAMPLE_ID}_kanpig.vcf.gz.tbi
             
             # Printing debug information
-            N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
-            N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
+            local N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
+            local N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
             echo "${N_PRESENT_RECORDS},${N_RECORDS},${PERCENT},Number of records that are marked as ALT by kanpig" >> ${SAMPLE_ID}_kanpig.csv
-            N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            N_PRESENT_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="alt"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local N_PRESENT_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="alt"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_PRESENT_RECORDS_IN_AUTOSOMES}" | bc )
             echo "${N_HETS_IN_AUTOSOMES},${N_PRESENT_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
@@ -180,14 +181,15 @@ task Impl {
             local SAMPLE_ID=$1
             
             i="0"
-            while read INTERVAL; do
+            local INTERVAL
+            while read -u 4 INTERVAL; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_chunk_${i}.bcf
                 bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
                 gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf
                 gcloud storage cp ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
                 i=$(( ${i} + 1 ))
-            done < ~{split_for_bcftools_merge_csv}
+            done 4< ~{split_for_bcftools_merge_csv}
             gcloud storage cp ${SAMPLE_ID}_kanpig.bed.gz ${SAMPLE_ID}_kanpig.csv ~{remote_outdir}/
         }
         
@@ -210,7 +212,7 @@ task Impl {
         ls -lah ./infrequent_bcfs/* 1>&2
         
         # Re-genotyping every sample assigned to this task
-        while read LINE; do
+        while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             
@@ -236,7 +238,7 @@ task Impl {
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
-        done < chunk.csv
+        done 3< chunk.csv
     >>>
     
     output {
