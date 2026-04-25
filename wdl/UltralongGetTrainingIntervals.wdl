@@ -12,6 +12,7 @@ workflow UltralongGetTrainingIntervals {
     input {
         File samples_tsv
         String suffix = "del"
+        File reference_fai
         
         String remote_indir_annotated
         String remote_indir_truth
@@ -36,6 +37,7 @@ workflow UltralongGetTrainingIntervals {
         input:
             samples_tsv = samples_tsv,
             suffix = suffix,
+            reference_fai = reference_fai,
             remote_indir_annotated = remote_indir_annotated,
             remote_indir_truth = remote_indir_truth,
             remote_outdir = remote_outdir,
@@ -55,6 +57,7 @@ task Impl {
     input {
         File samples_tsv
         String suffix
+        File reference_fai
         
         String remote_indir_annotated
         String remote_indir_truth
@@ -90,49 +93,73 @@ task Impl {
         
         function GetTrainingIntervalsThread() {
             local CHUNK_CSV=$1
+
+            local DIPCALL_SVTYPE=""
+            local TRUVARI_EXTRA_FLAGS=""
+            if [ ~{suffix} = "del" ]; then
+                DIPCALL_SVTYPE="DEL"
+            elif [ ~{suffix} = "ins" ]; then
+                DIPCALL_SVTYPE="INS"
+            elif [ ~{suffix} = "dup" ]; then
+                DIPCALL_SVTYPE="INS"
+                TRUVARI_EXTRA_FLAGS="--dup-to-ins"
+            elif [ ~{suffix} = "inv" ]; then
+                TRUVARI_EXTRA_FLAGS="--typeignore"
+            fi
             
             while read -u 3 LINE; do
-                SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-                DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
+                local SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+                local DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
                 
                 # Downloading the annotated VCF, skipping the sample if it was
                 # not annotated.
-                TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
+                local TEST=$( gsutil ls ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
                 if [ ${TEST} == "1" ]; then
                     continue
                 fi
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
+                if [ ~{suffix} = "dup" ]; then
+                    java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bgzip -c > ${SAMPLE_ID}_query_add.vcf.gz
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_query_add.vcf.gz
+                fi
                 
                 # Downloading and filtering the truth VCF
                 gcloud storage cp ~{remote_indir_truth}/${SAMPLE_ID}_canonized.vcf.'gz*' .
-                SVTYPE=""
-                if [ ~{suffix} = "del" ]; then
-                    SVTYPE="DEL"
-                elif [ ~{suffix} = "ins" ]; then
-                    SVTYPE="INS"
-                elif [ ~{suffix} = "dup" ]; then
-                    SVTYPE="DUP"
-                elif [ ~{suffix} = "inv" ]; then
-                    SVTYPE="INV"
+                if [ ~{suffix} = "inv" ]; then
+                    mv ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
+                    mv ${SAMPLE_ID}_canonized.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
+                else
+                    bcftools filter --include 'SVTYPE=="'${DIPCALL_SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
+                    rm -f ${SAMPLE_ID}_canonized.vcf.gz*
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
                 fi
-                bcftools filter --include 'SVTYPE=="'${SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
-                rm -f ${SAMPLE_ID}_canonized.vcf.gz*
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
                 
-                # Computing matches
+                # Computing matches, both with the original query VCF and with 
+                # the one where DUPs are translated.
                 # Remark: sequence similarity is not used.
                 if [ ~{truvari_refdist} -gt 1000 ]; then
                     # To avoid ERROR:root:--chunksize must be >= --refdist
-                    CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
+                    local CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
                 else
-                    CHUNKSIZE_FLAG=""
+                    local CHUNKSIZE_FLAG=""
                 fi
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
+                if [ ~{suffix} = "dup" ]; then
+                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/
+                    # Taking the union of the TPs from both comparisons.
+                    # Remark: removing duplicates is not needed, since the 
+                    # length of an ultralong call is much greater than truvari's
+                    # --refdist
+                    java -cp ~{docker_dir} UltralongDupSubtract ${SAMPLE_ID}_truvari_add/tp-comp.vcf.gz | bgzip -c > ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
+                    bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz --output ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                else
+                    mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                fi
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari/
+                rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari/ ${SAMPLE_ID}_truvari_add/
                 
                 # Uploading
                 gcloud storage mv ${SAMPLE_ID}_~{suffix}_training.vcf.'gz*' ~{remote_outdir}

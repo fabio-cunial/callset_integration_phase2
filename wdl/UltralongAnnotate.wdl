@@ -50,7 +50,9 @@ workflow UltralongAnnotate {
 }
 
 
-# Performance on a 4-core, 8GB VM:
+# Performance on a 4-core, 8GB VM.
+# Remark: each genotyper was run on a single-core and in parallel with 
+# all the others.
 #
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m

@@ -4,41 +4,32 @@ import java.io.*;
 
 
 /**
- * Given a VCF that contains only interval calls (e.g. DEL, INV, DUP, but not 
- * INS or BND), the program prints an output BED (zero-based, left-inclusive,
- * right-exclusive) with N+4 bins for each record: N equal-sized partitions of
- * the interval, one bin before and one bin after the interval, and two bins
- * centered at the interval breakpoints.
+ * Given an input VCF with only ultralong DUPs, the program adds to each POS its
+ * SVLEN.
  */
-public class UltralongIntervalGetBins {
+public class UltralongDupAdd {
     
     private static HashMap<String,Integer> fai;
     
     /**
-     * Output format: CHROM,START,END,VCFID_BINID
-     *
      * @param args
-     * 2: if zero, the program prints only the two bins centered at the 
-     *    breakpoints;
-     * 3: fixed length of each bin centered at a breakpoint.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String INPUT_FAI = args[1];
-        final int N_BINS = Integer.parseInt(args[2]);
-        final int BREAKPOINT_BIN_LENGTH = Integer.parseInt(args[3]);
         
-        int i, p;
-        int chromLength, pos, svlen, quantum, binStart, binEnd;
-        String str, chrom, id, info;
+        int i;
+        int chromLength, pos, newPos, svlen;
+        String str, chrom, info;
         BufferedReader br;
         String[] tokens;
         
         loadFai(INPUT_FAI);
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        str=br.readLine(); quantum=0;
+        str=br.readLine();
         while (str!=null) {
             if (str.charAt(0)=='#') {
+                System.out.println(str);
                 str=br.readLine();
                 continue;
             }
@@ -46,28 +37,16 @@ public class UltralongIntervalGetBins {
             chrom=tokens[0];
             chromLength=fai.get(chrom).intValue();
             pos=Integer.parseInt(tokens[1]);  // 1-based, exclusive.
-            id=tokens[2];
             info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
-            if (N_BINS>0) {
-                quantum=svlen/N_BINS;
-                p=pos-quantum;
-                System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_before");
-            }
-            p=pos-BREAKPOINT_BIN_LENGTH/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"_left");
-            if (N_BINS>0) {
-                for (i=0; i<N_BINS; i++) {
-                    binStart=pos+(i*svlen)/N_BINS; binEnd=pos+((i+1)*svlen)/N_BINS;
-                    System.out.println(chrom+"\t"+(binStart>=0?binStart:0)+"\t"+(binEnd<=chromLength?binEnd:chromLength)+"\t"+id+"_bin"+i);
-                }
-            }
-            p=pos+svlen-BREAKPOINT_BIN_LENGTH/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"_right");
-            if (N_BINS>0) {
-                p=pos+svlen;
-                System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+quantum<=chromLength?p+quantum:chromLength)+"\t"+id+"_after");
-            }
+            newPos=pos+svlen;
+            if (newPos>chromLength) newPos=chromLength;
+            tokens[1]=newPos+"";
+
+            // Outputting
+            System.out.print(tokens[0]);
+            for (i=1; i<tokens.length; i++) System.out.print("\t"+tokens[i]);
+            System.out.println();
             
             // Next iteration
             str=br.readLine();
