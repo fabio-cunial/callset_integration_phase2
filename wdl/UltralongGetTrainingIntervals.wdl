@@ -111,6 +111,10 @@ task Impl {
                     SVTYPE="DEL"
                 elif [ ~{suffix} = "ins" ]; then
                     SVTYPE="INS"
+                elif [ ~{suffix} = "dup" ]; then
+                    SVTYPE="DUP"
+                elif [ ~{suffix} = "inv" ]; then
+                    SVTYPE="INV"
                 fi
                 bcftools filter --include 'SVTYPE=="'${SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
                 rm -f ${SAMPLE_ID}_canonized.vcf.gz*
@@ -118,6 +122,7 @@ task Impl {
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
                 
                 # Computing matches
+                # Remark: sequence similarity is not used.
                 if [ ~{truvari_refdist} -gt 1000 ]; then
                     # To avoid ERROR:root:--chunksize must be >= --refdist
                     CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
