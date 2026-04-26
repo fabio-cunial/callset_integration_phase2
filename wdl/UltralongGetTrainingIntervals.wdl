@@ -103,8 +103,6 @@ task Impl {
             elif [ ~{suffix} = "dup" ]; then
                 DIPCALL_SVTYPE="INS"
                 TRUVARI_EXTRA_FLAGS="--dup-to-ins"
-            elif [ ~{suffix} = "inv" ]; then
-                TRUVARI_EXTRA_FLAGS="--typeignore"
             fi
             local CHUNKSIZE_FLAG=""
             if [ ~{truvari_refdist} -gt 1000 ]; then
@@ -128,17 +126,10 @@ task Impl {
                 fi
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
                 gcloud storage cp ~{remote_indir_annotated}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
-                if [ ~{suffix} = "dup" ]; then
-                    java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bcftools sort --output-type z --output ${SAMPLE_ID}_query_add.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_query_add.vcf.gz
-                fi
                 
-                # Downloading and filtering the truth VCF
-                gcloud storage cp ~{remote_indir_truth}/${SAMPLE_ID}_canonized.vcf.'gz*' .
-                if [ ~{suffix} = "inv" ]; then
-                    mv ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
-                    mv ${SAMPLE_ID}_canonized.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
-                else
+                # Downloading and filtering the truth VCF and BED
+                if [ ~{suffix} != "inv" ]; then
+                    gcloud storage cp ~{remote_indir_truth}/${SAMPLE_ID}_canonized.vcf.'gz*' .
                     bcftools filter --include 'SVTYPE=="'${DIPCALL_SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
                     rm -f ${SAMPLE_ID}_canonized.vcf.gz*
                     bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
@@ -146,21 +137,40 @@ task Impl {
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
                 
                 # Computing matches
-                # Remark: sequence similarity is not used.
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
-                if [ ~{suffix} = "dup" ]; then
-                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/
-                    # Taking the union of the TPs from both comparisons.
-                    # Removing duplicates is not needed, since the length of an 
-                    # ultralong call is much greater than truvari's --refdist
-                    java -cp ~{docker_dir} UltralongDupSubtract ${SAMPLE_ID}_truvari_add/tp-comp.vcf.gz | bgzip -c > ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
-                    bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz --output ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                # Remark: sequence similarity is never used.
+                if [ ~{suffix} != "inv" ]; then
+                    # 1. Standard VCF-to-VCF matching
+                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
+                    if [ ~{suffix} = "dup" ]; then
+                        # 2.1 Matching DUPs to dipcall INS at their END
+                        java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bcftools sort --output-type z --output ${SAMPLE_ID}_query_add.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_query_add.vcf.gz
+                        ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/
+                        java -cp ~{docker_dir} UltralongDupSubtract ${SAMPLE_ID}_truvari_add/tp-comp.vcf.gz | bgzip -c > ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
+                        # 2.2 Matching DUPs to dipcall INS in their interior
+                        local N_TRUE_INS=$(bcftools index --nrecords ${SAMPLE_ID}_truth.vcf.gz)
+                        java -cp ~{docker_dir} UltralongBenchDupIns ${SAMPLE_ID}_query.vcf.gz ${SAMPLE_ID}_truth.vcf.gz ${N_TRUE_INS} ~{truvari_pctsize} | bgzip -c > ./${SAMPLE_ID}_dupins.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ./${SAMPLE_ID}_dupins.vcf.gz
+                        # Taking the union of all TPs from all comparisons
+                        bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz ./${SAMPLE_ID}_dupins.vcf.gz --output ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                    else
+                        mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                    fi
                 else
+                    # 3. Matching INVs to gaps in the dipcall BED
+                    ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_truth.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                    bcftools view --header-only ${SAMPLE_ID}_query.vcf.gz > ${SAMPLE_ID}_gaps.vcf
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2InvVcf ${SAMPLE_ID}_gaps.bed >> ${SAMPLE_ID}_gaps.vcf
+                    rm -f ${SAMPLE_ID}_gaps.bed
+                    bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
+                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
                     mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
+                    rm -f ${SAMPLE_ID}_gaps.vcf.gz*
                 fi
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari/ ${SAMPLE_ID}_truvari_add/
+                rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari*/
                 
                 # Uploading
                 gcloud storage mv ${SAMPLE_ID}_~{suffix}_training.vcf.'gz*' ~{remote_outdir}
