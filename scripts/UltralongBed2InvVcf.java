@@ -28,7 +28,7 @@ public class UltralongBed2InvVcf {
             chrom=tokens[0];
             start=Integer.parseInt(tokens[1]);  // 0-based, inclusive.
             end=Integer.parseInt(tokens[2]);    // 0-based, exclusive.
-            System.out.println(chrom+"\t"+(start+1)+"\t"+(++i)+"\tN\t<INV>\t60\tPASS\tSVTYPE=INV;SVLEN="+(end-start)+"\tGT\t0/1");
+            System.out.println(chrom+"\t"+(start+1)+"\t"+(++i)+"\tN\t<INV>\t60\tPASS\tSVTYPE=INV;SVLEN="+(end-start)+";END="+end+"\tGT\t0/1");
             
             // Next iteration
             str=br.readLine();
