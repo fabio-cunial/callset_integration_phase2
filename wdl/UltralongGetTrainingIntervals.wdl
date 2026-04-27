@@ -159,7 +159,8 @@ task Impl {
                     fi
                 else
                     # 3. Matching INVs to gaps in the dipcall BED
-                    ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_truth.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                    ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_truth.bed -g ~{reference_fai} > ${SAMPLE_ID}_truth_sorted.bed
+                    ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_truth_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
                     bcftools view --header-only ${SAMPLE_ID}_query.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                     ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2InvVcf ${SAMPLE_ID}_gaps.bed >> ${SAMPLE_ID}_gaps.vcf
                     rm -f ${SAMPLE_ID}_gaps.bed
