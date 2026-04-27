@@ -23,8 +23,8 @@ public class UltralongPointGetBins {
         final String INPUT_FAI = args[1];
         final int BREAKPOINT_BIN_LENGTH = Integer.parseInt(args[2]);
         
-        int i, p;
-        int chromLength, pos, svlen, quantum;
+        int p;
+        int chromLength, pos;
         String str, chrom, id, info;
         BufferedReader br;
         String[] tokens;

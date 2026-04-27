@@ -63,16 +63,16 @@ public class UltralongIntervalIntersectClips {
         }
         br.close();
         
-        // Mergesort-like scan of the two sorted files
+        // Simple quadratic scan of the two sorted files. 
+        // Could be made much faster.
         Arrays.fill(marked1[0],false); Arrays.fill(marked1[1],false); 
         Arrays.fill(marked2[0],false); Arrays.fill(marked2[1],false);
-        j=0;
         for (i=0; i<N_CLIPS1; i++) {
             readId1=clips1[i][0];
             isRc1=clips1[i][1].charAt(0)=='1';
             readPos1=Integer.parseInt(clips1[i][2]);
             readLength1=Integer.parseInt(clips1[i][3]);
-            for (; j<N_CLIPS2; j++) {
+            for (j=0; j<N_CLIPS2; j++) {
                 readId2=clips2[j][0];
                 k=readId2.compareTo(readId1);
                 if (k<0) continue;
@@ -106,7 +106,8 @@ public class UltralongIntervalIntersectClips {
     
     /**
      * @return TRUE iff two maximal alignments of the same read are such that 
-     * their maximal endpoints are adjacent on the read.
+     * their maximal endpoints are adjacent on the read and are maximal in
+     * opposite directions.
      */
     private static final boolean areAdjacent(boolean isRc1, int pos1, int length1, boolean isLeftMaximal1, boolean isRc2, int pos2, int length2, boolean isLeftMaximal2, int slack) {
         if (!isRc1) {
