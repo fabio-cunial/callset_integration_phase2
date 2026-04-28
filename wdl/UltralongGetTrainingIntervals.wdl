@@ -52,7 +52,7 @@ workflow UltralongGetTrainingIntervals {
 }
 
 
-# Performance onf a 4-core 8GB VM:
+# Performance on a 4-core 8GB VM:
 # TOOL                                  CPU%        RAM         TIME
 #
 task Impl {
