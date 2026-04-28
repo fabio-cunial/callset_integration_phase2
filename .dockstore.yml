@@ -600,4 +600,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongGetTrainingIntervals.wdl
   testParameterFiles:
+- name: SvimAsm
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SvimAsm.wdl
+  testParameterFiles:
 

@@ -154,6 +154,15 @@ RUN wget https://github.com/DecodeGenetics/LRcaller/releases/download/v${lrcalle
 RUN pip install pandas numpy matplotlib seaborn cyvcf2 pysam scipy
 COPY *.py .
 
+# SVIM-ASM
+ARG svim_asm_version=1.0.3
+RUN wget https://github.com/eldariont/svim-asm/archive/refs/tags/v${svim_asm_version}.tar.gz \
+    && tar -xzf v${svim_asm_version}.tar.gz \
+    && rm -f v${svim_asm_version}.tar.gz \
+    && cd svim-asm-${svim_asm_version} \
+    && pip install . \
+    && svim-asm --help
+
 # AD HOC SCRIPTS
 COPY *.java .
 RUN javac *.java

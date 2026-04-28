@@ -92,24 +92,6 @@ task Impl {
         
         
         # ----------------------- Steps of the pipeline ------------------------
-        
-        # Makes sure the END field of a VCF that contains only interval records
-        # is consistent with its SVLEN. This is necessary for truvari's --pctovl
-        # to work.
-        #
-        # function FixEnd() {
-        #     local INPUT_VCF_GZ=$1
-        #     local SAMPLE_ID=$2
-
-        #     ${TIME_COMMAND} bcftools annotate --remove INFO/END --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_fixend_dropped.vcf.gz
-        #     ${TIME_COMMAND} bcftools query -f '%CHROM\t%POS\t%ID\t%INFO/SVLEN\n' ${SAMPLE_ID}_fixend_dropped.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t" } { print $1, $2, $3, $2 + $4 }' | bgzip > ${SAMPLE_ID}_fixend_annotations.tsv.gz
-        #     tabix -s1 -b2 -e2 ${SAMPLE_ID}_fixend_annotations.tsv.gz
-        #     echo '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the structural variant">' > ${SAMPLE_ID}_fixend_header.txt
-        #     ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_fixend_annotations.tsv.gz --columns CHROM,POS,~ID,INFO/END --header-lines ${SAMPLE_ID}_fixend_header.txt --output-type z ${SAMPLE_ID}_fixend_dropped.vcf.gz --output ${SAMPLE_ID}_fixend_fixed.vcf.gz
-        #     rm -f ${SAMPLE_ID}_fixend_annotations.tsv.gz* ${SAMPLE_ID}_fixend_header.txt
-        #     rm -f ${INPUT_VCF_GZ}* ; mv ${SAMPLE_ID}_fixend_fixed.vcf.gz ${INPUT_VCF_GZ} ; bcftools index --threads ${N_THREADS} -f -t ${INPUT_VCF_GZ}
-        # }
-
 
         function GetTrainingIntervalsThread() {
             local CHUNK_CSV=$1
@@ -180,7 +162,6 @@ task Impl {
                     fi
                 else
                     # 3. Matching INVs to gaps in the dipcall BED
-                    #FixEnd ${SAMPLE_ID}_query.vcf.gz ${SAMPLE_ID}
                     ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_truth.bed -g ~{reference_fai} > ${SAMPLE_ID}_truth_sorted.bed
                     ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_truth_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
                     bcftools view --header-only ${SAMPLE_ID}_query.vcf.gz > ${SAMPLE_ID}_gaps.vcf
