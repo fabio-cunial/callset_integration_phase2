@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l UltralongGetTrainingIntervalsSvim.wdl
 java -jar ${WOMTOOL_PATH} validate -l SvimAsm.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongCanonizeDipcall.wdl
