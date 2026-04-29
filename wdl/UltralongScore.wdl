@@ -271,7 +271,8 @@ task Score {
         rm -f ~{resource_vcf_gz}
         
         # 2. Scoring
-        EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr4 -XL chr7 -XL chr10 -XL chr13 -XL chr16 -XL chr19 -XL chr22"
+        EXCLUDE_CHROMOSOMES=" "
+        #EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr4 -XL chr7 -XL chr10 -XL chr13 -XL chr16 -XL chr19 -XL chr22"
         #EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
         if ~{defined(training_resource_bed)}
         then
