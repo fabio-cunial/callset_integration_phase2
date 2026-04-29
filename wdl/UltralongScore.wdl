@@ -271,9 +271,9 @@ task Score {
         rm -f ~{resource_vcf_gz}
         
         # 2. Scoring
-        EXCLUDE_CHROMOSOMES=" "
+        #EXCLUDE_CHROMOSOMES=" "
         #EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr4 -XL chr7 -XL chr10 -XL chr13 -XL chr16 -XL chr19 -XL chr22"
-        #EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
+        EXCLUDE_CHROMOSOMES="-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
         if ~{defined(training_resource_bed)}
         then
             BED_FLAG="-L ~{training_resource_bed}"
@@ -304,6 +304,10 @@ task Score {
     >>>
     
     output {
+        File extract_annot_hdf5 = "extract.annot.hdf5"
+        File extract_unlabeled_annot_hdf5 = "extract.unlabeled.annot.hdf5"
+        File score_annot_hdf5 = "score.annot.hdf5"
+        File score_scores_hdf5 = "score.scores.hdf5"
     }
     runtime {
         docker: docker_image
