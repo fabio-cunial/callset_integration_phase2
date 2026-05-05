@@ -610,4 +610,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongGetTrainingIntervals.wdl
   testParameterFiles:
+- name: InsRemap
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InsRemap.wdl
+  testParameterFiles:
 
