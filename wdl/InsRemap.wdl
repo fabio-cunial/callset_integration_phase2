@@ -3,7 +3,6 @@ version 1.0
 #
 workflow InsRemap {
     input {
-        String sample_id
         File vcf_gz
         File vcf_tbi
 
@@ -18,7 +17,6 @@ workflow InsRemap {
 
     call Impl {
         input:
-            sample_id = sample_id,
             vcf_gz = vcf_gz,
             vcf_tbi = vcf_tbi,
 
@@ -36,7 +34,6 @@ workflow InsRemap {
 #
 task Impl {
     input {
-        String sample_id
         File vcf_gz
         File vcf_tbi
 
@@ -48,36 +45,36 @@ task Impl {
 
         String docker_image
         Int n_cpu = 8
-        Int mem_gb = 16
+        Int mem_gb = 32
+        Int disk_size_gb = 50
     }
-   
-    Int disk_size = ceil(size(vcf_gz, "GB") + size(ref_fa, "GB")) * 3 + 50
 
     command <<<
         set -euxo pipefail
         
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
 
         mkdir ./ref_files
         mv ~{ref_fa} ./ref_files/
         mv ~{ref_fai} ./ref_files/
         REF_FA_BASENAME=$(basename ~{ref_fa})
-        time truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ~{vcf_gz} -o ~{sample_id}_ins_remapped.vcf.gz     
-        time bcftools index --threads ${N_THREADS} --tbi ~{sample_id}_ins_remapped.vcf.gz
+        time truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ~{vcf_gz} -o remapped.vcf.gz     
+        time bcftools index --threads ${N_THREADS} --tbi remapped.vcf.gz
+        bcftools query --format '%INFO/SUPP_SNIFFLES,%INFO/SUPP_PBSV,%INFO/SUPP_PAV,%INFO/SVLEN,%INFO/remap_classification,%INFO/remap_perc\n' remapped.vcf.gz > matrix.csv
     >>>
     
     output {
-        File out_vcf_gz = "~{sample_id}_ins_remapped.vcf.gz"
-        File out_tbi = "~{sample_id}_ins_remapped.vcf.gz.tbi"
+        File out_vcf_gz = "remapped.vcf.gz"
+        File out_tbi = "remapped.vcf.gz.tbi"
+        File matrix_csv = "matrix.csv"
     }
 
     runtime {
         cpu: n_cpu
         memory: mem_gb + " GiB"
-        disks: "local-disk " +  disk_size + " HDD"
+        disks: "local-disk " +  disk_size_gb + " HDD"
         preemptible: 0
         docker: docker_image
     }
