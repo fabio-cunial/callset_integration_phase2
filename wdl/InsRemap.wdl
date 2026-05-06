@@ -15,7 +15,7 @@ workflow InsRemap {
         Int max_length = 1000000
         Float cov_threshold = 0.8
 
-        String docker_image = "quay.io/ymostovoy/lr-remap:latest"
+        String docker_image = "fcunial/callset_integration_phase2_remap"
     }
 
     call Impl {
@@ -64,6 +64,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        TIME_COMMAND="/usr/bin/time --verbose"
         
 
         # Initializing REF
@@ -78,28 +79,28 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it is not in the input
-            TEST=$( gsutil ls ~{remote_indir}/${SAMPLE_ID}_ins.vcf.gz || echo "0" )
+            TEST=$( gcloud storage ls ~{remote_indir}/${SAMPLE_ID}_ins.vcf.gz || echo "0" )
             if [ ${TEST} = "0" ]; then
                 continue
             fi
 
             # Skipping the sample if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
                 continue
             fi
             
             # Remapping
-            gsutil cp ~{remote_indir}/${SAMPLE_ID}_ins.vcf.'gz*' .
-            time truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ${SAMPLE_ID}_ins.vcf.gz -o ${SAMPLE_ID}_ins_remapped.vcf.gz
-            time bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_ins_remapped.vcf.gz
-            bcftools query --format '%INFO/SUPP_SNIFFLES,%INFO/SUPP_PBSV,%INFO/SUPP_PAV,%INFO/SVLEN,%INFO/remap_classification,%INFO/remap_perc\n' ${SAMPLE_ID}_ins_remapped.vcf.gz >> ~{chunk_id}_matrix.csv
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ins.vcf.'gz*' .
+            ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ${SAMPLE_ID}_ins.vcf.gz -o ${SAMPLE_ID}_ins_remapped.vcf.gz
+            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_ins_remapped.vcf.gz
+            ${TIME_COMMAND} bcftools query --format '%INFO/SUPP_SNIFFLES,%INFO/SUPP_PBSV,%INFO/SUPP_PAV,%INFO/SVLEN,%INFO/remap_classification,%INFO/remap_perc\n' ${SAMPLE_ID}_ins_remapped.vcf.gz >> ~{chunk_id}_matrix.csv
             tail -n 10 ~{chunk_id}_matrix.csv 1>&2
             
             # Next iteration
-            gsutil mv ${SAMPLE_ID}_ins_remapped.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_ins_remapped.vcf.'gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
-            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             rm -f ${SAMPLE_ID}*
             ls -laht 1>&2
         done 3< ~{chunk_csv}
