@@ -77,6 +77,12 @@ task Impl {
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
+            # Skipping the sample if it is not in the input
+            TEST=$( gcloud storage ls ~{remote_indir}/${SAMPLE_ID}_ins.vcf.gz || echo "0" )
+            if [ ${TEST} = "0" ]; then
+                continue
+            fi
+
             # Skipping the sample if it has already been processed
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
