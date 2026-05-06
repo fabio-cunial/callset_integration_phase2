@@ -6,6 +6,9 @@ workflow InsRemap {
         String chunk_id
         File chunk_csv
 
+        String remote_indir
+        String remote_outdir
+
         File ref_fa
         File ref_fai
 
@@ -19,6 +22,9 @@ workflow InsRemap {
         input:
             chunk_id = chunk_id,
             chunk_csv = chunk_csv,
+
+            remote_indir = remote_indir,
+            remote_outdir = remote_outdir,
 
             ref_fa = ref_fa,
             ref_fai = ref_fai,
@@ -36,6 +42,9 @@ task Impl {
     input {
         String chunk_id
         File chunk_csv
+
+        String remote_indir
+        String remote_outdir
 
         File ref_fa
         File ref_fai
@@ -82,9 +91,9 @@ task Impl {
             tail -n 10 ~{chunk_id}_matrix.csv 1>&2
             
             # Next iteration
+            gcloud storage mv ${SAMPLE_ID}_ins_remapped.vcf.'gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
-            gcloud storage cp ~{chunk_id}_matrix.csv ~{remote_outdir}/
             rm -f ${SAMPLE_ID}*
             ls -laht 1>&2
         done 3< ~{chunk_csv}
