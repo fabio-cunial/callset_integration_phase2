@@ -615,4 +615,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InsRemap.wdl
   testParameterFiles:
-
+- name: UltralongRecordsInTrack
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongRecordsInTrack.wdl
+  testParameterFiles:
