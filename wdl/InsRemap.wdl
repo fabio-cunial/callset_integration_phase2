@@ -3,8 +3,8 @@ version 1.0
 #
 workflow InsRemap {
     input {
-        File vcf_gz
-        File vcf_tbi
+        String chunk_id
+        File chunk_csv
 
         File ref_fa
         File ref_fai
@@ -17,8 +17,8 @@ workflow InsRemap {
 
     call Impl {
         input:
-            vcf_gz = vcf_gz,
-            vcf_tbi = vcf_tbi,
+            chunk_id = chunk_id,
+            chunk_csv = chunk_csv,
 
             ref_fa = ref_fa,
             ref_fai = ref_fai,
@@ -34,8 +34,8 @@ workflow InsRemap {
 #
 task Impl {
     input {
-        File vcf_gz
-        File vcf_tbi
+        String chunk_id
+        File chunk_csv
 
         File ref_fa
         File ref_fai
@@ -46,7 +46,7 @@ task Impl {
         String docker_image
         Int n_cpu = 8
         Int mem_gb = 32
-        Int disk_size_gb = 50
+        Int disk_size_gb = 20
     }
 
     command <<<
@@ -55,20 +55,43 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
 
+        # Initializing REF
         mkdir ./ref_files
         mv ~{ref_fa} ./ref_files/
         mv ~{ref_fai} ./ref_files/
         REF_FA_BASENAME=$(basename ~{ref_fa})
-        time truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ~{vcf_gz} -o remapped.vcf.gz     
-        time bcftools index --threads ${N_THREADS} --tbi remapped.vcf.gz
-        bcftools query --format '%INFO/SUPP_SNIFFLES,%INFO/SUPP_PBSV,%INFO/SUPP_PAV,%INFO/SVLEN,%INFO/remap_classification,%INFO/remap_perc\n' remapped.vcf.gz > matrix.csv
+
+        # Iterating over samples
+        touch ~{chunk_id}_matrix.csv
+        while read -u 3 LINE; do
+            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+            
+            # Skipping the sample if it has already been processed
+            TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+            
+            # Remapping
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ins.vcf.'gz*' .
+            time truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{max_length} --cov-threshold ~{cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ${SAMPLE_ID}_ins.vcf.gz -o ${SAMPLE_ID}_ins_remapped.vcf.gz
+            time bcftools index --threads ${N_THREADS} --tbi ${SAMPLE_ID}_ins_remapped.vcf.gz
+            bcftools query --format '%INFO/SUPP_SNIFFLES,%INFO/SUPP_PBSV,%INFO/SUPP_PAV,%INFO/SVLEN,%INFO/remap_classification,%INFO/remap_perc\n' ${SAMPLE_ID}_ins_remapped.vcf.gz >> ~{chunk_id}_matrix.csv
+            tail -n 10 ~{chunk_id}_matrix.csv 1>&2
+            
+            # Next iteration
+            touch ${SAMPLE_ID}.done
+            gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+            gcloud storage cp ~{chunk_id}_matrix.csv ~{remote_outdir}/
+            rm -f ${SAMPLE_ID}*
+            ls -laht 1>&2
+        done 3< ~{chunk_csv}
     >>>
     
     output {
-        File out_vcf_gz = "remapped.vcf.gz"
-        File out_tbi = "remapped.vcf.gz.tbi"
-        File matrix_csv = "matrix.csv"
+        File matrix_csv = "~{chunk_id}_matrix.csv"
     }
 
     runtime {
