@@ -37,6 +37,11 @@ workflow InsRemap {
 }
 
 
+# Performance on a VM with 4 physical cores and 32GB of RAM:
+#
+# TOOL                                                CPU     RAM     TIME
+# truvari anno remap                                  300%    20G     15m
+# RAM can reach >32GB in some cases though.
 #
 task Impl {
     input {
@@ -56,6 +61,7 @@ task Impl {
         Int n_cpu = 8
         Int mem_gb = 32
         Int disk_size_gb = 20
+        Int preemptible_number = 3
     }
 
     command <<<
@@ -114,7 +120,7 @@ task Impl {
         cpu: n_cpu
         memory: mem_gb + " GiB"
         disks: "local-disk " +  disk_size_gb + " HDD"
-        preemptible: 0
+        preemptible: preemptible_number
         docker: docker_image
     }
 }

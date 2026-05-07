@@ -10,7 +10,7 @@ workflow UltralongRecordsInTrack {
         File segdup_bed
         File segdup_gt10kb_bed
 
-        String docker_image
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
     }
 
     call Impl {

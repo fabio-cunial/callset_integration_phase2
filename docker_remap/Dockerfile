@@ -109,6 +109,15 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v${bedtools_versio
     && mv bedtools /usr/local/bin \
     && bedtools --help
 
+# MINIMAP2
+ARG minimap2_version=2.30
+RUN wget https://github.com/lh3/minimap2/releases/download/v${minimap2_version}/minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && tar xjf minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && rm -f minimap2-${minimap2_version}_x64-linux.tar.bz2 \
+    && mv ./minimap2-${minimap2_version}_x64-linux/ ./minimap2/ \
+    && ./minimap2/minimap2 -h && echo 0 || echo 1
+ENV PATH="${work_dir}/minimap2:${PATH}"
+
 # TRUVARI, Yulia's version.
 RUN git clone https://github.com/yuliamostovoy/truvari.git \
     && cd truvari \
