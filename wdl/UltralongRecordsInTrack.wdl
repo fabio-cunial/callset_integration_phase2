@@ -168,9 +168,9 @@ task Impl {
         fi
         
         # Outputting
-        bcftools view --output-type z --threads ${N_THREADS} input.bcf --output ${output_prefix}.vcf.gz
-        bcftools index --threads ${N_THREADS} -f -t ${output_prefix}.vcf.gz
-        gcloud storage cp ${output_prefix}.vcf.'gz*' ~{remote_outdir}
+        bcftools view --output-type z --threads ${N_THREADS} input.bcf --output ~{output_prefix}.vcf.gz
+        bcftools index --threads ${N_THREADS} -f -t ~{output_prefix}.vcf.gz
+        gcloud storage cp ~{output_prefix}.vcf.gz* ~{remote_outdir}
     >>>
     
     output {
