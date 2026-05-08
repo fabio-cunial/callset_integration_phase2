@@ -22,7 +22,7 @@ workflow UltralongRecordsInTrack {
             vcf_gz = vcf_gz,
             vcf_tbi = vcf_tbi,
             svtype = svtype,
-            
+
             output_prefix = output_prefix,
             remote_outdir = remote_outdir,
 
@@ -75,7 +75,7 @@ task Impl {
 
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${START_BED} -b ${TRACK_BED} > start_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' start_track.bed > start_track.tsv
-            ${TIME_COMMAND} bedtools intersect -v -wa -u -a ${START_BED} -b ${TRACK_BED} > start_track.bed
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${START_BED} -b ${TRACK_BED} > start_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' start_track.bed >> start_track.tsv
             sort -k 1,1 -k 2,2n start_track.tsv | bgzip > start_track.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 start_track.tsv.gz
@@ -95,7 +95,7 @@ task Impl {
 
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} > end_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' end_track.bed > end_track.tsv
-            ${TIME_COMMAND} bedtools intersect -v -wa -u -a ${END_BED} -b ${TRACK_BED} > end_track.bed
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} > end_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' end_track.bed >> end_track.tsv
             sort -k 1,1 -k 2,2n end_track.tsv | bgzip > end_track.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 end_track.tsv.gz
@@ -115,7 +115,7 @@ task Impl {
 
             ${TIME_COMMAND} bedtools intersect -wa -u -f 1.0 -a ${INTERVAL_BED} -b ${TRACK_BED} > interval_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' interval_track.bed > interval_track.tsv
-            ${TIME_COMMAND} bedtools intersect -v -wa -u -f 1.0 -a ${INTERVAL_BED} -b ${TRACK_BED} > interval_track.bed
+            ${TIME_COMMAND} bedtools intersect -wa -v -f 1.0 -a ${INTERVAL_BED} -b ${TRACK_BED} > interval_track.bed
             awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' interval_track.bed >> interval_track.tsv
             sort -k 1,1 -k 2,2n interval_track.tsv | bgzip > interval_track.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 interval_track.tsv.gz
