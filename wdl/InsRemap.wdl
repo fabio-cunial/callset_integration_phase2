@@ -41,7 +41,8 @@ workflow InsRemap {
 #
 # TOOL                                                CPU     RAM     TIME
 # truvari anno remap                                  300%    20G     15m
-# RAM can reach >32GB in some cases though.
+#
+# Remark: RAM can reach >64GB in some cases.
 #
 task Impl {
     input {
