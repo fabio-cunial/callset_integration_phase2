@@ -22,7 +22,7 @@ public class UltralongInsExtractDups {
         final String OUTPUT_VCF_DUP = args[3];
         
         int i, p;
-        int pos, newPos, newEnd, newLength;
+        int pos, newPos, newEnd, newLength, nRecords, nDups;
         String str, strPrime, id, info;
         BufferedReader br, brPrime;
         BufferedWriter bwIns, bwDup;
@@ -31,7 +31,7 @@ public class UltralongInsExtractDups {
         bwIns = new BufferedWriter(new FileWriter(OUTPUT_VCF_INS));
         bwDup = new BufferedWriter(new FileWriter(OUTPUT_VCF_DUP));
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        str=br.readLine();
+        str=br.readLine(); nRecords=0; nDups=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 bwIns.write(str+"\n");
@@ -39,6 +39,7 @@ public class UltralongInsExtractDups {
                 str=br.readLine();
                 continue;
             }
+            nRecords++;
             tokens=str.split("\t");
             id=tokens[2];
             info=tokens[7];
@@ -47,6 +48,7 @@ public class UltralongInsExtractDups {
             brPrime.close();
             if (strPrime==null) bwIns.write(str+"\n");
             else {
+                nDups++;
                 p=strPrime.indexOf("\t");
                 newPos=Integer.parseInt(strPrime.substring(0,p));
                 newEnd=Integer.parseInt(strPrime.substring(p+1));
@@ -64,6 +66,7 @@ public class UltralongInsExtractDups {
             str=br.readLine();
         }
         br.close(); bwIns.close(); bwDup.close();
+        System.out.println("Created "+nDups+" DUPs out of "+nRecords+" INS records ("+String.format("%.2f",(100.0*nDups)/nRecords)+"%).");
     }
 
 

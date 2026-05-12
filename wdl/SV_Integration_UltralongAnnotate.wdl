@@ -11,15 +11,22 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
-        File feature_extraction_py
+        Int ins2dup_bin_length
+        Float ins2dup_bin_coverage_ratio
         
-        Int n_coverage_bins = 10
-        Int breakpoint_window_bp = 500
-        Int min_clip_length = 200
-        Int adjacency_slack_bp = 300
+        Int custom_n_coverage_bins
+        Int custom_breakpoint_window_bp
+        Int custom_min_clip_length
+        Int custom_adjacency_slack_bp
+
+        File feature_extraction_py
+
+        File tr_bed
+        File segdup_bed
+        Float repeat_overlap_fraction = 0.8
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
-        Int preemptible_number = 10
+        Int preemptible_number = 5
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam,csi,bcf"
@@ -32,14 +39,21 @@ workflow SV_Integration_UltralongAnnotate {
             
             reference_fa = reference_fa,
             reference_fai = reference_fai,
+
+            ins2dup_bin_length = ins2dup_bin_length,
+            ins2dup_bin_coverage_ratio = ins2dup_bin_coverage_ratio,
             
-            feature_extraction_py = feature_extraction_py,
-            
-            n_coverage_bins = n_coverage_bins,
-            breakpoint_window_bp = breakpoint_window_bp,
-            min_clip_length = min_clip_length,
-            adjacency_slack_bp = adjacency_slack_bp,
+            custom_n_coverage_bins = custom_n_coverage_bins,
+            custom_breakpoint_window_bp = custom_breakpoint_window_bp,
+            custom_min_clip_length = custom_min_clip_length,
+            custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
+            feature_extraction_py = feature_extraction_py,
+
+            tr_bed = tr_bed,
+            segdup_bed = segdup_bed,
+            repeat_overlap_fraction = repeat_overlap_fraction,
+
             docker_image = docker_image,
             preemptible_number = preemptible_number
     }
@@ -75,13 +89,20 @@ task Impl {
         
         File reference_fa
         File reference_fai
+
+        Int ins2dup_bin_length
+        Float ins2dup_bin_coverage_ratio
         
+        Int custom_n_coverage_bins
+        Int custom_breakpoint_window_bp
+        Int custom_min_clip_length
+        Int custom_adjacency_slack_bp
+
         File feature_extraction_py
-        
-        Int n_coverage_bins
-        Int breakpoint_window_bp
-        Int min_clip_length
-        Int adjacency_slack_bp
+
+        File tr_bed
+        File segdup_bed
+        Float repeat_overlap_fraction
         
         String docker_image
         Int n_cpu = 4
@@ -415,9 +436,10 @@ END
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
+            local MIN_CLIP_LENGTH=$6
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ~{min_clip_length}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.tsv
@@ -464,9 +486,10 @@ END
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
+            local MIN_CLIP_LENGTH=$6
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ~{min_clip_length}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.tsv
@@ -498,34 +521,34 @@ END
         }
 
 
-        function AnnotateDelInvDup() {
+        function AnnotateCustom_NotIns() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
 
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_n_coverage_bins} ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
         }
 
         
-        function AnnotateIns() {
+        function AnnotateCustom_Ins() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
             
-            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -670,9 +693,121 @@ END
         }
         
         
+
+
+        # ------------------------ Repeat annotations --------------------------
+
+        function VcfToBed_Start() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+      
+            bcftools query --format '%CHROM\t%POS\t%INFO/SVLEN\t%ID\n' ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%d\t%s\n",$1,$2,$2,$4); }' | sort -k1,1 -k2,2n > ${SAMPLE_ID}_start.bed
+        }
+
+
+        function VcfToBed_StartEndInterval() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+      
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%INFO/SVLEN\t%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_matrix.tsv
+            ${TIME_COMMAND} awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%d\t%s\n",$1,$2,$2,$4); }' ${SAMPLE_ID}_matrix.tsv | sort -k1,1 -k2,2n > ${SAMPLE_ID}_start.bed
+            ${TIME_COMMAND} awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%d\t%s\n",$1, $2 + $3 - 1, $2 + $3 - 1, $4); }' ${SAMPLE_ID}_matrix.tsv | sort -k1,1 -k2,2n > ${SAMPLE_ID}_end.bed
+            ${TIME_COMMAND} awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%d\t%s\n",$1,$2, $2 + $3 - 1, $4); }' ${SAMPLE_ID}_matrix.tsv | sort -k1,1 -k2,2n > ${SAMPLE_ID}_interval.bed
+            rm -f ${SAMPLE_ID}_matrix.tsv
+        }
+
+
+        function AnnotateTrack_Point() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local POINT_BED=$3
+            local POINT_ID=$4
+            local TRACK_BED=$5
+            local TRACK_ID=$6
+
+            ${TIME_COMMAND} bedtools intersect -wa -u -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_${POINT_ID}_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_${POINT_ID}_track.tsv
+            sort -k 1,1 -k 2,2n ${SAMPLE_ID}_${POINT_ID}_track.tsv | bgzip > ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
+            echo '##INFO=<ID='${POINT_ID}'_'${TRACK_ID}',Number=1,Type=Integer,Description="'${POINT_ID}' breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/'${POINT_ID}'_'${TRACK_ID}
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_${POINT_ID}_track* ${SAMPLE_ID}_header.txt
+        }
+
+
+        function AnnotateTrack_Interval() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            local INTERVAL_BED=$3
+            local TRACK_BED=$4
+            local TRACK_ID=$5
+            local OVERLAP_FRACTION=$6
+
+            ${TIME_COMMAND} bedtools intersect -wa -u -f ${OVERLAP_FRACTION} -a ${INTERVAL_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_interval_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -f ${OVERLAP_FRACTION} -a ${INTERVAL_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_interval_track.tsv
+            sort -k 1,1 -k 2,2n ${SAMPLE_ID}_interval_track.tsv | bgzip > ${SAMPLE_ID}_interval_track.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_interval_track.tsv.gz
+            echo '##INFO=<ID=INTERVAL_'${TRACK_ID}',Number=1,Type=Integer,Description="Interval overlaps the '${TRACK_ID}' track by at least '${OVERLAP_FRACTION}'">' > ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/INTERVAL_'${TRACK_ID}
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_interval_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_interval_track* ${SAMPLE_ID}_header.txt
+        }
+
+
         
         
-        # -------------------- SV-type specific processing ---------------------
+        # ---------------- Handling alternative representations ----------------
+        # Remarks: 
+        #
+        # 1. Some INS records may correspond to a DUP. Such records could be 
+        # located at the beginning/end of their DUP, or in the middle of the 
+        # DUP. INS records located at DUP breakpoints would see peculiar BAM 
+        # features at their POS, while those located in the middle of their DUP 
+        # would likely see no significant BAM features.
+        #
+        # 2. Assume that we keep such records in the INS VCF, without any 
+        # special treatment.
+        # 2.1 Assume that we then use a stringent match against both the INS and
+        # the DUP truth VCF (with --dup-to-ins) to mark the true INS records. 
+        # This would mark as true only INS records at the start (and perhaps at 
+        # the end) of their DUP. The model would then learn to mark as true the 
+        # INS records that have the BAM features of the true INS records, as 
+        # well as those that have the BAM features of DUP breakpoints. This is 
+        # fine, but INS records located in the middle of their DUP would not 
+        # have such features and would likely be marked as false at test time:
+        # this may result in losing some DUPs completely.
+        # 2.2 Assume instead that we use a lenient match proportional to SVLEN
+        # to mark the true INS records. This would mark as true also INS in the
+        # middle of their DUP. This is fine, but since such INS have no BAM 
+        # features, the model's precision may decrease.
+        #
+        # 3. We try to rewrite INS records as DUP using a simple heuristic that 
+        # detects a longest interval with increased BAM coverage and position
+        # and length compatible with the INS.
+        # 3.1 Note that an INS could encode a complex DUP that corresponds to a
+        # permutation of the source interval, and coverage inside the source 
+        # interval may be uneven depending on how many times each source 
+        # fragment occurs in the INS sequence. Our method puts in the DUP class
+        # both simple and complex DUPs.
+        # 3.2 We could have used `truvari anno remap`, rather than depth: this 
+        # might have given more accurate breakpoints, and it might have allowed 
+        # us to separate simple DUPs from complex DUPs. However, we want to 
+        # perform the same classification at testing time, and we observed that
+        # mapping some INS can take a large amount of RAM and thus make the task
+        # expensive.
+        #
+        # 4. None of these problems affect the main (non-ultralong) VCF, since
+        # features come from Kanpig which simply takes paths in the variation
+        # graph, regardless of how they are represented in the VCF, and since 
+        # the records that are marked as true by `truvari bench` are likely to 
+        # capture the Kanpig features of true variants.
+        #
+        # 5. Alternative representations should have been handled in
+        # `SV_Integration_Workpackage1.wdl` before truvari collapse. We do it
+        # here just to reuse the intra-sample VCFs we already have from that
+        # workflow.
+
 
         cat << 'END' > interval_2_breakpoints.sh
 #!/bin/bash
@@ -692,49 +827,6 @@ END
         chmod +x interval_2_breakpoints.sh
 
 
-        # Remark: some INS records may correspond to a DUP. Such records could
-        # be located at the beginning/end of their DUP, or in the middle of the
-        # DUP. INS records located at DUP breakpoints would see peculiar BAM 
-        # features at their POS, while those located in the middle of their DUP 
-        # would likely see no significant BAM features.
-        #
-        # 1. Assume that we keep such records in the INS VCF, without any 
-        # special treatment.
-        # 1.1 Assume that we then use a stringent match against both the INS and
-        # the DUP truth VCF (with --dup-to-ins) to mark the true INS records. 
-        # This would mark as true only INS records at the start (and perhaps at 
-        # the end) of their DUP. The model would then learn to mark as true the 
-        # INS records that have the BAM features of the true INS records, as 
-        # well as those that have the BAM features of DUP breakpoints. This is 
-        # fine, but INS records located in the middle of their DUP would not 
-        # have such features and would likely be marked as false at test time:
-        # this may result in losing some DUPs completely.
-        # 1.2 Assume instead that we use a lenient match proportional to SVLEN
-        # to mark the true INS records. This would mark as true also INS in the
-        # middle of their DUP. This is fine, but since such INS have no BAM 
-        # features, the model's precision may decrease.
-        #
-        # 2. We try to rewrite INS records as DUP using a simple heuristic that 
-        # detects a longest interval with increased BAM coverage and position
-        # and length compatible with the INS.
-        # 2.1 Note that an INS could encode a complex DUP that corresponds to a
-        # permutation of the source interval, and coverage inside the source 
-        # interval may be uneven depending on how many times each source 
-        # fragment occurs in the INS sequence. Our method puts in the DUP class
-        # both simple and complex DUPs.
-        # 2.2 We could have used `truvari anno remap`, rather than depth: this 
-        # might have given more accurate breakpoints, and it might have allowed 
-        # us to separate simple DUPs from complex DUPs. However, we want to 
-        # perform the same classification at testing time, and we observed that
-        # mapping some INS can take a large amount of RAM and thus make the task
-        # expensive.
-        #
-        # 3. None of these problems affect the main (non-ultralong) VCF, since
-        # features come from Kanpig which simply takes paths in the variation
-        # graph, regardless of how they are represented in the VCF, and since 
-        # the records that are marked as true by `truvari bench` are likely to 
-        # capture the Kanpig features of true variants.
-        #
         function Ins2Dup() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -755,7 +847,11 @@ END
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
 
-----------> Do a truvari collapse of the insdup VCF!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # Truvari collapse with the same parameters as in
+            # `SV_Integration_Workpackage1.wdl`.
+            bgzip --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
+            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
         }
         
         
@@ -763,10 +859,12 @@ END
         
         # ---------------------------- Main program ----------------------------
         
+        INFINITY="1000000000"
         samtools --version 1>&2
         bcftools --version 1>&2
         truvari --help 1>&2
         cuteFC --version 1>&2
+        truvari --help 1>&2
         df -h 1>&2
         
         while read -u 3 LINE; do
@@ -777,37 +875,64 @@ END
                 continue
             fi
 
-            # Canonizing the VCF and converting INS to DUP
+            # 1. Canonizing the VCF and handling alternative representations
             LocalizeSample ${SAMPLE_ID} ${LINE}
             df -h 1>&2
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{bin_length} ~{bin_coverage_ratio}
+            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio}
+            rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
-            # Annotating
-            AnnotateDelInvDup ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-            AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            # 2. Adding custom annotations
+            AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+
+            # 3. Adding repeat annotations
+            # 3.1 Not INS
+            VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{tr_bed} "TR" ~{repeat_overlap_fraction}
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{segdup_bed} "SD" ~{repeat_overlap_fraction}
+            rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            # 3.2 INS
+            VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+            rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+            AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+            rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+            rm -f ${SAMPLE_ID}_start.bed
+
+            # 4. Merging INS and non-INS VCFs
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf
-            rm -f ${SAMPLE_ID}_canonized.vcf.gz ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+            # 5. Adding annotations from Kalra et al.
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+            # 6. Adding annotations from genotypers
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-
----------------> Add TR/segdup annotations!!!!!!!!!!!!!!!!
             
-            # Splitting by type and copying to the remote directory
+            # Splitting by type and uploading
             bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
-            bcftools filter --include "SVTYPE=\"INS\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
             bcftools filter --include "SVTYPE=\"DUP\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
             bcftools filter --include "SVTYPE=\"INV\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
+            bcftools filter --include "SVTYPE=\"INS\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
             wait
             bcftools index -f -t ${SAMPLE_ID}_del.vcf.gz &
-            bcftools index -f -t ${SAMPLE_ID}_ins.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_dup.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_inv.vcf.gz &
+            bcftools index -f -t ${SAMPLE_ID}_ins.vcf.gz &
             wait
-            gcloud storage mv ${SAMPLE_ID}_'*.vcf.gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_'del.vcf.gz*' ${SAMPLE_ID}_'inv.vcf.gz*' ${SAMPLE_ID}_'dup.vcf.gz*' ${SAMPLE_ID}_'ins.vcf.gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}

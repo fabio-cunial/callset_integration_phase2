@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongRecordsInTrack.wdl
 java -jar ${WOMTOOL_PATH} validate -l InsRemap.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongGetTrainingIntervalsSvim.wdl
@@ -11,7 +12,6 @@ java -jar ${WOMTOOL_PATH} validate -l UltralongGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongCanonizeDipcall.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongScore.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongMerge.wdl
-java -jar ${WOMTOOL_PATH} validate -l UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_RegenotypingAnalysis.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_PlotPrme.wdl
