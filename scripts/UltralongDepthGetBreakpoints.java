@@ -60,7 +60,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=0; i<BIN_LENGTH; i++) sum1+=depth[i];
         sum2=0;
         for (i=BIN_LENGTH; i<2*BIN_LENGTH; i++) sum2+=depth[i];
-        if (sum1>0) {
+        if (sum1>=BIN_LENGTH) {
             maxRatio=((double)sum2)/sum1;
             if (maxRatio>=BIN_COVERAGE_RATIO) leftBreakpoints.add(new Breakpoint(i-BIN_LENGTH,((double)sum1)/BIN_LENGTH,maxRatio));   
         }
@@ -68,7 +68,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=2*BIN_LENGTH; i<SAMTOOLS_DEPTH_N_POSITIONS; i++) {
             sum1+=depth[i-BIN_LENGTH]-depth[i-2*BIN_LENGTH];
             sum2+=depth[i]-depth[i-BIN_LENGTH];
-            if (sum1==0) continue;
+            if (sum1<BIN_LENGTH) continue;
             ratio=((double)sum2)/sum1;
             if (ratio>maxRatio) maxRatio=ratio;
             if (ratio>=BIN_COVERAGE_RATIO) leftBreakpoints.add(new Breakpoint(i-BIN_LENGTH,((double)sum1)/BIN_LENGTH,ratio));
@@ -82,7 +82,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-1; i>=SAMTOOLS_DEPTH_N_POSITIONS-BIN_LENGTH; i--) sum2+=depth[i];
         sum1=0;
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-BIN_LENGTH-1; i>=SAMTOOLS_DEPTH_N_POSITIONS-2*BIN_LENGTH; i--) sum1+=depth[i];
-        if (sum2>0) {
+        if (sum2>=BIN_LENGTH) {
             maxRatio=((double)sum1)/sum2;
             if (maxRatio>=BIN_COVERAGE_RATIO) rightBreakpoints.add(new Breakpoint(i+BIN_LENGTH,((double)sum2)/BIN_LENGTH,maxRatio));
         }
@@ -90,7 +90,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-2*BIN_LENGTH-1; i>=0; i--) {
             sum1+=depth[i]-depth[i+BIN_LENGTH];
             sum2+=depth[i+BIN_LENGTH]-depth[i+2*BIN_LENGTH];
-            if (sum2==0) continue;
+            if (sum2<BIN_LENGTH) continue;
             ratio=((double)sum1)/sum2;
             if (ratio>maxRatio) maxRatio=ratio;
             if (ratio>=BIN_COVERAGE_RATIO) rightBreakpoints.add(new Breakpoint(i+BIN_LENGTH,((double)sum2)/BIN_LENGTH,ratio));
