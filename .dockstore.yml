@@ -620,3 +620,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongRecordsInTrack.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongAnnotate
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongAnnotate.wdl
+  testParameterFiles:
