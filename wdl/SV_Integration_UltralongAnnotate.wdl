@@ -496,6 +496,40 @@ END
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
+
+
+        function AnnotateDelInvDup() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            
+            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
+
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+            mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
+        }
+
+        
+        function AnnotateIns() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+            
+            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
+            
+            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+            mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
+        }
         
         
         
@@ -538,7 +572,7 @@ END
         
         # -------------------- Annotations from genotypers ---------------------
         
-        # Uses multiple cores
+        # Uses all available cores
         #
         function Cutefc() {
             local SAMPLE_ID=$1
@@ -658,40 +692,6 @@ END
         chmod +x interval_2_breakpoints.sh
 
 
-        function AnnotateDelInvDup() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF=$2
-            
-            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
-
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{n_coverage_bins} ~{breakpoint_window_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-
-            mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
-        }
-
-        
-        function AnnotateIns() {
-            local SAMPLE_ID=$1
-            local INPUT_VCF=$2
-            
-            mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
-            
-            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{breakpoint_window_bp} ~{adjacency_slack_bp}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-
-            mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
-        }
-
-
         # Remark: some INS records may correspond to a DUP. Such records could
         # be located at the beginning/end of their DUP, or in the middle of the
         # DUP. INS records located at DUP breakpoints would see peculiar BAM 
@@ -735,7 +735,7 @@ END
         # the records that are marked as true by `truvari bench` are likely to 
         # capture the Kanpig features of true variants.
         #
-        function CustomFeatures() {
+        function Ins2Dup() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             local INPUT_BAM=$3
@@ -750,13 +750,12 @@ END
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf
             rm -f *_breakpoints.tsv
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
+            ${TIME_COMMAND} bcftools sort --threads ${N_THREADS} --output-type v ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup_sorted.vcf
+            rm -f ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_ins_dup_sorted.vcf ${SAMPLE_ID}_ins_dup.vcf
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
 
-            AnnotateDelInvDup ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-            AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
-            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf
+----------> Do a truvari collapse of the insdup VCF!!!!!!!!!!!!!!!!!!!!!!!!!!
         }
         
         
@@ -777,22 +776,38 @@ END
             if [ ${TEST} != "0" ]; then
                 continue
             fi
+
+            # Canonizing the VCF and converting INS to DUP
             LocalizeSample ${SAMPLE_ID} ${LINE}
             df -h 1>&2
-            
-            # Annotating
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            CustomFeatures ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{bin_length} ~{bin_coverage_ratio}
-            mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{bin_length} ~{bin_coverage_ratio}
+
+            # Annotating
+            AnnotateDelInvDup ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            AnnotateIns ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins.vcf
+            rm -f ${SAMPLE_ID}_canonized.vcf.gz ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
-            mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
-            mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+---------------> Add TR/segdup annotations!!!!!!!!!!!!!!!!
             
-            # Copying to remote directory
-            bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_annotated.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_annotated.vcf.gz
-            gcloud storage mv ${SAMPLE_ID}_annotated.vcf.'gz*' ~{remote_outdir}/
+            # Splitting by type and copying to the remote directory
+            bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
+            bcftools filter --include "SVTYPE=\"INS\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
+            bcftools filter --include "SVTYPE=\"DUP\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
+            bcftools filter --include "SVTYPE=\"INV\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
+            wait
+            bcftools index -f -t ${SAMPLE_ID}_del.vcf.gz &
+            bcftools index -f -t ${SAMPLE_ID}_ins.vcf.gz &
+            bcftools index -f -t ${SAMPLE_ID}_dup.vcf.gz &
+            bcftools index -f -t ${SAMPLE_ID}_inv.vcf.gz &
+            wait
+            gcloud storage mv ${SAMPLE_ID}_'*.vcf.gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}

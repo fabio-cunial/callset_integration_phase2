@@ -6,6 +6,9 @@ import java.io.*;
 /**
  * Given a VCF that contains only INS records, the program separates records
  * that are likely DUP based on the output of `UltralongDepthGetBreakpoints`.
+ * 
+ * Remark: the output INS VCF is sorted, but the output DUP VCF is not 
+ * necessarily sorted.
  */
 public class UltralongInsExtractDups {
     
