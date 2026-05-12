@@ -11,13 +11,13 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
-        Int ins2dup_bin_length
-        Float ins2dup_bin_coverage_ratio
+        Int ins2dup_bin_length = 100
+        Float ins2dup_bin_coverage_ratio = 1.5
         
-        Int custom_n_coverage_bins
-        Int custom_breakpoint_window_bp
-        Int custom_min_clip_length
-        Int custom_adjacency_slack_bp
+        Int custom_n_coverage_bins = 10
+        Int custom_breakpoint_window_bp = 500
+        Int custom_min_clip_length = 200
+        Int custom_adjacency_slack_bp = 300
 
         File feature_extraction_py
 

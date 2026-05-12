@@ -22,6 +22,7 @@ public class UltralongDepthGetBreakpoints {
         int i, j, p;
         int length, sum1, sum2, leftBreakpoint, rightBreakpoint, posStart, posEnd, validPairs, maxLength, bestLeft, bestRight, lowDepth1, lowDepth2;
         long firstPos;
+        double ratio, maxRatio;
         String str;
         BufferedReader br;
         short[] depth;
@@ -62,6 +63,7 @@ public class UltralongDepthGetBreakpoints {
             leftBreakpoints.add(i-BIN_LENGTH);
             lowDepths1.add(sum1);
         }
+        maxRatio=((double)sum2)/sum1;
         for (i=2*BIN_LENGTH; i<SAMTOOLS_DEPTH_N_POSITIONS; i++) {
             sum1+=depth[i-BIN_LENGTH]-depth[i-2*BIN_LENGTH];
             sum2+=depth[i]-depth[i-BIN_LENGTH];
@@ -69,9 +71,11 @@ public class UltralongDepthGetBreakpoints {
                 leftBreakpoints.add(i-BIN_LENGTH);
                 lowDepths1.add(sum1);
             }
+            ratio=((double)sum2)/sum1;
+            if (ratio>maxRatio) maxRatio=ratio;
         }
         if (leftBreakpoints.isEmpty()) return;
-        System.err.println(leftBreakpoints.size()+" left breakpoints");
+        System.err.println(leftBreakpoints.size()+" left breakpoints, maxRatio="+String.format("%.2f",maxRatio));
 
         // Collecting all right breakpoints, if any.
         rightBreakpoints = new Vector<Integer>();
@@ -84,6 +88,7 @@ public class UltralongDepthGetBreakpoints {
             rightBreakpoints.add(i+BIN_LENGTH);
             lowDepths2.add(sum2);
         }
+        maxRatio=((double)sum1)/sum2;
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-2*BIN_LENGTH-1; i>=0; i--) {
             sum1+=depth[i]-depth[i+BIN_LENGTH];
             sum2+=depth[i+BIN_LENGTH]-depth[i+2*BIN_LENGTH];
@@ -91,32 +96,36 @@ public class UltralongDepthGetBreakpoints {
                 rightBreakpoints.add(i+BIN_LENGTH);
                 lowDepths2.add(sum2);
             }
+            ratio=((double)sum1)/sum2;
+            if (ratio>maxRatio) maxRatio=ratio;
         }
         if (rightBreakpoints.isEmpty()) return;
-        System.err.println(rightBreakpoints.size()+" right breakpoints");
+        System.err.println(rightBreakpoints.size()+" right breakpoints, maxRatio="+String.format("%.2f",maxRatio));
         
         // Finding a longest valid pair, if any.
-        // Remark: medians are computed in a very naive way and should be made 
-        // faster.
-        validPairs=0; maxLength=0; bestLeft=-1; bestRight=-1;
+        // Remark: medians are computed naively and should be made faster.
+        validPairs=0; maxLength=0; bestLeft=-1; bestRight=-1; maxRatio=0;
         for (i=0; i<leftBreakpoints.size(); i++) {
             leftBreakpoint=leftBreakpoints.get(i);
-            lowDepth1=lowDepths1.get(i);
+            lowDepth1=lowDepths1.get(i)/BIN_LENGTH;
             for (j=0; j<rightBreakpoints.size(); j++) {
                 rightBreakpoint=rightBreakpoints.get(j);
                 if (rightBreakpoint<=leftBreakpoint) continue;
-                lowDepth2=lowDepths2.get(j);
+                lowDepth2=lowDepths2.get(j)/BIN_LENGTH;
                 short[] newArray = Arrays.copyOfRange(depth,leftBreakpoint,rightBreakpoint+1);
                 Arrays.sort(newArray);
-                if (newArray[newArray.length/2]<(lowDepth1<lowDepth2?lowDepth1:lowDepth2)*BIN_COVERAGE_RATIO) return;
-                validPairs++;
-                if (rightBreakpoint-leftBreakpoint>maxLength) {
-                    maxLength=rightBreakpoint-leftBreakpoint;
-                    bestLeft=leftBreakpoint; bestRight=rightBreakpoint;
+                if (newArray[newArray.length/2]>=(lowDepth1<lowDepth2?lowDepth1:lowDepth2)*BIN_COVERAGE_RATIO) {
+                    validPairs++;
+                    if (rightBreakpoint-leftBreakpoint>maxLength) {
+                        maxLength=rightBreakpoint-leftBreakpoint;
+                        bestLeft=leftBreakpoint; bestRight=rightBreakpoint;
+                    }
                 }
+                ratio=((double)newArray[newArray.length/2])/(lowDepth1<lowDepth2?lowDepth1:lowDepth2);
+                if (ratio>maxRatio) maxRatio=ratio;
             }
         }
-        System.err.println("validPairs="+validPairs+" maxLength="+maxLength);
+        System.err.println("validPairs="+validPairs+" maxLength="+maxLength+" maxRatio="+String.format("%.2f",maxRatio));
         if (validPairs==0) return;
 
         // Outputting
