@@ -78,8 +78,7 @@ workflow SV_Integration_UltralongAnnotate {
 # cutefc (1 thread)                                   30%    1.5G      50m
 # cutefc (4 threads)                                 
 # feature_extraction.py                              100%    3.5G       2m
-# samtools depth
-# UltralongDepthGetBreakpoints
+# samtools depth + UltralongDepthGetBreakpoints      150%    1.5G       1m
 # truvari collapse
 #
 task Impl {
@@ -842,7 +841,7 @@ END
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf
             rm -f *_breakpoints.tsv
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
-            ${TIME_COMMAND} bcftools sort --threads ${N_THREADS} --output-type v ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup_sorted.vcf
+            ${TIME_COMMAND} bcftools sort --output-type v ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup_sorted.vcf
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_ins_dup_sorted.vcf ${SAMPLE_ID}_ins_dup.vcf
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
