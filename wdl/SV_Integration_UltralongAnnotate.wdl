@@ -71,16 +71,16 @@ workflow SV_Integration_UltralongAnnotate {
 # samtools bedcov                                     70%    500M       3m
 # annotate_mapq_secondary.sh                         400%     15M      10s
 # bcftools annotate                                  100%     15M      50s
-# truvari bench                                      100%    200M      10s
 # java UltralongIntervalGetBins                      200%     50M       1s
 # java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
 # annotate_clipped_alignments_1.sh                   400%    200M       1m
 # annotate_clipped_alignments_2.sh                   400%     50M       1m
-# sniffles 2.7.3 (1 thread)                           30%    500M      40m
 # cutefc (1 thread)                                   30%    1.5G      50m
-# lrcaller left (1 thread)                            30%    200M      50m
-# lrcaller right (1 thread)                           30%    200M       4s
+# cutefc (4 threads)                                 
 # feature_extraction.py                              100%    3.5G       2m
+# samtools depth
+# UltralongDepthGetBreakpoints
+# truvari collapse
 #
 task Impl {
     input {
