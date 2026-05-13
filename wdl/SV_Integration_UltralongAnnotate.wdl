@@ -600,7 +600,19 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local ALIGNMENTS_BAM=$3
-                
+            local EXTRACT_BAM=$4
+
+            if [ ${EXTRACT_BAM} -eq 1 ]; then
+                bcftools query -f '%CHROM\t%POS\t%INFO/SVLEN\t%INFO/SVTYPE\n' ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t" } { \
+                    if ($4=="INS") { $2 = $2 - 1; $3 = $2 + 1; } \
+                    else { $3 = $2 + $3; } \
+                    print $1, $2, $3 \
+                }' > ${SAMPLE_ID}_regions.bed
+                ${TIME_COMMAND} samtools view --threads ${N_THREADS} --bam --regions-file ${SAMPLE_ID}_regions.bed ${ALIGNMENTS_BAM} --output ${SAMPLE_ID}_extracted.bam
+                ${TIME_COMMAND} samtools index --threads ${N_THREADS} ${SAMPLE_ID}_extracted.bam
+                ALIGNMENTS_BAM=${SAMPLE_ID}_extracted.bam
+            fi
+            
             mkdir ./cutefc_dir/
             ${TIME_COMMAND} cuteFC --threads ${N_THREADS} --genotype --max_size -1 --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_cutefc.vcf ./cutefc_dir
             rm -rf ./cutefc_dir
@@ -689,6 +701,10 @@ END
             local COLUMNS='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+
+            if [ ${EXTRACT_BAM} -eq 1 ]; then
+                rm -f ${SAMPLE_ID}_extracted.bam*
+            fi
         }
         
         
@@ -833,18 +849,28 @@ END
             local BIN_LENGTH=$4
             local BIN_COVERAGE_RATIO=$5
 
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins.vcf
+            local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
+            if [ ${N_INS} -eq 0 ]; then
+                ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf
+                return
+            fi
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins.vcf
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf
             rm -f *_breakpoints.tsv
+            local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
+            if [ ${N_INS_DUP} -eq 0 ]; then
+                rm -f ${SAMPLE_ID}_ins_dup.vcf ${SAMPLE_ID}_ins_ins.vcf
+                gunzip ${SAMPLE_ID}_not_ins.vcf.gz
+                return
+            fi
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
-
             # Merging `ins_dup` and `not_ins`.
             # Remark: truvari collapse is run with the same parameters as in
             # `SV_Integration_Workpackage1.wdl`. 
@@ -885,12 +911,10 @@ END
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
             # 2. Adding custom annotations
-            cat ${SAMPLE_ID}_not_ins.vcf 1>&2
             N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
                 AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
             fi
-            cat ${SAMPLE_ID}_ins.vcf 1>&2
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
                 AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
@@ -934,8 +958,31 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             # 6. Adding annotations from genotypers
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1
+            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+
+
+
+
+
+
+            cp ${SAMPLE_ID}_in.vcf original.vcf
+
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > original.tsv
+
+            Cutefc ${SAMPLE_ID} original.vcf ${SAMPLE_ID}.bam 1
+            mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > extracted.tsv
+
+            diff --brief original.tsv extracted.tsv
+
+
+            
+
+
+
             
             # Splitting by type and uploading
             bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
