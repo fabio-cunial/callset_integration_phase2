@@ -68,18 +68,23 @@ workflow SV_Integration_UltralongAnnotate {
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m
 #
-# samtools bedcov                                     70%    500M       3m
+# samtools bedcov                                     80%    900M      15m
 # annotate_mapq_secondary.sh                         400%     15M      10s
 # bcftools annotate                                  100%     15M      50s
 # java UltralongIntervalGetBins                      200%     50M       1s
 # java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
-# annotate_clipped_alignments_1.sh                   400%    200M       1m
-# annotate_clipped_alignments_2.sh                   400%     50M       1m
+# annotate_clipped_alignments_1.sh                   300%    500M       2m
+# annotate_clipped_alignments_2.sh                   300%     50M       2m
 # cutefc (1 thread)                                   30%    1.5G      50m
-# cutefc (4 threads)                                 
-# feature_extraction.py                              100%    3.5G       2m
-# samtools depth + UltralongDepthGetBreakpoints      150%    1.5G       1m
-# truvari collapse
+# cutefc (2 threads)                                  50%    1.5G      25m
+# samtools view (for extracted BAM, 2 threads)       100%     20M      10m
+# cutefc (2 threads, extracted BAM)                  200%    900M       2m               
+# feature_extraction.py                              100%     12G       7m
+#
+# UltralongInsGetIntervals                           200%     50M       1m
+# xargs interval_2_breakpoints.sh                    200%    1.5G       1m
+# UltralongInsExtractDups                            200%     60M       1s
+# truvari collapse                                   100%    100M       1m
 #
 task Impl {
     input {
@@ -120,7 +125,7 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
         
         
@@ -199,7 +204,19 @@ task Impl {
         
         
         # ------------------------- Custom annotations -------------------------
-        
+
+cat << 'END' > samtools_bedcov_thread.sh
+#!/bin/bash
+set -euxo pipefail
+
+INPUT_BAM=$1
+INPUT_BED=$2
+
+samtools bedcov ${INPUT_BED} ${INPUT_BAM} > ${INPUT_BED}_counts.bed
+END
+        chmod +x samtools_bedcov_thread.sh
+
+
         # Given an input VCF containing only interval records, the procedure
         # annotates each record with coverage measures extracted from a BAM.
         #
@@ -213,9 +230,18 @@ task Impl {
             local N_BINS=$4
             local BREAKPOINT_WINDOW_BP=$5
 
+            # Running `samtools bedcov` in parallel, since it can be very slow.
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
+            split -d -a 5 -l 1 ${SAMPLE_ID}_bins.bed ${SAMPLE_ID}_chunk_
+            ls ${SAMPLE_ID}_chunk_* | sort -V > ${SAMPLE_ID}_list.txt
             rm -f ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${N_THREADS} ./samtools_bedcov_thread.sh ${INPUT_BAM}
+            rm -f ${SAMPLE_ID}_counts.bed
+            while read -u 4 CHUNK; do
+                cat ${CHUNK}_counts.bed >> ${SAMPLE_ID}_counts.bed
+            done 4< ${SAMPLE_ID}_list.txt
+            rm -f ${SAMPLE_ID}_chunk_* ${SAMPLE_ID}_list.txt 
+            
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\n' ${INPUT_VCF} | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
@@ -302,14 +328,14 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 4 ID; do
+            while read -u 5 ID; do
                 local MAPQ_LEFT=$(cat ${ID}_left_mapq.txt)
                 local MAPQ_RIGHT=$(cat ${ID}_right_mapq.txt)
                 local SECONDARY_LEFT=$(cat ${ID}_left_secondary.txt)
                 local SECONDARY_RIGHT=$(cat ${ID}_right_secondary.txt)
                 echo -e "${ID}\t${MAPQ_LEFT}\t${MAPQ_RIGHT}\t${SECONDARY_LEFT}\t${SECONDARY_RIGHT}" >> ${SAMPLE_ID}_counts.tsv
                 rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
-            done 4< ${SAMPLE_ID}_variantID_sorted.txt
+            done 5< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%f\t%f\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
@@ -345,12 +371,12 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 4 ID; do
+            while read -u 6 ID; do
                 local MAPQ_POINT=$(cat ${ID}_point_mapq.txt)
                 local SECONDARY_POINT=$(cat ${ID}_point_secondary.txt)
                 echo -e "${ID}\t${MAPQ_POINT}\t${SECONDARY_POINT}" >> ${SAMPLE_ID}_counts.tsv
                 rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
-            done 4< ${SAMPLE_ID}_variantID_sorted.txt
+            done 6< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%f\t%d\n",$2,$3,$1,$4,$5); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
@@ -602,12 +628,10 @@ END
             local ALIGNMENTS_BAM=$3
             local EXTRACT_BAM=$4
 
+            local SLACK_BP=1000  # Arbitrary
+
             if [ ${EXTRACT_BAM} -eq 1 ]; then
-                bcftools query -f '%CHROM\t%POS\t%INFO/SVLEN\t%INFO/SVTYPE\n' ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t" } { \
-                    if ($4=="INS") { $2 = $2 - 1; $3 = $2 + 1; } \
-                    else { $3 = $2 + $3; } \
-                    print $1, $2, $3 \
-                }' > ${SAMPLE_ID}_regions.bed
+                java -cp ~{docker_dir} UltralongGetIntervals ${INPUT_VCF} ~{reference_fai} ${SLACK_BP} > ${SAMPLE_ID}_regions.bed
                 ${TIME_COMMAND} samtools view --threads ${N_THREADS} --bam --regions-file ${SAMPLE_ID}_regions.bed ${ALIGNMENTS_BAM} --output ${SAMPLE_ID}_extracted.bam
                 ${TIME_COMMAND} samtools index --threads ${N_THREADS} ${SAMPLE_ID}_extracted.bam
                 ALIGNMENTS_BAM=${SAMPLE_ID}_extracted.bam
@@ -910,42 +934,42 @@ END
             Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio}
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
-            # 2. Adding custom annotations
-            N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
-            if [ ${N_NOT_INS} -gt 0 ]; then
-                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-            fi
-            N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
-            if [ ${N_INS} -gt 0 ]; then
-                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
-            fi
+            # # 2. Adding custom annotations
+            # N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
+            # if [ ${N_NOT_INS} -gt 0 ]; then
+            #     AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            # fi
+            # N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
+            # if [ ${N_INS} -gt 0 ]; then
+            #     AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            # fi
 
-            # 3. Adding repeat annotations
-            # 3.1 Not INS
-            if [ ${N_NOT_INS} -gt 0 ]; then
-                VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{tr_bed} "TR" ~{repeat_overlap_fraction}
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-                AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{segdup_bed} "SD" ~{repeat_overlap_fraction}
-                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            fi
-            # 3.2 INS
-            if [ ${N_INS} -gt 0 ]; then
-                VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
-                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
-                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
-                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
-                rm -f ${SAMPLE_ID}_start.bed
-            fi
+            # # 3. Adding repeat annotations
+            # # 3.1 Not INS
+            # if [ ${N_NOT_INS} -gt 0 ]; then
+            #     VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{tr_bed} "TR" ~{repeat_overlap_fraction}
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            #     AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{segdup_bed} "SD" ~{repeat_overlap_fraction}
+            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            # fi
+            # # 3.2 INS
+            # if [ ${N_INS} -gt 0 ]; then
+            #     VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+            #     rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+            #     rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+            #     rm -f ${SAMPLE_ID}_start.bed
+            # fi
 
             # 4. Merging INS and non-INS VCFs
             ${TIME_COMMAND} bgzip --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
@@ -953,9 +977,9 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # 5. Adding annotations from Kalra et al.
-            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            # # 5. Adding annotations from Kalra et al.
+            # FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             # 6. Adding annotations from genotypers
             # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1
@@ -971,10 +995,12 @@ END
             Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > original.tsv
+            cat original.tsv 1>&2
 
             Cutefc ${SAMPLE_ID} original.vcf ${SAMPLE_ID}.bam 1
             mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > extracted.tsv
+            cat extracted.tsv 1>&2
 
             diff --brief original.tsv extracted.tsv
 
