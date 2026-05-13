@@ -882,16 +882,16 @@ END
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
             # 2. Adding custom annotations
+            bcftools view --no-header ${SAMPLE_ID}_not_ins.vcf 1>&2
             N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
                 AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
             fi
-            bcftools view --no-header ${SAMPLE_ID}_not_ins.vcf 1>&2
+            bcftools view --no-header ${SAMPLE_ID}_ins.vcf 1>&2
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
                 AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
             fi
-            bcftools view --no-header ${SAMPLE_ID}_ins.vcf 1>&2
 
             # 3. Adding repeat annotations
             # 3.1 Not INS
