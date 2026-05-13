@@ -66,7 +66,7 @@ public class UltralongInsExtractDups {
             str=br.readLine();
         }
         br.close(); bwIns.close(); bwDup.close();
-        System.out.println("Created "+nDups+" DUPs out of "+nRecords+" INS records ("+String.format("%.2f",(100.0*nDups)/nRecords)+"%).");
+        System.err.println("Created "+nDups+" DUPs out of "+nRecords+" INS records ("+String.format("%.2f",(100.0*nDups)/nRecords)+"%).");
     }
 
 
