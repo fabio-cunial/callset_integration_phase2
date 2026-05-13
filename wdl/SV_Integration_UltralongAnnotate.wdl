@@ -840,12 +840,27 @@ END
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf
+
+
+
+
+            cat ${SAMPLE_ID}_ins_ins.vcf 1>&2
+            cat ${SAMPLE_ID}_ins_dup.vcf 1>&2
+
+
+
             rm -f *_breakpoints.tsv
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
+
+
+
+            bcftools view ${SAMPLE_ID}_not_ins.vcf.gz 1>&2
+
+
 
             # Truvari collapse with the same parameters as in
             # `SV_Integration_Workpackage1.wdl`.
