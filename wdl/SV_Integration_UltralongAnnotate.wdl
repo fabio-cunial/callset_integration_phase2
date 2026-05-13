@@ -230,7 +230,8 @@ END
             local N_BINS=$4
             local BREAKPOINT_WINDOW_BP=$5
 
-            # Running `samtools bedcov` in parallel, since it can be very slow.
+            # Running `samtools bedcov` in parallel, since it can be very slow
+            # for large intervals.
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} ${N_BINS} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
             split -d -a 5 -l 1 ${SAMPLE_ID}_bins.bed ${SAMPLE_ID}_chunk_
             ls ${SAMPLE_ID}_chunk_* | sort -V > ${SAMPLE_ID}_list.txt
@@ -589,14 +590,28 @@ END
         # Kalra, Paulin, Sedlazeck. "A systematic assessment of machine
         # learning for structural variant filtering." bioRxiv (2026): 2026-01.
         #
+        # The script is run in parallel over VCF chunks, since it can be very
+        # slow.
+        #
         function FeatureExtraction() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local ALIGNMENTS_BAM=$3
             
-            ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} 1>&2
-            head -n 10 features.csv 1>&2 || echo "0"
-            tail -n +2 features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
+            local N_RECORDS=$(bcftools view --no-header ${INPUT_VCF} | wc -l)
+            local N_RECORDS_PER_THREAD=$(( (${N_RECORDS} + ${N_THREADS} - 1) / ${N_THREADS} ))
+            bcftools view --no-header ${INPUT_VCF} | split -l ${N_RECORDS_PER_THREAD} - ${SAMPLE_ID}_chunk_
+            for FILE in ${SAMPLE_ID}_chunk_*; do
+                cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}.vcf
+                rm -f ${FILE}
+                ${TIME_COMMAND} python ~{feature_extraction_py} ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
+            done
+            wait
+            cat ${SAMPLE_ID}_chunk_*_features.csv > ${SAMPLE_ID}_features.csv
+            rm -f ${SAMPLE_ID}_chunk_*_features.csv ${SAMPLE_ID}_header.txt
+            head -n 10 ${SAMPLE_ID}_features.csv 1>&2 || echo "0"
+            tail -n +2 ${SAMPLE_ID}_features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=FEX_DEPTH_RATIO,Number=1,Type=Float,Description="depth_ratio from feature_extraction">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_DEPTH_MAD,Number=1,Type=Float,Description="depth_mad from feature_extraction">' >> ${SAMPLE_ID}_header.txt

@@ -328,7 +328,7 @@ def compute_all_features_for_variant(variant, bam_file, ref_file):
     return features
      
 
-def process_dataset(dataset_name, dataset_info):
+def process_dataset(dataset_name, dataset_info, output_file):
     """Process a single dataset to extract features"""
     print(f"\nProcessing {dataset_name}")
     print("=" * 50)
@@ -391,7 +391,6 @@ def process_dataset(dataset_name, dataset_info):
             print(f"New dataset: {len(new_df):,} variants")
 
         # Save complete dataset
-        output_file = f'features.csv'
         combined_df.to_csv(output_file, index=False)
         print(f"Saved: {output_file}")
 
@@ -409,11 +408,12 @@ def main(args):
             'ref': sys.argv[3]
         }
     }
+    output_file = sys.argv[4]
     
     all_dataframes = []
     for dataset_name, dataset_info in DATASETS.items():
         try:
-            df = process_dataset(dataset_name, dataset_info)
+            df = process_dataset(dataset_name, dataset_info, output_file)
             if df is not None and len(df) > 0:
                 all_dataframes.append(df)
         except Exception as e:
