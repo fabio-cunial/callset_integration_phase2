@@ -853,7 +853,9 @@ END
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
-            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+
+
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
 
 
