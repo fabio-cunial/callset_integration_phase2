@@ -77,9 +77,11 @@ workflow SV_Integration_UltralongAnnotate {
 # annotate_clipped_alignments_2.sh                   300%     50M       2m
 # cutefc (1 thread)                                   30%    1.5G      50m
 # cutefc (2 threads)                                  50%    1.5G      25m
+# cutefc (4 threads)                                  30%    1.5G      50m
+# cutefc (2 threads, extracted BAM)                  200%    900M       2m
 # samtools view (for extracted BAM, 2 threads)       100%     20M      10m
-# cutefc (2 threads, extracted BAM)                  200%    900M       2m               
-# feature_extraction.py                              100%     12G       7m
+# feature_extraction.py (1 thread)                   100%     12G       7m
+# feature_extraction.py (4 threads)
 #
 # UltralongInsGetIntervals                           200%     50M       1m
 # xargs interval_2_breakpoints.sh                    200%    1.5G       1m
@@ -635,7 +637,13 @@ END
         
         # -------------------- Annotations from genotypers ---------------------
         
-        # Uses all available cores
+        # Remark: all available cores are given to cuteFC, but it makes poor use
+        # of them in practice. 
+        #
+        # Remark: extracting the BAM with a 1kbp slack around each call does not
+        # make cuteFC output exactly the same annotations as with the original
+        # BAM. Maybe such annotations are still useful for filtering, but we
+        # skip this analysis for now.
         #
         function Cutefc() {
             local SAMPLE_ID=$1
@@ -992,38 +1000,13 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # # 5. Adding annotations from Kalra et al.
-            # FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
-            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            # 5. Adding annotations from Kalra et al.
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             # 6. Adding annotations from genotypers
-            # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1
+            # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
             # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-
-
-
-
-
-
-            cp ${SAMPLE_ID}_in.vcf original.vcf
-
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > original.tsv
-            cat original.tsv 1>&2
-
-            Cutefc ${SAMPLE_ID} original.vcf ${SAMPLE_ID}.bam 1
-            mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CUTEFC_GT_COUNT\t%INFO/CUTEFC_GQ\t%INFO/CUTEFC_DR\t%INFO/CUTEFC_DV\t%INFO/CUTEFC_PL_1\t%INFO/CUTEFC_PL_2\t%INFO/CUTEFC_PL_3\t%INFO/CUTEFC_CIPOS_1\t%INFO/CUTEFC_CIPOS_2\t%INFO/CUTEFC_CILEN_1\t%INFO/CUTEFC_CILEN_2\t%INFO/CUTEFC_RE\t%INFO/CUTEFC_STRAND\n' ${SAMPLE_ID}_in.vcf > extracted.tsv
-            cat extracted.tsv 1>&2
-
-            diff --brief original.tsv extracted.tsv
-
-
-            
-
-
-
             
             # Splitting by type and uploading
             bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
