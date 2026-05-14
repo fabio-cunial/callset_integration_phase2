@@ -81,7 +81,7 @@ workflow SV_Integration_UltralongAnnotate {
 # cutefc (2 threads, extracted BAM)                  200%    900M       2m
 # samtools view (for extracted BAM, 2 threads)       100%     20M      10m
 # feature_extraction.py (1 thread)                   100%     12G       7m
-# feature_extraction.py (4 threads)
+# feature_extraction.py (4 threads, 4 chunks)         50%   2-12G     3-9m 
 #
 # UltralongInsGetIntervals                           200%     50M       1m
 # xargs interval_2_breakpoints.sh                    200%    1.5G       1m
@@ -587,31 +587,77 @@ END
         
         # ------------------- Annotations from Kalra et al. --------------------
         
+        cat << 'END' > feature_extraction_thread.sh
+#!/bin/bash
+set -euxo pipefail
+
+SAMPLE_ID=$1
+ALIGNMENTS_BAM=$2
+INPUT_VCF=$3
+
+${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_features.csv 1>&2
+END
+        chmod +x feature_extraction_thread.sh
+
+
         # Runs a slightly modified version of the code from:
         #
         # Kalra, Paulin, Sedlazeck. "A systematic assessment of machine
         # learning for structural variant filtering." bioRxiv (2026): 2026-01.
         #
-        # The script is run in parallel over VCF chunks, since it can be very
-        # slow.
+        # -------->Remark: running the script in parallel over VCF chunks does not seem 
+        # to reduce runtime significantly.
         #
         function FeatureExtraction() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local ALIGNMENTS_BAM=$3
+            local PARALLELIZE=$4
             
-            bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
-            local N_RECORDS=$(bcftools view --no-header ${INPUT_VCF} | wc -l)
-            local N_RECORDS_PER_THREAD=$(( (${N_RECORDS} + ${N_THREADS} - 1) / ${N_THREADS} ))
-            bcftools view --no-header ${INPUT_VCF} | split -l ${N_RECORDS_PER_THREAD} - ${SAMPLE_ID}_chunk_
-            for FILE in ${SAMPLE_ID}_chunk_*; do
-                cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}.vcf
-                rm -f ${FILE}
-                ${TIME_COMMAND} python ~{feature_extraction_py} ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
-            done
-            wait
-            cat ${SAMPLE_ID}_chunk_*_features.csv > ${SAMPLE_ID}_features.csv
-            rm -f ${SAMPLE_ID}_chunk_*_features.csv ${SAMPLE_ID}_header.txt
+            if [ ${PARALLELIZE} -eq 1 ]; then
+                # bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
+                # local N_RECORDS=$(bcftools view --no-header ${INPUT_VCF} | wc -l)
+                # local N_RECORDS_PER_THREAD=$(( (${N_RECORDS} + ${N_THREADS} - 1) / ${N_THREADS} ))
+                # bcftools view --no-header ${INPUT_VCF} | split -l ${N_RECORDS_PER_THREAD} - ${SAMPLE_ID}_chunk_
+                # for FILE in ${SAMPLE_ID}_chunk_*; do
+                #     cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}.vcf
+                #     rm -f ${FILE}
+                #     ${TIME_COMMAND} python ~{feature_extraction_py} ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
+                # done
+                # wait
+                # cat ${SAMPLE_ID}_chunk_*_features.csv > ${SAMPLE_ID}_features.csv
+                # rm -f ${SAMPLE_ID}_chunk_*_features.csv ${SAMPLE_ID}_header.txt
+
+
+
+
+
+
+
+                bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
+                bcftools view --no-header ${INPUT_VCF} | split -l 1 - ${SAMPLE_ID}_chunk_
+                for FILE in ${SAMPLE_ID}_chunk_*; do
+                    cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}_vcf
+                    rm -f ${FILE}
+                done
+                rm -f ${SAMPLE_ID}_header.txt
+                ls ${SAMPLE_ID}_chunk_*_vcf > list.txt
+                ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./feature_extraction_thread.sh ${SAMPLE_ID} ${ALIGNMENTS_BAM}
+                rm -f ${SAMPLE_ID}_features.csv
+                for FILE in $( ls ${SAMPLE_ID}_chunk_*_features.csv | sort -V ); do
+                    cat ${FILE} >> ${SAMPLE_ID}_features.csv
+                    rm -f ${FILE}
+                done
+                
+
+
+
+
+
+
+            else
+                ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_features.csv 1>&2
+            fi
             head -n 10 ${SAMPLE_ID}_features.csv 1>&2 || echo "0"
             tail -n +2 ${SAMPLE_ID}_features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
