@@ -241,6 +241,7 @@ END
             local INPUT_BAM=$3
             local N_BINS=$4
             local BREAKPOINT_WINDOW_BP=$5
+            local BEDCOV_N_THREADS=$6
 
             # Running `samtools bedcov` in parallel, since it can be very slow
             # for large intervals.
@@ -248,7 +249,7 @@ END
             split -d -a 5 -l 1 ${SAMPLE_ID}_bins.bed ${SAMPLE_ID}_chunk_
             ls ${SAMPLE_ID}_chunk_* | sort -V > ${SAMPLE_ID}_list.txt
             rm -f ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${N_THREADS} ./samtools_bedcov_thread.sh ${INPUT_BAM}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${BEDCOV_N_THREADS} ./samtools_bedcov_thread.sh ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_counts.bed
             while read -u 4 CHUNK; do
                 cat ${CHUNK}_counts.bed >> ${SAMPLE_ID}_counts.bed
@@ -565,7 +566,7 @@ END
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
 
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_n_coverage_bins} ~{custom_breakpoint_window_bp}
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_n_coverage_bins} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 ))
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
@@ -1083,9 +1084,9 @@ END
 
             # 5. Adding annotations from cuteFC and Kalra et al., in parallel
             # since they are both slow and use threads inefficiently.
-            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0 &
-            wait
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0  #&
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0  #&
+            #wait
             FeatureExtraction_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
