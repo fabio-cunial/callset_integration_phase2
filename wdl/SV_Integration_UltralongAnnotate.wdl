@@ -1,6 +1,5 @@
 version 1.0
 
-
 # 
 #
 workflow SV_Integration_UltralongAnnotate {
@@ -23,6 +22,7 @@ workflow SV_Integration_UltralongAnnotate {
 
         File tr_bed
         File segdup_bed
+        File gc_content_bed
         Float repeat_overlap_fraction = 0.8
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
@@ -52,6 +52,7 @@ workflow SV_Integration_UltralongAnnotate {
 
             tr_bed = tr_bed,
             segdup_bed = segdup_bed,
+            gc_content_bed = gc_content_bed,
             repeat_overlap_fraction = repeat_overlap_fraction,
 
             docker_image = docker_image,
@@ -69,7 +70,7 @@ workflow SV_Integration_UltralongAnnotate {
 # BAM download                                                          5m
 #
 # samtools bedcov (1 thread)                          80%    900M      15m
-# samtools bedcov (4 threads)
+# samtools bedcov (4 threads)                        350%    900M       5m
 # annotate_mapq_secondary.sh                         400%     15M      10s
 # bcftools annotate                                  100%     15M      50s
 # java UltralongIntervalGetBins                      200%     50M       1s
@@ -112,12 +113,13 @@ task Impl {
 
         File tr_bed
         File segdup_bed
+        File gc_content_bed
         Float repeat_overlap_fraction
         
         String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 8
-        Int disk_size_gb = 50
+        Int n_cpu = 8
+        Int ram_size_gb = 16
+        Int disk_size_gb = 20
         Int preemptible_number
     }
     parameter_meta {
@@ -612,7 +614,7 @@ END
         # variant using xargs, does not seem to reduce runtime significantly, 
         # suggesting that some calls are the bottleneck.
         #
-        # Remark: we could try to re-implement the Python script e.g. by calling
+        # Remark: we could try to re-implement the Python script e.g. with
         # samtools. For simplicity we leave this to the future.
         #
         function FeatureExtraction() {
@@ -651,17 +653,25 @@ END
                 ls ${SAMPLE_ID}_chunk_*_vcf > list.txt
                 ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./feature_extraction_thread.sh ${ALIGNMENTS_BAM}
                 ls -laht 1>&2
-                rm -f ${SAMPLE_ID}_features.csv
+                rm -f ${SAMPLE_ID}_feature_extraction_features.csv
                 for FILE in $( ls ${SAMPLE_ID}_chunk_*_features.csv | sort -V ); do
-                    cat ${FILE} >> ${SAMPLE_ID}_features.csv
+                    cat ${FILE} >> ${SAMPLE_ID}_feature_extraction_features.csv
                     rm -f ${FILE}
                 done
             else
-                ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_features.csv 1>&2
+                ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_feature_extraction_features.csv 1>&2
             fi
-            head -n 10 ${SAMPLE_ID}_features.csv 1>&2 || echo "0"
-            tail -n +2 ${SAMPLE_ID}_features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            head -n 10 ${SAMPLE_ID}_feature_extraction_features.csv 1>&2 || echo "0"
+            tail -n +2 ${SAMPLE_ID}_feature_extraction_features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_feature_extraction_features.csv
+        }
+
+
+        function FeatureExtraction_Annotate() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+
             echo '##INFO=<ID=FEX_DEPTH_RATIO,Number=1,Type=Float,Description="depth_ratio from feature_extraction">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_DEPTH_MAD,Number=1,Type=Float,Description="depth_mad from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_AB,Number=1,Type=Float,Description="ab from feature_extraction">' >> ${SAMPLE_ID}_header.txt
@@ -675,8 +685,8 @@ END
             echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
         
         
@@ -684,19 +694,21 @@ END
         
         # -------------------- Annotations from genotypers ---------------------
         
-        # Remark: all available cores are given to cuteFC, but it makes poor use
-        # of them in practice. 
-        #
         # Remark: extracting the BAM with a 1kbp slack around each call does not
         # make cuteFC output exactly the same annotations as with the original
         # BAM. Maybe such annotations are still useful for filtering, but we
-        # skip this analysis for now.
+        # skip this analysis for simplicity.
+        #
+        # Remark: cuteFC does not seem to run faster when more threads than CPU
+        # cores are given to it (hyperthreading). In general, cuteFC seems to
+        # make poor use of multiple threads.
         #
         function Cutefc() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local ALIGNMENTS_BAM=$3
-            local EXTRACT_BAM=$4
+            local CUTEFC_N_THREADS=$4
+            local EXTRACT_BAM=$5
 
             local SLACK_BP=1000  # Arbitrary
 
@@ -708,7 +720,7 @@ END
             fi
             
             mkdir ./cutefc_dir/
-            ${TIME_COMMAND} cuteFC --threads ${N_THREADS} --genotype --max_size -1 --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_cutefc.vcf ./cutefc_dir
+            ${TIME_COMMAND} cuteFC --threads ${CUTEFC_N_THREADS} --genotype --max_size -1 --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_cutefc.vcf ./cutefc_dir
             rm -rf ./cutefc_dir
             bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\t[%PL]\t%INFO/CIPOS\t%INFO/CILEN\t%INFO/RE\t%INFO/STRAND\n' ${SAMPLE_ID}_cutefc.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
@@ -776,9 +788,19 @@ END
                 else if ($12=="++") STRAND=3; \
                 \
                 printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
-            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            }' | bgzip -c > ${SAMPLE_ID}_cutefc_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_cutefc.vcf
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_cutefc_annotations.tsv.gz
+            if [ ${EXTRACT_BAM} -eq 1 ]; then
+                rm -f ${SAMPLE_ID}_extracted.bam*
+            fi
+        }
+
+
+        function Cutefc_Annotate() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+        
             echo '##INFO=<ID=CUTEFC_GT_COUNT,Number=1,Type=Integer,Description="Cutefc GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_GQ,Number=1,Type=Integer,Description="Genotype quality according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Integer,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
@@ -793,18 +815,14 @@ END
             echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
-
-            if [ ${EXTRACT_BAM} -eq 1 ]; then
-                rm -f ${SAMPLE_ID}_extracted.bam*
-            fi
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_cutefc_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_cutefc_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
         
-        
 
 
-        # ------------------------ Repeat annotations --------------------------
+
+        # --------------------- Repeat track annotations -----------------------
 
         function VcfToBed_Start() {
             local SAMPLE_ID=$1
@@ -867,7 +885,6 @@ END
         
         
         # ---------------- Handling alternative representations ----------------
-        # Remarks: 
         #
         # 1. Some INS records may correspond to a DUP. Such records could be 
         # located at the beginning/end of their DUP, or in the middle of the 
@@ -916,7 +933,6 @@ END
         # `SV_Integration_Workpackage1.wdl` before truvari collapse. We do it
         # here just to reuse the intra-sample VCFs we already have from that
         # workflow.
-
 
         cat << 'END' > interval_2_breakpoints.sh
 #!/bin/bash
@@ -984,7 +1000,6 @@ END
         INFINITY="1000000000"
         samtools --version 1>&2
         bcftools --version 1>&2
-        truvari --help 1>&2
         cuteFC --version 1>&2
         truvari --help 1>&2
         df -h 1>&2
@@ -1014,32 +1029,47 @@ END
                 AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
             fi
 
-            # # 3. Adding repeat annotations
-            # # 3.1 Not INS
-            # if [ ${N_NOT_INS} -gt 0 ]; then
-            #     VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{tr_bed} "TR" ~{repeat_overlap_fraction}
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            #     AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{segdup_bed} "SD" ~{repeat_overlap_fraction}
-            #     rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
-            # fi
-            # # 3.2 INS
-            # if [ ${N_INS} -gt 0 ]; then
-            #     VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
-            #     rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
-            #     AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
-            #     rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
-            #     rm -f ${SAMPLE_ID}_start.bed
-            # fi
+            # 3. Adding repeat track annotations
+            # 3.1 Not INS
+            if [ ${N_NOT_INS} -gt 0 ]; then
+                VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{tr_bed} "TR" ~{repeat_overlap_fraction}
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{segdup_bed} "SD" ~{repeat_overlap_fraction}
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{gc_content_bed} "GC"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_end.bed "END" ~{gc_content_bed} "GC"
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+                AnnotateTrack_Interval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${SAMPLE_ID}_interval.bed ~{gc_content_bed} "GC" ~{repeat_overlap_fraction}
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_not_ins.vcf
+            fi
+            # 3.2 INS
+            if [ ${N_INS} -gt 0 ]; then
+                VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+
+                AnnotateTrack_Point ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${SAMPLE_ID}_start.bed "START" ~{gc_content_bed} "GC"
+                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_ins.vcf
+
+                rm -f ${SAMPLE_ID}_start.bed
+            fi
 
             # 4. Merging INS and non-INS VCFs
             ${TIME_COMMAND} bgzip --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
@@ -1047,15 +1077,17 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # # 5. Adding annotations from Kalra et al.
-            # FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
-            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-
-            # 6. Adding annotations from genotypers
-            # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
-            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            # 5. Adding annotations from cuteFC and Kalra et al., in parallel
+            # since they are both slow and use threads inefficiently.
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0 &
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0 &
+            wait
+            FeatureExtraction_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
-            # Splitting by type and uploading
+            # Splitting by SVTYPE and uploading
             bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
             bcftools filter --include "SVTYPE=\"DUP\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
             bcftools filter --include "SVTYPE=\"INV\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
