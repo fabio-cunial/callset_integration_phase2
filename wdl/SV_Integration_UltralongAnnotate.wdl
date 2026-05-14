@@ -68,7 +68,8 @@ workflow SV_Integration_UltralongAnnotate {
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m
 #
-# samtools bedcov                                     80%    900M      15m
+# samtools bedcov (1 thread)                          80%    900M      15m
+# samtools bedcov (4 threads)
 # annotate_mapq_secondary.sh                         400%     15M      10s
 # bcftools annotate                                  100%     15M      50s
 # java UltralongIntervalGetBins                      200%     50M       1s
@@ -84,7 +85,7 @@ workflow SV_Integration_UltralongAnnotate {
 #
 # feature_extraction.py (1 thread)                   100%     12G       7m
 # feature_extraction.py (4 threads, 4 chunks)         50%   2-12G     3-9m 
-# feature_extraction.py (4 threads, per-call paral.)  
+# feature_extraction.py (4 threads, per-call paral.) 300%     12G      10m
 #
 # UltralongInsGetIntervals                           200%     50M       1m
 # xargs interval_2_breakpoints.sh                    200%    1.5G       1m
@@ -607,8 +608,12 @@ END
         # Kalra, Paulin, Sedlazeck. "A systematic assessment of machine
         # learning for structural variant filtering." bioRxiv (2026): 2026-01.
         #
-        # -------->Remark: running the script in parallel over VCF chunks does not seem 
-        # to reduce runtime significantly.
+        # Remark: running the script in parallel, either over VCF chunks or per-
+        # variant using xargs, does not seem to reduce runtime significantly, 
+        # suggesting that some calls are the bottleneck.
+        #
+        # Remark: we could try to re-implement the Python script e.g. by calling
+        # samtools. For simplicity we leave this to the future.
         #
         function FeatureExtraction() {
             local SAMPLE_ID=$1
@@ -617,6 +622,7 @@ END
             local PARALLELIZE=$4
             
             if [ ${PARALLELIZE} -eq 1 ]; then
+                # # Chunk-based parallelization
                 # bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
                 # local N_RECORDS=$(bcftools view --no-header ${INPUT_VCF} | wc -l)
                 # local N_RECORDS_PER_THREAD=$(( (${N_RECORDS} + ${N_THREADS} - 1) / ${N_THREADS} ))
@@ -627,15 +633,13 @@ END
                 #     ${TIME_COMMAND} python ~{feature_extraction_py} ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
                 # done
                 # wait
-                # cat ${SAMPLE_ID}_chunk_*_features.csv > ${SAMPLE_ID}_features.csv
-                # rm -f ${SAMPLE_ID}_chunk_*_features.csv ${SAMPLE_ID}_header.txt
+                # rm -f ${SAMPLE_ID}_features.csv
+                # for FILE in $( ls ${SAMPLE_ID}_chunk_*_features.csv | sort -V ); do
+                #     cat ${FILE} >> ${SAMPLE_ID}_features.csv
+                #     rm -f ${FILE}
+                # done
 
-
-
-
-
-
-
+                # Call-based parallelization
                 bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
                 bcftools view --no-header ${INPUT_VCF} | split -l 1 - ${SAMPLE_ID}_chunk_
                 for FILE in ${SAMPLE_ID}_chunk_* ; do
@@ -652,13 +656,6 @@ END
                     cat ${FILE} >> ${SAMPLE_ID}_features.csv
                     rm -f ${FILE}
                 done
-                
-
-
-
-
-
-
             else
                 ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_features.csv 1>&2
             fi
@@ -1007,15 +1004,15 @@ END
             Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio}
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
-            # # 2. Adding custom annotations
-            # N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
-            # if [ ${N_NOT_INS} -gt 0 ]; then
-            #     AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
-            # fi
-            # N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
-            # if [ ${N_INS} -gt 0 ]; then
-            #     AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
-            # fi
+            # 2. Adding custom annotations
+            N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
+            if [ ${N_NOT_INS} -gt 0 ]; then
+                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+            fi
+            N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
+            if [ ${N_INS} -gt 0 ]; then
+                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+            fi
 
             # # 3. Adding repeat annotations
             # # 3.1 Not INS
@@ -1050,9 +1047,9 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # 5. Adding annotations from Kalra et al.
-            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 1
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            # # 5. Adding annotations from Kalra et al.
+            # FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
+            # rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             # 6. Adding annotations from genotypers
             # Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
