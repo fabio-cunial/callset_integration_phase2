@@ -75,13 +75,16 @@ workflow SV_Integration_UltralongAnnotate {
 # java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
 # annotate_clipped_alignments_1.sh                   300%    500M       2m
 # annotate_clipped_alignments_2.sh                   300%     50M       2m
+#
 # cutefc (1 thread)                                   30%    1.5G      50m
 # cutefc (2 threads)                                  50%    1.5G      25m
 # cutefc (4 threads)                                  30%    1.5G      50m
 # cutefc (2 threads, extracted BAM)                  200%    900M       2m
 # samtools view (for extracted BAM, 2 threads)       100%     20M      10m
+#
 # feature_extraction.py (1 thread)                   100%     12G       7m
 # feature_extraction.py (4 threads, 4 chunks)         50%   2-12G     3-9m 
+# feature_extraction.py (4 threads, per-call paral.)  
 #
 # UltralongInsGetIntervals                           200%     50M       1m
 # xargs interval_2_breakpoints.sh                    200%    1.5G       1m
@@ -594,7 +597,7 @@ set -euxo pipefail
 ALIGNMENTS_BAM=$1
 INPUT_VCF=$2
 
-${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${INPUT_VCF}_features.csv 1>&2
+python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${INPUT_VCF}_features.csv 1>&2
 END
         chmod +x feature_extraction_thread.sh
 
