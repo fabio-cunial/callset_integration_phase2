@@ -30,6 +30,9 @@ workflow SV_Integration_UltralongAnnotate {
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam,csi,bcf"
+        tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations" 
+        segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
+        gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
     }
     
     call Impl {
@@ -119,10 +122,11 @@ task Impl {
         String docker_image
         Int n_cpu = 8
         Int ram_size_gb = 16
-        Int disk_size_gb = 20
+        Int disk_size_gb = 50
         Int preemptible_number
     }
     parameter_meta {
+        disk_size_gb: ">=50GB, because of the BAMs."
     }
     
     String docker_dir = "/callset_integration"
