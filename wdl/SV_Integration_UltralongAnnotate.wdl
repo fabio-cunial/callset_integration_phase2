@@ -591,11 +591,10 @@ END
 #!/bin/bash
 set -euxo pipefail
 
-SAMPLE_ID=$1
-ALIGNMENTS_BAM=$2
-INPUT_VCF=$3
+ALIGNMENTS_BAM=$1
+INPUT_VCF=$2
 
-${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_features.csv 1>&2
+${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${INPUT_VCF}_features.csv 1>&2
 END
         chmod +x feature_extraction_thread.sh
 
@@ -636,13 +635,15 @@ END
 
                 bcftools view --header-only ${INPUT_VCF} > ${SAMPLE_ID}_header.txt
                 bcftools view --no-header ${INPUT_VCF} | split -l 1 - ${SAMPLE_ID}_chunk_
-                for FILE in ${SAMPLE_ID}_chunk_*; do
+                for FILE in ${SAMPLE_ID}_chunk_* ; do
                     cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}_vcf
                     rm -f ${FILE}
                 done
+                ls -laht 1>&2
                 rm -f ${SAMPLE_ID}_header.txt
                 ls ${SAMPLE_ID}_chunk_*_vcf > list.txt
-                ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./feature_extraction_thread.sh ${SAMPLE_ID} ${ALIGNMENTS_BAM}
+                ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./feature_extraction_thread.sh ${ALIGNMENTS_BAM}
+                ls -laht 1>&2
                 rm -f ${SAMPLE_ID}_features.csv
                 for FILE in $( ls ${SAMPLE_ID}_chunk_*_features.csv | sort -V ); do
                     cat ${FILE} >> ${SAMPLE_ID}_features.csv
