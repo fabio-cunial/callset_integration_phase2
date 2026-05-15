@@ -26,7 +26,7 @@ workflow SV_Integration_UltralongAnnotate {
         Float repeat_overlap_fraction = 0.8
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
-        Int preemptible_number = 5
+        Int preemptible_number = 3
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam,csi,bcf"
@@ -120,13 +120,15 @@ task Impl {
         Float repeat_overlap_fraction
         
         String docker_image
-        Int n_cpu = 8
+        Int n_cpu = 4
         Int ram_size_gb = 16
         Int disk_size_gb = 50
         Int preemptible_number
     }
     parameter_meta {
-        disk_size_gb: ">=50GB, because of the BAMs."
+        n_cpu: "4 is good enough, since only custom annotations use all available threads, and they are not the bottleneck."
+        ram_size_gb: "16GB is needed by `feature_extraction.py`."
+        disk_size_gb: "50GB is needed by the BAMs."
     }
     
     String docker_dir = "/callset_integration"
@@ -673,6 +675,9 @@ END
         }
 
 
+        # A separate function just to enable running `feature_extraction_py` in 
+        # parallel with other tools, if needed.
+        #
         function FeatureExtraction_Annotate() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -802,6 +807,9 @@ END
         }
 
 
+        # A separate function just to enable running cuteFC in parallel with 
+        # other tools, if needed.
+        #
         function Cutefc_Annotate() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
@@ -1082,11 +1090,12 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # 5. Adding annotations from cuteFC and Kalra et al., in parallel
-            # since they are both slow and use threads inefficiently.
-            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0  #&
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0  #&
-            #wait
+            # 5. Adding annotations from cuteFC and Kalra et al.
+            # Remark: we could run these two annotations in parallel, since they
+            # are both slow and use threads inefficiently. In practice this does
+            # not decrease total runtime.
+            FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
+            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0
             FeatureExtraction_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
