@@ -964,6 +964,9 @@ END
         chmod +x interval_2_breakpoints.sh
 
 
+        # ~40% of all the ultralong INS of a sample are reclassified as DUP.
+        # This is not too far from the results of `truvari anno remap`.
+        #
         function Ins2Dup() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
@@ -995,7 +998,8 @@ END
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
             # Merging `ins_dup` and `not_ins`.
             # Remark: truvari collapse is run with the same parameters as in
-            # `SV_Integration_Workpackage1.wdl`. 
+            # `SV_Integration_Workpackage1.wdl`. It collapses ~3-5 variants per
+            # sample.
             # Remark: truvari needs `bcftools merge` and it does not work with 
             # `bcftools concat`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
