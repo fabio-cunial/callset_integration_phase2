@@ -108,66 +108,58 @@ task Impl {
             local SVIMASM_SVTYPE=${SVIMASM_SVTYPE^^}
 
 
-            if [ ~{suffix} = "del" ]; then
-                DIPCALL_SVTYPE="DEL"
-            elif [ ~{suffix} = "ins" ]; then
-                DIPCALL_SVTYPE="INS"
-            elif [ ~{suffix} = "dup" ]; then
-                DIPCALL_SVTYPE="INS"
-                TRUVARI_EXTRA_FLAGS="--dup-to-ins"
-            fi
-            local CHUNKSIZE_FLAG=""
-            if [ ~{truvari_refdist} -gt 1000 ]; then
-                # To avoid ERROR:root:--chunksize must be >= --refdist
-                CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
-            fi
             
-            local LINE
-            local TEST
-            local SAMPLE_ID
-            local DIPCALL_BED
+            
+            
+            
             while read -u 3 LINE; do
-                SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-                DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
+                local SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+                local DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
                 
                 # Downloading the annotated VCF, skipping the sample if it was
                 # not annotated.
-                TEST=$( gsutil ls ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
+                local TEST=$( gsutil ls ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz || echo "1" )
                 if [ ${TEST} == "1" ]; then
-                    echo "WARNING: sample ${SAMPLE_ID} is not annotated. Skipping." 1>&2
+                    echo "WARNING: sample ${SAMPLE_ID} was not annotated?! Skipping." 1>&2
                     continue
                 fi
                 gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
                 gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
                 
-                # Downloading and filtering the truth VCF
-                gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_truth.bed
-                ------> Complement the BED, then remove every reference gap. Or maybe this is not necessary since calls in refgaps have already been deleted upstream?
-
-
-                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
+                # Downloading and filtering the truth VCF.
+                # Remark: we do not handle reference gaps explicitly, since
+                # calls in reference gaps are assumed to have already been 
+                # removed upstream.
+                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz ./${SAMPLE_ID}_svimasm.vcf.gz
+                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz.tbi ./${SAMPLE_ID}_svimasm.vcf.gz.tbi
                 if [ ~{suffix} == "dup" ]; then
-                    bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth_ins.vcf
-                    bcftools filter --include 'SVTYPE=="DUP"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth_dup.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_dup.vcf.gz
-                    java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_truth_ins.vcf ${SAMPLE_ID}_gaps.bed $((wc -l < ${SAMPLE_ID}_gaps.bed)) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_ins_dup.vcf
-                    rm -f ${SAMPLE_ID}_truth_ins.vcf
-                    local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
+                    gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
+                    ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                    local N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
+                    echo "INFO: the dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps." 1>&2
+                    bcftools filter --include 'SVTYPE=="DUP"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_dup.vcf.gz
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
+                    bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_ins.vcf
+                    java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $((wc -l < ${SAMPLE_ID}_gaps.bed)) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf
+                    rm -f ${SAMPLE_ID}_svimasm_ins.vcf
+                    local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
                     if [ ${N_INS_DUP} -gt 0 ]; then
-                        ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
-                        rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
-                        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_truth_dup.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                        rm -f ${SAMPLE_ID}_truth_dup.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_truth_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth_dup.vcf.gz
+                        ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz*
+                    else
+                        mv ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
+                        mv ${SAMPLE_ID}_svimasm_dup.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
                     fi
-                    mv ${SAMPLE_ID}_truth_dup.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
-                    mv ${SAMPLE_ID}_truth_dup.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
                 else
                     bcftools filter --include 'SVTYPE=="'${SVIMASM_SVTYPE}'"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
                     bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
                 fi
-                rm -f ${SAMPLE_ID}_canonized.vcf.gz*
+                rm -f ${SAMPLE_ID}_svimasm.vcf.gz*
                 
-
+------------------->
 
                 
                 
