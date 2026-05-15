@@ -5,6 +5,7 @@ version 1.0
 workflow SV_Integration_UltralongAnnotate {
     input {
         File chunk_csv
+        String remote_indir
         String remote_outdir
         
         File reference_fa
@@ -29,7 +30,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int preemptible_number = 3
     }
     parameter_meta {
-        chunk_csv: "Format: ID,bai,bam,csi,bcf"
+        chunk_csv: "Format: ID,bai,bam"
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations" 
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -38,6 +39,7 @@ workflow SV_Integration_UltralongAnnotate {
     call Impl {
         input:
             chunk_csv = chunk_csv,
+            remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             
             reference_fa = reference_fa,
@@ -99,6 +101,7 @@ workflow SV_Integration_UltralongAnnotate {
 task Impl {
     input {
         File chunk_csv
+        String remote_indir
         String remote_outdir
         
         File reference_fa
@@ -155,15 +158,11 @@ task Impl {
             
             local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 2)
             local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 3)
-            local ULTRALONG_CSI=$(echo ${LINE} | cut -d , -f 4)
-            local ULTRALONG_BCF=$(echo ${LINE} | cut -d , -f 5)
             
-            date 1>&2
-            gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
-            date 1>&2
+            ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
             gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
-            gcloud storage cp ${ULTRALONG_BCF} ./${SAMPLE_ID}.bcf
-            gcloud storage cp ${ULTRALONG_CSI} ./${SAMPLE_ID}.bcf.csi
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ultralong.bcf ./${SAMPLE_ID}.bcf
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ultralong.bcf.csi ./${SAMPLE_ID}.bcf.csi
             
             # Converting to .vcf.gz for downstream tools
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
