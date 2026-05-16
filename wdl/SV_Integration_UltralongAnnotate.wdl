@@ -1,6 +1,8 @@
 version 1.0
 
-# 
+
+# Annotates ultralong VCFs with multiple BAM- and genotyper-derived features,
+# and splits them by SVTYPE.
 #
 workflow SV_Integration_UltralongAnnotate {
     input {
