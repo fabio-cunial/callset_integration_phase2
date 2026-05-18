@@ -1090,8 +1090,8 @@ END
             fi
 
             # 4. Merging INS and non-INS VCFs
-            ${TIME_COMMAND} bgzip --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
-            ${TIME_COMMAND} bgzip --compress-level 1 ${SAMPLE_ID}_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
+            ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
+            ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 

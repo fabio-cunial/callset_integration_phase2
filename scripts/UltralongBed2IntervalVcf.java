@@ -5,15 +5,16 @@ import java.io.*;
 
 /**
  * The program transforms an input BED into a minimal headerless VCF with only
- * symbolic INVs.
+ * symbolic calls.
  */
-public class UltralongBed2InvVcf {
+public class UltralongBed2IntervalVcf {
     
     /**
      * @param args
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_BED = args[0];
+        final String SVTYPE = args[1];
         
         int i;
         int start, end;
@@ -28,7 +29,7 @@ public class UltralongBed2InvVcf {
             chrom=tokens[0];
             start=Integer.parseInt(tokens[1]);  // 0-based, inclusive.
             end=Integer.parseInt(tokens[2]);    // 0-based, exclusive.
-            System.out.println(chrom+"\t"+(start+1)+"\t"+(++i)+"\tN\t<INV>\t60\tPASS\tSVTYPE=INV;SVLEN="+(end-start)+";END="+end+"\tGT\t0/1");
+            System.out.println(chrom+"\t"+(start+1)+"\t"+(++i)+"\tN\t<"+SVTYPE+">\t60\tPASS\tSVTYPE="+SVTYPE+";SVLEN="+(end-start)+";END="+end+"\tGT\t0/1");
             
             // Next iteration
             str=br.readLine();

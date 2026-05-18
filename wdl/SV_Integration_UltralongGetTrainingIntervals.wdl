@@ -74,6 +74,11 @@ task Impl {
         Int svimasm_slack_bp
         Float svimasm_length_similarity
 
+        Int remap_max_length
+        Float remap_cov_threshold
+        File reference_fa
+        File reference_fai
+
         Int truvari_refdist
         Float truvari_pctsize
         Float truvari_pctovl
@@ -102,6 +107,7 @@ task Impl {
         
         # ----------------------- Steps of the pipeline ------------------------
 
+        
         function GetTrainingIntervalsThread() {
             local CHUNK_CSV=$1
 
@@ -112,7 +118,7 @@ task Impl {
 
 
             
-            
+------> Allow these steps on complex dups to be toggled from the WDL, to see if adding these events decreases performance.            
             
             
             while read -u 3 LINE; do
@@ -130,124 +136,174 @@ task Impl {
                     echo "WARNING: sample ${SAMPLE_ID} was not annotated?! Skipping." 1>&2
                     continue
                 fi
-                gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
-                gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
-                
 
-----------> INS2DUP should be done only once, i.e. all SVTYPEs should be processed together!!!!
+                # 0. Extracting gaps from the dipcall BED
+                # Remark: we do not handle gaps in the reference explicitly,
+                # since we assume that calls in reference gaps have already been 
+                # removed from the query VCFs upstream.
+                gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
+                ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                rm -f ${SAMPLE_ID}_dipcall.bed
+                local N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
+                echo "The dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps" 1>&2
 
+                # 1. Downloading and filtering the truth VCF
+                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz ./${SAMPLE_ID}_svimasm.vcf.gz
+                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz.tbi ./${SAMPLE_ID}_svimasm.vcf.gz.tbi
 
-                # Downloading and filtering the truth VCF.
-                #
-                # 1. Even though svim-asm explicitly emits DUPs, it might also 
+                # 1.1 DEL
+                bcftools filter --include 'SVTYPE=="DEL"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_del.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_del.vcf.gz
+
+                # 1.2 DUP
+                bcftools filter --include 'SVTYPE=="DUP" || SVTYPE=="DUP:TANDEM" || SVTYPE=="DUP:INT"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
+                java -cp ~{docker_dir} UltralongForceDup ${SAMPLE_ID}_out.vcf | bgzip > ${SAMPLE_ID}_svimasm_dup.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
+
+                # 1.3 INS
+                # Even though svim-asm explicitly emits DUPs, it might also 
                 # emit INS records that are actually DUP. We reclassify such 
                 # INS as DUP as follows.
                 #
-                # 1.1. We reclassify as DUP every INS that is compatible with a 
-                # dipcall BED gap. Recall that a base is included in the dipcall
-                # BED iff: (1) it is covered by one alignment >=50kb mapQ>=5 in 
-                # each haplotype; and (2) it is not covered by other >=10kb 
-                # alignments in either parent. A simple DUP >10kb might satisfy 
-                # (1) but it likely does not satisfy (2). This heurstic is very
-                # fast.
+                # We reclassify as DUP every INS that is compatible with
+                # a dipcall BED gap. Recall that a base is included in the 
+                # dipcall BED iff: (1) it is covered by one alignment >=50kb 
+                # mapQ>=5 in each haplotype; and (2) it is not covered by other 
+                # >=10kb alignments in either parent. A simple DUP >10kb might 
+                # satisfy (1) but it likely does not satisfy (2). This heuristic
+                # is very fast.
                 #
-                # 1.2 However, a complex DUP might satisfy (2), since its sub-
+                # However, a complex DUP might satisfy (2), since its sub-
                 # intervals might be covered by alignments <10kb, so the 
                 # heuristic above would only mark simple DUPs as true. If 
                 # svim-asm DUP records do not contain complex DUPs, then the 
                 # latter would never be marked as true and the model would never
                 # learn their BAM patterns.
                 #
-                # 1.3 Thus, we use `truvari anno remap` on the remaining INS...
+                # Thus, we use `truvari anno remap` on the remaining INS..................
                 # Working only on the remaining INS reduces the runtime of this
                 # slow step. However, using two methods might give rise to two
                 # populations of DUPs with different breakpoint decisions. Since
                 # these two populations are likely simple and complex DUPs, 
                 # which are likely to have distinct BAM patterns anyway, we
                 # accept this issue in exchange for the advantage in runtime.
-                #
-                # Remark: we do not handle reference gaps explicitly, since
-                # calls in reference gaps are assumed to have already been 
-                # removed upstream.
-                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz ./${SAMPLE_ID}_svimasm.vcf.gz
-                gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz.tbi ./${SAMPLE_ID}_svimasm.vcf.gz.tbi
-                if [ ~{suffix} == "dup" ]; then
-                    bcftools filter --include 'SVTYPE=="DUP"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_dup.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
-                    bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_ins.vcf
+                bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_ins.vcf
+                local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
+                if [ ${N_INS} -gt 0 ]; then
+                    # 1.2.1 Filtering all INS with the dipcall BED
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $((wc -l < ${SAMPLE_ID}_gaps.bed)) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    rm -f ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed
+                    local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
+                    if [ ${N_INS_DUP} -gt 0 ]; then
+                        ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
+                    fi
+                    rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
+
+                    # 1.2.2 Filtering the remaining INS with truvari anno remap
                     local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
                     if [ ${N_INS} -gt 0 ]; then
-                        gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
-                        ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
-                        local N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
-                        echo "INFO: the dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps." 1>&2
-                        rm -f ${SAMPLE_ID}_dipcall.bed
-                        java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $((wc -l < ${SAMPLE_ID}_gaps.bed)) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf
-                        rm -f ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed
-                        local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
-                        if [ ${N_INS_DUP} -gt 0 ]; then
-                            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
-                            rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
-                            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
-                            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
-                            rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz*
-                        else
-                            mv ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
-                            mv ${SAMPLE_ID}_svimasm_dup.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
-                        fi
-                    else
-                        rm -f ${SAMPLE_ID}_svimasm_ins.vcf
-                        mv ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
-                        mv ${SAMPLE_ID}_svimasm_dup.vcf.gz.tbi ${SAMPLE_ID}_truth.vcf.gz.tbi
+                        bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
+                        ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{remap_max_length} --cov-threshold ~{remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz* ; gunzip ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
+                        ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                        rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf
+                        bgzip --compress-level 1 --stdout ${SAMPLE_ID}_svimasm_ins_ins.vcf > ${SAMPLE_ID}_svimasm_ins.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
+                        ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
                     fi
-                else
-                    bcftools filter --include 'SVTYPE=="'${SVIMASM_SVTYPE}'"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_truth.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truth.vcf.gz
                 fi
-                rm -f ${SAMPLE_ID}_svimasm.vcf.gz*
-                
 
+                # 1.4 INV
+                bcftools filter --include 'SVTYPE=="INV"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_inv.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_inv.vcf.gz
+
+                rm -f ${SAMPLE_ID}_svimasm.vcf.gz*
+
+                # 2. Downloading and filtering the query VCF
+                gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz ./${SAMPLE_ID}_query.vcf.gz
+                gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_~{suffix}.vcf.gz.tbi ./${SAMPLE_ID}_query.vcf.gz.tbi
+                bcftools filter --include 'SVTYPE=="DEL"' --output-type z ${SAMPLE_ID}_query.vcf.gz --output ${SAMPLE_ID}_del.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del.vcf.gz
+                bcftools filter --include 'SVTYPE=="DUP"' --output-type z ${SAMPLE_ID}_query.vcf.gz --output ${SAMPLE_ID}_dup.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dup.vcf.gz
+                bcftools filter --include 'SVTYPE=="INS"' --output-type z ${SAMPLE_ID}_query.vcf.gz --output ${SAMPLE_ID}_ins.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
+                bcftools filter --include 'SVTYPE=="INV"' --output-type z ${SAMPLE_ID}_query.vcf.gz --output ${SAMPLE_ID}_inv.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv.vcf.gz
+
+                # 3. Computing matches
+                # Remark: for speed reasons, sequence similarity is never used.
+                #
+                # 3.1 DEL
+                # Remark: svim-asm does not emit calls at some query DELs that 
+                # correspond to gaps in the dipcall BED. DELs >10kb are likely
+                # to create gaps in dipcall's BED by the definition of confident
+                # BED, since such DELs induce split alignments. We choose to
+                # mark as true every query DEL that matches a gap in dipcall's
+                # BED.
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_del.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del1.vcf.gz
+                rm -rf ${SAMPLE_ID}_truvari/
+                bcftools view --header-only ${SAMPLE_ID}_del.vcf.gz > ${SAMPLE_ID}_gaps.vcf
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed DEL >> ${SAMPLE_ID}_gaps.vcf
+                bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del2.vcf.gz
+                rm -rf ${SAMPLE_ID}_truvari/
+                bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_del_training.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del_training.vcf.gz
+                rm -f ${SAMPLE_ID}_del1.vcf.gz* ${SAMPLE_ID}_del2.vcf.gz* ${SAMPLE_ID}_gaps.vcf.gz*
+
+                # 3.2 DUP
+                # We observe that DUP records from svim-asm are generally 
+                # comprehensive, and they do not need to be augmented with e.g.
+                # gaps in dipcall's BED.
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_dup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dup_training.vcf.gz
                 
-                # Computing matches
-                # Remark: sequence similarity is never used.
-                if [ ~{suffix} != "inv" ]; then
-                    # 1. Standard VCF-to-VCF matching
-                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
-                    if [ ~{suffix} = "dup" ]; then
-                        # 2.1 Matching DUPs to dipcall INS at their END
-                        java -cp ~{docker_dir} UltralongDupAdd ${SAMPLE_ID}_query.vcf.gz ~{reference_fai} | bcftools sort --output-type z --output ${SAMPLE_ID}_query_add.vcf.gz
-                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_query_add.vcf.gz
-                        ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_query_add.vcf.gz --includebed ${SAMPLE_ID}_truth.bed --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari_add/
-                        java -cp ~{docker_dir} UltralongDupSubtract ${SAMPLE_ID}_truvari_add/tp-comp.vcf.gz | bgzip -c > ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
-                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz
-                        # 2.2 Matching DUPs to dipcall INS in their interior
-                        local N_TRUE_INS=$(bcftools index --nrecords ${SAMPLE_ID}_truth.vcf.gz)
-                        java -cp ~{docker_dir} UltralongBenchDupIns ${SAMPLE_ID}_query.vcf.gz ${SAMPLE_ID}_truth.vcf.gz ${N_TRUE_INS} ~{truvari_pctsize} | bgzip -c > ./${SAMPLE_ID}_dupins.vcf.gz
-                        bcftools index --threads ${N_THREADS} -f -t ./${SAMPLE_ID}_dupins.vcf.gz
-                        # Taking the union of all TPs from all comparisons
-                        bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_truvari/tp-comp.vcf.gz
-                        bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_truvari_add/tp-comp_subtract.vcf.gz ./${SAMPLE_ID}_dupins.vcf.gz --output ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                    else
-                        mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                    fi
-                else
-                    # 3. Matching INVs to gaps in the dipcall BED
-                    ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_truth.bed -g ~{reference_fai} > ${SAMPLE_ID}_truth_sorted.bed
-                    ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_truth_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
-                    bcftools view --header-only ${SAMPLE_ID}_query.vcf.gz > ${SAMPLE_ID}_gaps.vcf
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2InvVcf ${SAMPLE_ID}_gaps.bed >> ${SAMPLE_ID}_gaps.vcf
-                    rm -f ${SAMPLE_ID}_gaps.bed
-                    bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
-                    ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_query.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} ${CHUNKSIZE_FLAG} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single ${TRUVARI_EXTRA_FLAGS} -o ./${SAMPLE_ID}_truvari/
-                    mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                    rm -f ${SAMPLE_ID}_gaps.vcf.gz*
-                fi
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_~{suffix}_training.vcf.gz
-                rm -rf ${SAMPLE_ID}_query.vcf.gz* ${SAMPLE_ID}_truth.vcf.gz* ${SAMPLE_ID}_truth.bed ${SAMPLE_ID}_truvari*/
+                # 3.3 INS
+                # Remark: we don't use `--dup-to-ins` in truvari, since we 
+                # assume that DUP and INS calls are already accurately
+                # classified in both the query and the svim-asm VCF, so we can
+                # compare each SVTYPE in isolation.
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_ins_training.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
+
+                # 3.4 INV
+                # Remark: svim-asm does not emit calls at some query INVs that 
+                # correspond to gaps in the dipcall BED. Since INV records are 
+                # rare, we choose to mark as true such query INVs, at the risk
+                # of polluting the training set with complex events that are not
+                # just INVs.
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_inv.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv1.vcf.gz
+                rm -rf ${SAMPLE_ID}_truvari/
+                bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
+                bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv2.vcf.gz
+                rm -rf ${SAMPLE_ID}_truvari/
+                bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_inv_training.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv_training.vcf.gz
+                rm -f ${SAMPLE_ID}_inv1.vcf.gz* ${SAMPLE_ID}_inv2.vcf.gz* ${SAMPLE_ID}_gaps.vcf.gz*
                 
                 # Uploading
-                gcloud storage mv ${SAMPLE_ID}_~{suffix}_training.vcf.'gz*' ~{remote_outdir}
+                gcloud storage mv ${SAMPLE_ID}_'*_training.vcf.gz*' ~{remote_outdir}
             done 3< ${CHUNK_CSV}
         }
 
@@ -261,6 +317,12 @@ task Impl {
         bcftools --version 1>&2
         truvari --help 1>&2
         df -h 1>&2
+
+        CHUNKSIZE_FLAG=""
+        if [ ~{truvari_refdist} -gt 1000 ]; then
+            # To avoid ERROR:root:--chunksize must be >= --refdist
+            CHUNKSIZE_FLAG="--chunksize ~{truvari_refdist}"
+        fi
         
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         N_ROWS=$(wc -l < samples.csv)
