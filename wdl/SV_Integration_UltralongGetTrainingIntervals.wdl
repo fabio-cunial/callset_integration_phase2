@@ -31,7 +31,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Float truvari_pctsize = 0.9
         Float truvari_pctovl = 0
         
-        String docker_image = "fcunial/callset_integration_phase2_remap:latest"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
     parameter_meta {
         samples_tsv: "Format: ID, DIPCALL_BED"
@@ -109,9 +109,9 @@ task Impl {
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 8
+        Int ram_size_gb = 32
         Int disk_size_gb = 20
-        Int preemptible_number = 0
+        Int preemptible_number = 3
     }
     parameter_meta {
     }
@@ -200,7 +200,7 @@ task Impl {
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
                 # 1.3.1 Filtering all INS with the dipcall BED
-                if [ ~{match_to_gaps} -eq 1 ]; then
+                if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                     ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
@@ -217,17 +217,17 @@ task Impl {
                 if [ ~{use_remap} -eq 1 -a ${N_INS} -gt 0 ]; then
                     bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
                     ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{remap_max_length} --cov-threshold ~{remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
-                    rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz* ; gunzip ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
-                    rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf
-                    bgzip --compress-level 1 --stdout ${SAMPLE_ID}_svimasm_ins_ins.vcf > ${SAMPLE_ID}_svimasm_ins.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
+                    rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz*
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz* ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
                     bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
                     ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
-                fi
+                fi    
             fi
+            bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
 
             # 1.4 INV
             bcftools filter --include 'SVTYPE=="INV"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_inv.vcf.gz
@@ -249,7 +249,7 @@ task Impl {
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            if [ ~{match_to_gaps} -eq 1 ]; then
+            if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_del.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed DEL >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
@@ -293,7 +293,7 @@ task Impl {
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            if [ ~{match_to_gaps} -eq 1 ]; then
+            if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf

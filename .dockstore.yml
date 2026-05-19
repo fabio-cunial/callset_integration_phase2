@@ -625,3 +625,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongAnnotate.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongGetTrainingIntervals
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongGetTrainingIntervals.wdl
+  testParameterFiles:
