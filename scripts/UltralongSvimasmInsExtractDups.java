@@ -86,8 +86,8 @@ public class UltralongSvimasmInsExtractDups {
             i=chrFirst[i]; found=false;
             while (i<N_BED_RECORDS) {
                 if (!bedChr[i].equals(chrom)) break;
-                else if (pos<bedIntervals[i][0]-SLACK_BP) { i++; continue; }
-                else if (pos>bedIntervals[i][1]+SLACK_BP) break;
+                else if (pos<bedIntervals[i][0]-SLACK_BP) break;
+                else if (pos>bedIntervals[i][1]+SLACK_BP) { i++; continue; }
                 else if (svlen>=(bedIntervals[i][1]-bedIntervals[i][0])*LENGTH_SIMILARITY) {
                     found=true; nDups++;
                     newPos=bedIntervals[i][0]; newEnd=bedIntervals[i][1]; newLength=newEnd-newPos;

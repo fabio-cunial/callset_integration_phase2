@@ -75,13 +75,13 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 # Performance on a 2-core 8GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# UltralongSvimasmInsExtractDups
-# bcftools sort
-# bcftools concat
-# truvari anno remap
-# UltralongSvimasmInsExtractDupsPrime
-# truvari bench
-# UltralongBed2IntervalVcf
+# UltralongSvimasmInsExtractDups            200%        70M           1s        
+# bcftools sort                              70%        10M           1s
+# bcftools concat                           100%        20M           1s
+# truvari anno remap                        200%        20G          10m
+# UltralongSvimasmInsExtractDupsPrime       200%        70M           1s
+# truvari bench                             100%       100M           1s
+# UltralongBed2IntervalVcf                  200%        50M           1s
 #
 task Impl {
     input {
