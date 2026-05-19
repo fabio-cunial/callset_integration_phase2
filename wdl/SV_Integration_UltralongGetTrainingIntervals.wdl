@@ -10,20 +10,19 @@ version 1.0
 #
 workflow SV_Integration_UltralongGetTrainingIntervals {
     input {
-        File samples_tsv
+        File samples_csv
         
         String remote_indir_query
         String remote_indir_svimasm
         String remote_outdir
         
-        Int svimasm_slack_bp
-        Float svimasm_length_similarity
+        Int match_to_gaps = 1
+        Int svimasm_ins_slack_bp = 200
+        Float svimasm_ins_length_similarity = 0.9
 
-        Int match_to_gaps
-
-        Int use_remap
-        Int remap_max_length
-        Float remap_cov_threshold
+        Int svimasm_ins_use_remap = 1
+        Int svimasm_ins_remap_max_length = 1000000
+        Float svimasm_ins_remap_cov_threshold = 0.8
         File reference_fa
         File reference_fai
         
@@ -34,7 +33,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
     parameter_meta {
-        samples_tsv: "Format: ID, DIPCALL_BED"
+        samples_csv: "Format: ID, DIPCALL_BED"
         remote_indir_query: "Without final slash. Contains per-sample annotated VCFs."
         remote_indir_svimasm: "Without final slash. Contains per-sample canonized and filtered svim-asm VCFs."
         truvari_refdist: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
@@ -44,20 +43,20 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
     
     call Impl {
         input:
-            samples_tsv = samples_tsv,
+            samples_csv = samples_csv,
 
             remote_indir_query = remote_indir_query,
             remote_indir_svimasm = remote_indir_svimasm,
             remote_outdir = remote_outdir,
 
-            svimasm_slack_bp = svimasm_slack_bp,
-            svimasm_length_similarity = svimasm_length_similarity,
+            svimasm_ins_slack_bp = svimasm_ins_slack_bp,
+            svimasm_ins_length_similarity = svimasm_ins_length_similarity,
 
             match_to_gaps = match_to_gaps,
 
-            use_remap = use_remap,
-            remap_max_length = remap_max_length,
-            remap_cov_threshold = remap_cov_threshold,
+            svimasm_ins_use_remap = svimasm_ins_use_remap,
+            svimasm_ins_remap_max_length = svimasm_ins_remap_max_length,
+            svimasm_ins_remap_cov_threshold = svimasm_ins_remap_cov_threshold,
             reference_fa = reference_fa,
             reference_fai = reference_fai,
 
@@ -86,20 +85,20 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 #
 task Impl {
     input {
-        File samples_tsv
+        File samples_csv
         
         String remote_indir_query
         String remote_indir_svimasm
         String remote_outdir
         
-        Int svimasm_slack_bp
-        Float svimasm_length_similarity
+        Int svimasm_ins_slack_bp
+        Float svimasm_ins_length_similarity
 
         Int match_to_gaps
 
-        Int use_remap
-        Int remap_max_length
-        Float remap_cov_threshold
+        Int svimasm_ins_use_remap
+        Int svimasm_ins_remap_max_length
+        Float svimasm_ins_remap_cov_threshold
         File reference_fa
         File reference_fai
 
@@ -132,7 +131,6 @@ task Impl {
         truvari --help 1>&2
         df -h 1>&2
 
-        cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
@@ -201,7 +199,7 @@ task Impl {
             if [ ${N_INS} -gt 0 ]; then
                 # 1.3.1 Filtering all INS with the dipcall BED
                 if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_slack_bp} ~{svimasm_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_slack_bp} ~{svimasm_ins_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
                     if [ ${N_INS_DUP} -gt 0 ]; then
@@ -214,9 +212,9 @@ task Impl {
 
                 # 1.3.2 Filtering the remaining INS with truvari anno remap
                 N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
-                if [ ~{use_remap} -eq 1 -a ${N_INS} -gt 0 ]; then
+                if [ ~{svimasm_ins_use_remap} -eq 1 -a ${N_INS} -gt 0 ]; then
                     bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
-                    ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{remap_max_length} --cov-threshold ~{remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
+                    ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{svimasm_ins_remap_max_length} --cov-threshold ~{svimasm_ins_remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz*
                     ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz* ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
@@ -316,7 +314,7 @@ task Impl {
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             rm -rf ${SAMPLE_ID}_*
             ls -laht 1>&2
-        done 3< samples.csv        
+        done 3< ~{samples_csv}        
     >>>
     
     output {
