@@ -4,7 +4,7 @@ import java.io.*;
 
 /**
  * Given a VCF that contains only DUP records, possibly marked with different 
- * subtypes, the program forces every SVTYPE to be simply DUP.
+ * DUP subtypes, the program forces every ALT and SVTYPE to be simply DUP.
  */
 public class UltralongForceDup {
     

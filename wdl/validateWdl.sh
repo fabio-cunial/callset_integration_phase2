@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongRecordsInTrack.wdl
