@@ -21,7 +21,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Float svimasm_ins_length_similarity = 0.9
 
         Int svimasm_ins_use_remap = 1
-        Int svimasm_ins_remap_max_length = 1000000
+        Int svimasm_ins_remap_max_length = 2000000
         Float svimasm_ins_remap_cov_threshold = 0.8
         File reference_fa
         File reference_fai
