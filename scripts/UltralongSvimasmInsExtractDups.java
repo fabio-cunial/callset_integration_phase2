@@ -83,7 +83,14 @@ public class UltralongSvimasmInsExtractDups {
                 str=br.readLine();
                 continue; 
             }
-            i=chrFirst[i]; found=false;
+            i=chrFirst[i]; 
+            if (i==-1) { 
+                // No BED record for this chromosome
+                bwIns.write(str+"\n");
+                str=br.readLine();
+                continue; 
+            }
+            found=false;
             while (i<N_BED_RECORDS) {
                 if (!bedChr[i].equals(chrom)) break;
                 else if (pos<bedIntervals[i][0]-SLACK_BP) break;
