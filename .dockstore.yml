@@ -630,3 +630,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongGetTrainingIntervals.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongMerge
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongMerge.wdl
+  testParameterFiles:

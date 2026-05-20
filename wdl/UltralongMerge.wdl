@@ -1,11 +1,14 @@
 version 1.0
 
 
-# 
+# Merges the per-sample, per-SVTYPE VCFs produced by 
+# `SV_Integration_UltralongAnnotate.wdl` and 
+# `SV_Integration_UltralongGetTrainingIntervals.wdl` into a single VCF, removing
+# exact duplicates.
 #
 workflow UltralongMerge {
     input {
-        File samples_tsv
+        File samples_csv
         String remote_indir
         String remote_outdir
         
@@ -19,7 +22,7 @@ workflow UltralongMerge {
     
     call Impl {
         input:
-            samples_tsv = samples_tsv,
+            samples_csv = samples_csv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             svtype = svtype,
@@ -39,7 +42,7 @@ workflow UltralongMerge {
 #
 task Impl {
     input {
-        File samples_tsv
+        File samples_csv
         String remote_indir
         String remote_outdir
         
@@ -52,6 +55,7 @@ task Impl {
         Int disk_size_gb = 50
     }
     parameter_meta {
+        samples_csv: "Format: ID, ..."
     }
     
     String docker_dir = "/callset_integration"
@@ -83,17 +87,19 @@ END
         
         # Simple concatenation, with only exact duplicate removal. In the
         # future we may run truvari collapse to remove approximate duplicates.
-        cat ~{samples_tsv} | tr '\t' ',' > samples.csv
+        rm -f list.txt
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            gcloud storage cp ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz*' . || echo "${SAMPLE_ID} not found in remote dir"
-        done < samples.csv
+            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz' >> list.txt
+            echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz.tbi' >> list.txt
+        done < ~{samples_csv}
+        cat list.txt | gcloud storage cp -I .
         df -h 1>&2
         ls -laht 1>&2
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
-        ${TIME_COMMAND} bcftools index --threads 2 -f -t ~{svtype}~{suffix}_merged.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
         
         # Uploading
