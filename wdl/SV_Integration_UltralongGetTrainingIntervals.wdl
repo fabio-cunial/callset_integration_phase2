@@ -199,7 +199,7 @@ task Impl {
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
                 # 1.3.1 Filtering all INS with the dipcall BED
-                # Approx. XXXX % of all INS get marked as DUP in this step.
+                # Approx. 5% of all INS get marked as DUP in this step.
                 if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                     ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_slack_bp} ~{svimasm_ins_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
@@ -213,7 +213,7 @@ task Impl {
                 fi
 
                 # 1.3.2 Filtering the remaining INS with truvari anno remap
-                # Approx. XXXX % of the remaining INS get marked as DUP.
+                # Approx. 55% of the remaining INS get marked as DUP.
                 N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
                 if [ ~{svimasm_ins_use_remap} -eq 1 -a ${N_INS} -gt 0 ]; then
                     bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
@@ -246,7 +246,7 @@ task Impl {
             # BED, since such DELs induce split alignments (see above). We 
             # choose to mark as true every query DEL that matches a gap in
             # dipcall's BED.
-            # Approx. XXXX % of all DEL get marked as true by a dipcall gap.
+            # Approx. 8% of all DEL get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_del.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del1.vcf.gz
@@ -291,7 +291,7 @@ task Impl {
             # correspond to gaps in the dipcall BED. We choose to mark as 
             # true such query INVs, at the risk of polluting the training 
             # set with events that are not simple INVs.
-            # Approx. XXXX % of all DEL get marked as true by a dipcall gap.
+            # Approx. 15% of all INV get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_inv.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv1.vcf.gz
