@@ -635,3 +635,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongMerge.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongScore
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongScore.wdl
+  testParameterFiles:

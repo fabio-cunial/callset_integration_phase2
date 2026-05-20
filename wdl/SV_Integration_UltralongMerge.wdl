@@ -52,7 +52,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
         Int disk_size_gb = 20
     }
     parameter_meta {
