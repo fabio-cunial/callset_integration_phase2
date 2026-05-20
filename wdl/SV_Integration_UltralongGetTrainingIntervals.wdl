@@ -176,7 +176,7 @@ task Impl {
             # a dipcall BED gap. Recall that a base is included in the 
             # dipcall BED iff: (1) it is covered by one alignment >=50kb 
             # mapQ>=5 in each haplotype; and (2) it is not covered by other 
-            # >=10kb alignments in either parent. A simple DUP >10kb might 
+            # >=10kb alignments in either haplotype. A simple DUP >10kb might 
             # satisfy (1) but it likely does not satisfy (2). This heuristic
             # is very fast.
             #

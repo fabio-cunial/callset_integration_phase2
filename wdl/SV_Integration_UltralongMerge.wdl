@@ -38,7 +38,8 @@ workflow SV_Integration_UltralongMerge {
 # Performance on a 4-core, 4GB VM:
 #
 # TOOL                                                CPU     RAM     TIME
-# bcftools concat
+# fix_sample.sh                                      300%     11M       4s
+# bcftools concat                                    300%    1.5G      20s
 #
 task Impl {
     input {
@@ -52,7 +53,7 @@ task Impl {
         String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 8
-        Int disk_size_gb = 50
+        Int disk_size_gb = 20
     }
     parameter_meta {
         samples_csv: "Format: ID, ..."
