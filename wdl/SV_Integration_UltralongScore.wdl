@@ -135,9 +135,9 @@ workflow SV_Integration_UltralongScore {
 # Performane on a 2-core, 16GB VM, all HPRC+HGSVC samples:
 #
 # TOOL                                  CPU            RAM              TIME
-# ExtractVariantAnnotations                             8G               20s
-# TrainVariantAnnotationsModel                        200M               10s
-# ScoreVariantAnnotations                             800M               20s
+# ExtractVariantAnnotations             ???             8G               20s
+# TrainVariantAnnotationsModel          ???           200M               10s
+# ScoreVariantAnnotations               ???           800M               20s
 #
 task Score {
     input {
@@ -162,7 +162,7 @@ task Score {
         String docker_image
         Int n_cpu = 2
         Int ram_size_gb = 10
-        Int disk_size_gb = 20
+        Int disk_size_gb = 10
     }
     parameter_meta {
     }
@@ -194,18 +194,21 @@ task Score {
             BED_FLAG=""
         fi
         gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V input_cleaned.vcf.gz ~{exclude_chromosomes_string} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL ${BED_FLAG}
-        ls -laht
+        ls -laht 1>&2
         # Output:
         # extract.annot.hdf5
         # extract.unlabeled.annot.hdf5
         # extract.vcf.gz
         # extract.vcf.gz.tbi
         gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 extract.annot.hdf5 --unlabeled-annotations-hdf5 extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O train.train --mode INDEL --verbosity DEBUG
-        ls -laht
+        ls -laht 1>&2
         # Output: 
-        # train.train.*
+        # train.train.indel.unlabeledScores.hdf5
+        # train.train.indel.calibrationScores.hdf5
+        # train.train.indel.trainingScores.hdf5
+        # train.train.indel.scorer.pkl
         gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V input_cleaned.vcf.gz -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --resource:extracted,extracted=true extract.vcf.gz --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
-        ls -laht
+        ls -laht 1>&2
         # Output:
         # score.vcf.gz
         # score.vcf.gz.tbi
@@ -213,18 +216,17 @@ task Score {
         # score.scores.hdf5
         gsutil -m mv score.vcf.gz ~{remote_outdir}/~{id}_score.vcf.gz
         gsutil -m mv score.vcf.gz.tbi ~{remote_outdir}/~{id}_score.vcf.gz.tbi
-
-
-
-        #-------------> Add SHAP analysis...............
-
-
-
     >>>
     
     output {
         File extract_annot_hdf5 = "extract.annot.hdf5"
         File extract_unlabeled_annot_hdf5 = "extract.unlabeled.annot.hdf5"
+
+        File train_indel_unlabeled_scores_hdf5 = "train.train.indel.unlabeledScores.hdf5"
+        File train_indel_calibration_scores_hdf5 = "train.train.indel.calibrationScores.hdf5"
+        File train_indel_training_scores_hdf5 = "train.train.indel.trainingScores.hdf5"
+        File train_indel_scorer_pkl = "train.train.indel.scorer.pkl"
+
         File score_annot_hdf5 = "score.annot.hdf5"
         File score_scores_hdf5 = "score.scores.hdf5"
     }
