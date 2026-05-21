@@ -179,10 +179,13 @@ task Score {
         bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{input_vcf_gz} --output input_cleaned.vcf.gz
         bcftools index -f -t input_cleaned.vcf.gz
         rm -f ~{input_vcf_gz}
+        N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
         bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
         bcftools index -f -t resource_cleaned.vcf.gz
         rm -f ~{resource_vcf_gz}
-        
+        N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
+        echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}"
+
         # 2. Scoring
         if ~{defined(training_resource_bed)}
         then
@@ -208,9 +211,15 @@ task Score {
         # score.vcf.gz.tbi
         # score.annot.hdf5
         # score.scores.hdf5
-        
         gsutil -m mv score.vcf.gz ~{remote_outdir}/~{id}_score.vcf.gz
         gsutil -m mv score.vcf.gz.tbi ~{remote_outdir}/~{id}_score.vcf.gz.tbi
+
+
+
+        #-------------> Add SHAP analysis...............
+
+
+
     >>>
     
     output {
