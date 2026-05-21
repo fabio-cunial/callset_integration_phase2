@@ -8,8 +8,9 @@ version 1.0
 # annotations_cutefc = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"]
 # annotations_all = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
 #  "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
-#  "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
-#]
+#  "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND" ]
+# annotations_all_except_genotyper = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
+#  "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" ]
 #
 # For INS:
 # annotations_custom = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4"]
@@ -17,11 +18,14 @@ version 1.0
 # annotations_cutefc = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"]
 # annotations_all = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
 #  "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
-#  "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
-#]
+#  "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND" ]
+# annotations_all_except_genotyper = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
+#  "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" ]
 #
 workflow SV_Integration_UltralongScore {
     input {
+        String svtype
+
         File input_vcf_gz
         File input_vcf_gz_tbi
         File resource_vcf_gz
@@ -29,17 +33,15 @@ workflow SV_Integration_UltralongScore {
         String remote_outdir
                 
         File? training_resource_bed
-        String exclude_chromosomes_string = "-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
+        String exclude_chromosomes_string = "-XL chr1 -XL chr2 -XL chr3"
         File reference_fa
         File reference_fai
 
-        Array[String] annotations_custom = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"]
-        Array[String] annotations_fex = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"]
-        Array[String] annotations_cutefc = ["SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"]
-        Array[String] annotations_all = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
-                                          "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
-                                          "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
-                                        ]
+        Array[String] annotations_custom
+        Array[String] annotations_fex
+        Array[String] annotations_cutefc
+        Array[String] annotations_all
+        Array[String] annotations_all_except_genotyper
 
         File training_python_script
         File scoring_python_script
@@ -56,7 +58,7 @@ workflow SV_Integration_UltralongScore {
     
     call Score as score_custom {
         input:
-            id = "custom",
+            id = svtype + "_custom",
             annotations = annotations_custom,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
@@ -74,7 +76,7 @@ workflow SV_Integration_UltralongScore {
     }
     call Score as score_fex {
         input:
-            id = "fex",
+            id = svtype + "_fex",
             annotations = annotations_fex,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
@@ -92,7 +94,7 @@ workflow SV_Integration_UltralongScore {
     }
     call Score as score_cutefc {
         input:
-            id = "cutefc",
+            id = svtype + "_cutefc",
             annotations = annotations_cutefc,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
@@ -110,8 +112,26 @@ workflow SV_Integration_UltralongScore {
     }
     call Score as score_all {
         input:
-            id = "all",
+            id = svtype + "_all",
             annotations = annotations_all,
+            input_vcf_gz = input_vcf_gz,
+            input_vcf_gz_tbi = input_vcf_gz_tbi,
+            resource_vcf_gz = resource_vcf_gz,
+            resource_vcf_gz_tbi = resource_vcf_gz_tbi,
+            remote_outdir = remote_outdir,
+            training_resource_bed = training_resource_bed,
+            exclude_chromosomes_string = exclude_chromosomes_string,
+            reference_fa = reference_fa,
+            reference_fai = reference_fai,
+            training_python_script = training_python_script,
+            scoring_python_script = scoring_python_script,
+            hyperparameters_json = hyperparameters_json,
+            docker_image = docker_image
+    }
+    call Score as score_all_except_genotyper {
+        input:
+            id = svtype + "_all_except_genotyper",
+            annotations = annotations_all_except_genotyper,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
             resource_vcf_gz = resource_vcf_gz,
