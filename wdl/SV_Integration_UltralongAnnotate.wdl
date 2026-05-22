@@ -979,7 +979,7 @@ END
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins.vcf
             local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -eq 0 ]; then
-                ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf
                 return
             fi
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
@@ -1107,17 +1107,19 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
             # Splitting by SVTYPE and uploading
-            bcftools filter --include "SVTYPE=\"DEL\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
-            bcftools filter --include "SVTYPE=\"DUP\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
-            bcftools filter --include "SVTYPE=\"INV\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
-            bcftools filter --include "SVTYPE=\"INS\"" --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
+            bcftools filter --include 'SVTYPE="DEL"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
+            bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=0' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
+            bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=1' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_insdup.vcf.gz &
+            bcftools filter --include 'SVTYPE="INV"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
+            bcftools filter --include 'SVTYPE="INS"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
             wait
             bcftools index -f -t ${SAMPLE_ID}_del.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_dup.vcf.gz &
+            bcftools index -f -t ${SAMPLE_ID}_insdup.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_inv.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_ins.vcf.gz &
             wait
-            gcloud storage mv ${SAMPLE_ID}_'del.vcf.gz*' ${SAMPLE_ID}_'inv.vcf.gz*' ${SAMPLE_ID}_'dup.vcf.gz*' ${SAMPLE_ID}_'ins.vcf.gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_'del.vcf.gz*' ${SAMPLE_ID}_'inv.vcf.gz*' ${SAMPLE_ID}_'dup.vcf.gz*' ${SAMPLE_ID}_'insdup.vcf.gz*' ${SAMPLE_ID}_'ins.vcf.gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}

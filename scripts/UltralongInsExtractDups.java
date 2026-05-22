@@ -7,6 +7,10 @@ import java.io.*;
  * Given a VCF that contains only INS records, the program separates records
  * that are likely DUP based on the output of `UltralongDepthGetBreakpoints`.
  * 
+ * Remark: every record in the output DUP VCF has tag INSDUP that indicates that
+ * it is the result of INS conversion, and a field INS_ALT that contains the ALT
+ * allele of the original INS record.
+ * 
  * Remark: the output INS VCF is sorted, but the output DUP VCF is not 
  * necessarily sorted.
  */
@@ -23,7 +27,7 @@ public class UltralongInsExtractDups {
         
         int i, p;
         int pos, newPos, newEnd, newLength, nRecords, nDups;
-        String str, strPrime, id, info;
+        String str, strPrime, id, info, alt;
         BufferedReader br, brPrime;
         BufferedWriter bwIns, bwDup;
         String[] tokens;
@@ -35,6 +39,10 @@ public class UltralongInsExtractDups {
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 bwIns.write(str+"\n");
+                if (str.startsWith("#CHROM")) {
+                    bwDup.write("##INFO=<ID=INSDUP,Number=0,Type=Flag,Description=\"The record is the result of an INS->DUP conversion\">");
+                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">");
+                }
                 bwDup.write(str+"\n");
                 str=br.readLine();
                 continue;
@@ -54,10 +62,11 @@ public class UltralongInsExtractDups {
                 newEnd=Integer.parseInt(strPrime.substring(p+1));
                 newLength=newEnd-newPos;
                 tokens[1]=newPos+"";
-                tokens[4]="<DUP>";
+                alt=tokens[4]; tokens[4]="<DUP>";
                 info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                 info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                 info=addOrReplaceInfoField(info,"END",newEnd+"");
+                info+=";INSDUP;INS_ALT="+alt;
                 tokens[7]=info;
                 bwDup.write(tokens[0]);
                 for (i=1; i<tokens.length; i++) bwDup.write("\t"+tokens[i]);
