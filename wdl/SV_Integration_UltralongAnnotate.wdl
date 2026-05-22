@@ -1108,7 +1108,7 @@ END
             
             # Ensuring that the VCF has the correct header
             bcftools view --header-only ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_header.txt
-            FOUND=$(grep INSDUP ${SAMPLE_ID}_header.txt || echo "0")
+            FOUND=$(grep INSDUP ${SAMPLE_ID}_header.txt | wc -l || echo "0")
             if [ ${FOUND} = "0" ]; then
                 N_ROWS=$(wc -l < ${SAMPLE_ID}_header.txt)
                 head -n $(( ${N_ROWS} - 1 )) ${SAMPLE_ID}_header.txt > ${SAMPLE_ID}_header_new.txt

@@ -17,7 +17,7 @@ import java.io.*;
 public class UltralongInsExtractDups {
     
     /**
-     * @param args 4: fixed QUAL value to assign to all INS->DUP records.
+     * @param args 4: fixed QUAL value to be assigned to all INS->DUP records.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
