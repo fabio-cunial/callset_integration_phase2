@@ -188,8 +188,6 @@ task Impl {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
             
-            local DEFAULT_QUAL="60"   # Arbitrary
-            
             # 1. Removing SVLEN from symbolic ALTs and fixing END.
             # This is necessary for `truvari bench` to work on symbolic records:
             # https://github.com/ACEnglish/truvari/issues/290
@@ -987,7 +985,7 @@ END
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf 1
             rm -f *_breakpoints.tsv
             local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
             if [ ${N_INS_DUP} -eq 0 ]; then
@@ -999,9 +997,10 @@ END
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
             rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
             # Merging `ins_dup` and `not_ins`.
-            # Remark: truvari collapse is run with the same parameters as in
-            # `SV_Integration_Workpackage1.wdl`. It collapses ~3-5 variants per
-            # sample.
+            # Remark: `truvari collapse` is run with the same parameters as in
+            # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
+            # lower QUAL to make truvari choose an original DUP record as a 
+            # representative. This collapses ~3-5 variants per sample.
             # Remark: truvari needs `bcftools merge` and it does not work with 
             # `bcftools concat`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
@@ -1015,7 +1014,8 @@ END
         
         # ---------------------------- Main program ----------------------------
         
-        INFINITY="1000000000"
+        INFINITY="1000000000"  # Arbitrary
+        DEFAULT_QUAL="60"   # Arbitrary
         samtools --version 1>&2
         bcftools --version 1>&2
         cuteFC --version 1>&2
@@ -1106,6 +1106,21 @@ END
             Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             
+            # Ensuring that the VCF has the correct header
+            bcftools view --header-only ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_header.txt
+            FOUND=$(grep INSDUP ${SAMPLE_ID}_header.txt || echo "0")
+            if [ ${FOUND} = "0" ]; then
+                N_ROWS=$(wc -l < ${SAMPLE_ID}_header.txt)
+                head -n $(( ${N_ROWS} - 1 )) ${SAMPLE_ID}_header.txt > ${SAMPLE_ID}_header_new.txt
+                echo '##INFO=<ID=INSDUP,Number=0,Type=Flag,Description="The record is the result of an INS->DUP conversion">' >> ${SAMPLE_ID}_header_new.txt
+                echo '##INFO=<ID=INS_ALT,Number=1,Type=String,Description="The ALT allele of the original INS record">' >> ${SAMPLE_ID}_header_new.txt
+                tail -n 1 ${SAMPLE_ID}_header.txt >> ${SAMPLE_ID}_header_new.txt
+                bcftools reheader --header ${SAMPLE_ID}_header_new.txt ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+                rm -f ${SAMPLE_ID}_header_new.txt
+            fi
+            rm -f ${SAMPLE_ID}_header.txt
+
             # Splitting by SVTYPE and uploading
             bcftools filter --include 'SVTYPE="DEL"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
             bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=0' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &

@@ -17,13 +17,14 @@ import java.io.*;
 public class UltralongInsExtractDups {
     
     /**
-     * @param args
+     * @param args 4: fixed QUAL value to assign to all INS->DUP records.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String BREAKPOINTS_DIR = args[1];
         final String OUTPUT_VCF_INS = args[2];
         final String OUTPUT_VCF_DUP = args[3];
+        final int INSDUP_QUAL = Integer.parseInt(args[4]);
         
         int i, p;
         int pos, newPos, newEnd, newLength, nRecords, nDups;
@@ -40,8 +41,8 @@ public class UltralongInsExtractDups {
             if (str.charAt(0)=='#') {
                 bwIns.write(str+"\n");
                 if (str.startsWith("#CHROM")) {
-                    bwDup.write("##INFO=<ID=INSDUP,Number=0,Type=Flag,Description=\"The record is the result of an INS->DUP conversion\">");
-                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">");
+                    bwDup.write("##INFO=<ID=INSDUP,Number=0,Type=Flag,Description=\"The record is the result of an INS->DUP conversion\">\n");
+                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
                 }
                 bwDup.write(str+"\n");
                 str=br.readLine();
@@ -63,6 +64,7 @@ public class UltralongInsExtractDups {
                 newLength=newEnd-newPos;
                 tokens[1]=newPos+"";
                 alt=tokens[4]; tokens[4]="<DUP>";
+                tokens[5]=INSDUP_QUAL+"";
                 info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                 info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                 info=addOrReplaceInfoField(info,"END",newEnd+"");
