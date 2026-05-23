@@ -101,9 +101,9 @@ task Impl {
             ${TIME_COMMAND} bcftools norm --multiallelics -any --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
 
-            # Removing SNVs, if any.
+            # Removing SNVs and small INDELs to speed up downstream steps
             if [ ${CALLER_ID} = 'pav' ]; then
-                ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV"' --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf
+                ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV" || ABS(SVLEN)<20' --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf
                 rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             fi
 
@@ -148,6 +148,7 @@ task Impl {
 
         # ---------------------------- Main program ----------------------------
 
+        SV_TYPES="DEL INS DUP INV BND SUB UNK"
         mv ~{tr_bed} ./tr.bed
         bedtools complement -L -i tr.bed -g ~{reference_fai} > not_tr.bed
         while read -u 3 LINE; do
@@ -169,11 +170,11 @@ task Impl {
             # Counting
             COUNTS="${SAMPLE_ID},${COVERAGE}"
             for REGIONS in 0 1 2; do
-                for SVTYPE in DEL INS DUP INV; do
+                for SVTYPE in ${SV_TYPES}; do
                     Count ${SAMPLE_ID} 20 ${SVTYPE} ${REGIONS}
                 done
             done
-            for SVTYPE in DEL INS DUP INV; do
+            for SVTYPE in ${SV_TYPES}; do
                 for REGIONS in 0 1 2; do
                     Count ${SAMPLE_ID} 50 ${SVTYPE} ${REGIONS}
                 done
