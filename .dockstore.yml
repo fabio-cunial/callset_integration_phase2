@@ -640,3 +640,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongScore.wdl
   testParameterFiles:
+- name: SvQc
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SvQc.wdl
+  testParameterFiles:
