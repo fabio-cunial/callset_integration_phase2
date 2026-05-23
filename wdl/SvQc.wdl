@@ -14,6 +14,7 @@ workflow SvQc {
     }
     parameter_meta {
         chunk_csv: "Format: ID,COVERAGE,PAV_TBI,PAV_VCF_GZ,PBSV_TBI,PBSV_VCF_GZ,SNIFFLES_TBI,SNIFFLES_VCF_GZ"
+        tr_bed: "Assumed to contain at least one record for each standard chromosome"
     }
 
     call Impl {
@@ -30,6 +31,8 @@ workflow SvQc {
 }
 
 
+# ~3m per sample, including localization.
+#
 task Impl {
     input {
         File chunk_csv
@@ -55,7 +58,6 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
 
 
 
@@ -137,9 +139,15 @@ task Impl {
             elif [ ${REGIONS_MODE} = "2" ]; then
                 local REGIONS_ARG="--targets-file not_tr.bed --targets-overlap pos"
             fi
-            local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
-            local N_RECORDS_PBSV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pbsv.vcf | wc -l)
-            local N_RECORDS_SNIFFLES=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_sniffles.vcf | wc -l)
+            if [ ${SVTYPE} = "BND" -o ${SVTYPE} = "UNK" -o ${SVTYPE} = "SUB" ]; then
+                local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                local N_RECORDS_PBSV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_pbsv.vcf | wc -l)
+                local N_RECORDS_SNIFFLES=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_sniffles.vcf | wc -l)
+            else
+                local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                local N_RECORDS_PBSV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pbsv.vcf | wc -l)
+                local N_RECORDS_SNIFFLES=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_sniffles.vcf | wc -l)
+            fi
             COUNTS="${COUNTS},${N_RECORDS_PAV},${N_RECORDS_PBSV},${N_RECORDS_SNIFFLES}"
         }
 
@@ -148,9 +156,13 @@ task Impl {
 
         # ---------------------------- Main program ----------------------------
 
-        SV_TYPES="DEL INS DUP INV BND SUB UNK"
+        # Initializing BED files
         mv ~{tr_bed} ./tr.bed
         bedtools complement -L -i tr.bed -g ~{reference_fai} > not_tr.bed
+
+        # Counting
+        SV_TYPES_PRIMARY="DEL INS DUP INV"
+        SV_TYPES_SECONDARY="BND SUB UNK"
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             COVERAGE=$(echo ${LINE} | cut -d , -f 2)
@@ -169,14 +181,16 @@ task Impl {
 
             # Counting
             COUNTS="${SAMPLE_ID},${COVERAGE}"
-            for REGIONS in 0 1 2; do
-                for SVTYPE in ${SV_TYPES}; do
-                    Count ${SAMPLE_ID} 20 ${SVTYPE} ${REGIONS}
+            for SVLEN in 20 50; do
+                for REGIONS in 0 1 2; do
+                    for SVTYPE in ${SV_TYPES_PRIMARY}; do
+                        Count ${SAMPLE_ID} ${SVLEN} ${SVTYPE} ${REGIONS}
+                    done
                 done
             done
-            for SVTYPE in ${SV_TYPES}; do
-                for REGIONS in 0 1 2; do
-                    Count ${SAMPLE_ID} 50 ${SVTYPE} ${REGIONS}
+            for REGIONS in 0 1 2; do
+                for SVTYPE in ${SV_TYPES_SECONDARY}; do
+                    Count ${SAMPLE_ID} 0 ${SVTYPE} ${REGIONS}
                 done
             done
             echo "${COUNTS}" > ${SAMPLE_ID}.counts
