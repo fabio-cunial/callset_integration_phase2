@@ -148,7 +148,7 @@ task Impl {
 
         # ---------------------------- Main program ----------------------------
 
-        gcloud storage cp ~{tr_bed} ./tr.bed
+        mv ~{tr_bed} ./tr.bed
         bedtools complement -L -i tr.bed -g ~{reference_fai} > not_tr.bed
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
