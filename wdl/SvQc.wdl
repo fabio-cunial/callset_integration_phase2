@@ -77,6 +77,7 @@ task Impl {
             local SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 8)
             
             gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_tmp.vcf.gz
+            # Removing SNVs to speed up downstream steps
             ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV"' --output-type v ${SAMPLE_ID}_tmp.vcf.gz --output ${SAMPLE_ID}_pav.vcf
             rm -f ${SAMPLE_ID}_tmp.vcf.gz
             gcloud storage cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz

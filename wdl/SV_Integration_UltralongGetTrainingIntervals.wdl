@@ -163,7 +163,9 @@ task Impl {
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_del.vcf.gz
 
             # 1.2 DUP
-            bcftools filter --include 'SVTYPE=="DUP" || SVTYPE=="DUP:TANDEM" || SVTYPE=="DUP:INT"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            # The intervals of both DUP:TANDEM and DUP:INT behave like DUPs in
+            # terms of depth, so we include both.
+            bcftools filter --include 'SVTYPE=="DUP"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
             java -cp ~{docker_dir} UltralongForceDup ${SAMPLE_ID}_out.vcf | bgzip > ${SAMPLE_ID}_svimasm_dup.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
 
@@ -195,6 +197,13 @@ task Impl {
             # complex DUPs, which are likely to have distinct BAM patterns 
             # anyway, we accept this issue in exchange for the advantage in 
             # runtime.
+            #
+            # Remark: one could think of creating an INT for every DUP:INT 
+            # record from svim-asm. However, we ran svim-asm with default 
+            # params, which exclude `--interspersed_duplications_as_insertions`,
+            # which means that an interspersed DUP is only represented as its 
+            # source interval and the destination cannot be reconstructed. We 
+            # should have run svim-asm twice, with and without the flag.
             bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_ins.vcf
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
@@ -269,15 +278,25 @@ task Impl {
             fi
 
             # 3.2 DUP
-            # DUP records from svim-asm seem to be generally comprehensive,
-            # and they do not need to be augmented with e.g. gaps in
-            # dipcall's BED.
+            # We compare the query DUPs to the entire DUP truth, which consists
+            # of svim-asm's DUPs and svim-asm's INS->DUP.
+            # Remark: DUP records from svim-asm seem to be generally 
+            # comprehensive, and they do not need to be augmented with e.g. gaps
+            # in dipcall's BED.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_dup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
+
+            # 3.3 INSDUP
+            # We compare the query INS->DUPs to the entire DUP truth, which 
+            # consists of svim-asm's DUPs and svim-asm's INS->DUP.
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
+            rm -rf ${SAMPLE_ID}_truvari/
             
-            # 3.3 INS
+            # 3.4 INS
             # Remark: we don't use `--dup-to-ins` in truvari, since we 
             # assume that DUP and INS calls are already accurately
             # classified in both the query and the svim-asm VCF.
@@ -286,7 +305,7 @@ task Impl {
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
 
-            # 3.4 INV
+            # 3.5 INV
             # Remark: svim-asm does not emit calls at some query INVs that 
             # correspond to gaps in the dipcall BED. We choose to mark as 
             # true such query INVs, at the risk of polluting the training 
