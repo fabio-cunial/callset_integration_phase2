@@ -7,6 +7,8 @@ MAX_COVERAGE=50;
 MAX_NRECORDS=40000;
 CALLER_NAMES={'PAV','PBSV','Sniffles'};
 
+
+A=load('/Users/fcunial/Downloads/svqc/plot/counts.csv');
 % Meaning of the columns of `counts.csv` (numbers ar offsets from the first 
 % column, which contains the coverage):
 %
@@ -158,11 +160,11 @@ CALLER_NAMES={'PAV','PBSV','Sniffles'};
 %       99 sniffles
 
 
-A=load('/Users/fcunial/Downloads/svqc/plot/counts.csv');
+
+
+figure(1);
 x=A(:,1);
 
-% PAV
-figure(1);
 
 % >=20bp
 subplot(3,3,1); hold on;
@@ -181,6 +183,7 @@ for i=[25,28,31,34]+CALLER_ID
 end
 xlabel('Coverage'); ylabel('Number of records'); title(sprintf('%s, >=20bp, outside TR', CALLER_NAMES{CALLER_ID+1})); axis([0 MAX_COVERAGE 0 MAX_NRECORDS]); axis square; grid on; set(gca,'fontsize',14); legend('DEL','INS','DUP','INV','location','eastoutside');
 
+
 % >=50bp
 subplot(3,3,2); hold on;
 for i=[37,40,43,46]+CALLER_ID
@@ -197,6 +200,7 @@ for i=[61,64,67,70]+CALLER_ID
     plot(x,A(:,1+i),'.');
 end
 xlabel('Coverage'); ylabel('Number of records'); title(sprintf('%s, >=50bp, outside TR', CALLER_NAMES{CALLER_ID+1})); axis([0 MAX_COVERAGE 0 MAX_NRECORDS]); axis square; grid on; set(gca,'fontsize',14); legend('DEL','INS','DUP','INV','location','eastoutside');
+
 
 % Other types
 subplot(3,3,3); hold on;
