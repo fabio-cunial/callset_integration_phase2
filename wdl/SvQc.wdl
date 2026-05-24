@@ -6,6 +6,7 @@ version 1.0
 workflow SvQc {
     input {
         File chunk_csv
+        Int sequencing_technology
         File tr_bed
         File reference_fai
         String remote_outdir
@@ -14,12 +15,14 @@ workflow SvQc {
     }
     parameter_meta {
         chunk_csv: "Format: ID,COVERAGE,PAV_TBI,PAV_VCF_GZ,PBSV_TBI,PBSV_VCF_GZ,SNIFFLES_TBI,SNIFFLES_VCF_GZ"
+        sequencing_technology: "0=PacBio, 1=ONT"
         tr_bed: "Assumed to contain at least one record for each standard chromosome"
     }
 
     call Impl {
         input:
             chunk_csv = chunk_csv,
+            sequencing_technology = sequencing_technology,
             tr_bed = tr_bed,
             reference_fai = reference_fai,
             remote_outdir = remote_outdir,
@@ -36,6 +39,7 @@ workflow SvQc {
 task Impl {
     input {
         File chunk_csv
+        Int sequencing_technology
         File tr_bed
         File reference_fai
         String remote_outdir
@@ -69,17 +73,23 @@ task Impl {
             local LINE=$2
             
             local COVERAGE=$(echo ${LINE} | cut -d , -f 2)
-            local PAV_TBI=$(echo ${LINE} | cut -d , -f 3)
-            local PAV_VCF_GZ=$(echo ${LINE} | cut -d , -f 4)
-            local PBSV_TBI=$(echo ${LINE} | cut -d , -f 5)
-            local PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 6)
-            local SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 7)
-            local SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 8)
-            
-            gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_tmp.vcf.gz
-            # Removing SNVs to speed up downstream steps
-            ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV"' --output-type v ${SAMPLE_ID}_tmp.vcf.gz --output ${SAMPLE_ID}_pav.vcf
-            rm -f ${SAMPLE_ID}_tmp.vcf.gz
+            if [ ~{sequencing_technology} -eq 0 ]; then
+                local PAV_TBI=$(echo ${LINE} | cut -d , -f 3)
+                local PAV_VCF_GZ=$(echo ${LINE} | cut -d , -f 4)
+                local PBSV_TBI=$(echo ${LINE} | cut -d , -f 5)
+                local PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 6)
+                local SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 7)
+                local SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 8)
+                gcloud storage cp ${PAV_VCF_GZ} ./${SAMPLE_ID}_tmp.vcf.gz
+                # Removing SNVs to speed up downstream steps
+                ${TIME_COMMAND} bcftools filter --exclude 'SVTYPE="SNV"' --output-type v ${SAMPLE_ID}_tmp.vcf.gz --output ${SAMPLE_ID}_pav.vcf
+                rm -f ${SAMPLE_ID}_tmp.vcf.gz
+            else
+                local PBSV_TBI=$(echo ${LINE} | cut -d , -f 3)
+                local PBSV_VCF_GZ=$(echo ${LINE} | cut -d , -f 4)
+                local SNIFFLES_TBI=$(echo ${LINE} | cut -d , -f 5)
+                local SNIFFLES_VCF_GZ=$(echo ${LINE} | cut -d , -f 6)
+            fi
             gcloud storage cp ${PBSV_VCF_GZ} ./${SAMPLE_ID}_pbsv.vcf.gz
             gunzip ${SAMPLE_ID}_pbsv.vcf.gz
             gcloud storage cp ${SNIFFLES_VCF_GZ} ./${SAMPLE_ID}_sniffles.vcf.gz
@@ -141,11 +151,19 @@ task Impl {
                 local REGIONS_ARG="--targets-file not_tr.bed --targets-overlap pos"
             fi
             if [ ${SVTYPE} = "BND" -o ${SVTYPE} = "UNK" -o ${SVTYPE} = "SUB" ]; then
-                local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                if [ ~{sequencing_technology} -eq 0 ]; then
+                    local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                else
+                    local N_RECORDS_PAV="0"
+                fi
                 local N_RECORDS_PBSV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_pbsv.vcf | wc -l)
                 local N_RECORDS_SNIFFLES=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}'" ${REGIONS_ARG} ${SAMPLE_ID}_sniffles.vcf | wc -l)
             else
-                local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                if [ ~{sequencing_technology} -eq 0 ]; then
+                    local N_RECORDS_PAV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pav.vcf | wc -l)
+                else
+                    local N_RECORDS_PAV="0"
+                fi
                 local N_RECORDS_PBSV=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_pbsv.vcf | wc -l)
                 local N_RECORDS_SNIFFLES=$(bcftools query --format '%ID\n' --include "SVTYPE='${SVTYPE}' && ABS(SVLEN)>=${MIN_SV_LENGTH}" ${REGIONS_ARG} ${SAMPLE_ID}_sniffles.vcf | wc -l)
             fi
@@ -178,7 +196,9 @@ task Impl {
             LocalizeSample ${SAMPLE_ID} ${LINE}
             CanonizeVcf ${SAMPLE_ID} "pbsv"
             CanonizeVcf ${SAMPLE_ID} "sniffles"
-            CanonizeVcf ${SAMPLE_ID} "pav"
+            if [ ~{sequencing_technology} -eq 0 ]; then
+                CanonizeVcf ${SAMPLE_ID} "pav"
+            fi
 
             # Counting
             COUNTS="${SAMPLE_ID},${COVERAGE}"

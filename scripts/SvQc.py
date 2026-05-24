@@ -3,28 +3,61 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import numpy as np
 
-# Configuration
-COHORT_NAME = 'BI'
-CALLER_ID = 2  # 0=pav, 1=pbsv, 2=sniffles
+
+COHORT_NAME = 'UW'
+CALLER_ID = 0  # 0=pav, 1=pbsv, 2=sniffles
 SELECTED_SV_TYPE = 'DEL'  # DEL, INS, DUP, INV, BND, SUB, UNK
+INPUT_DIR = f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/'
+
 
 SV_TYPES_PRIMARY = ['DEL', 'INS', 'DUP', 'INV']
 SV_TYPES_SECONDARY = ['BND', 'SUB', 'UNK']
-MAX_COVERAGE = 50
-MAX_NRECORDS = 40000
 CALLER_NAMES = ['PAV', 'PBSV', 'Sniffles']
 HEATMAP_BINS_X = 50
 HEATMAP_BINS_Y = 50
 
-if SELECTED_SV_TYPE not in SV_TYPES_PRIMARY + SV_TYPES_SECONDARY:
-    raise ValueError(
-        f'Unsupported SV type: {SELECTED_SV_TYPE}. '
-        f'Valid values: {SV_TYPES_PRIMARY + SV_TYPES_SECONDARY}'
+
+def _make_bin_edges(values, nbins):
+    if values.size == 0:
+        return np.linspace(0.0, 1.0, nbins + 1)
+    vmin = np.min(values)
+    vmax = np.max(values)
+    if vmin == vmax:
+        pad = max(abs(vmin) * 0.01, 0.5)
+        vmin -= pad
+        vmax += pad
+    return np.linspace(vmin, vmax, nbins + 1)
+
+
+def plot_count_heatmap(fig_obj, ax_obj, x_values, y_values):
+    x_values = np.asarray(x_values, dtype=float)
+    y_values = np.asarray(y_values, dtype=float)
+
+    valid_mask = np.isfinite(x_values) & np.isfinite(y_values)
+    x_valid = x_values[valid_mask]
+    y_valid = y_values[valid_mask]
+
+    x_edges = _make_bin_edges(x_valid, HEATMAP_BINS_X)
+    y_edges = _make_bin_edges(y_valid, HEATMAP_BINS_Y)
+    counts, _, _ = np.histogram2d(x_valid, y_valid, bins=[x_edges, y_edges])
+
+    cmap = plt.get_cmap('viridis').copy()
+    cmap.set_under('white')
+    vmax = max(1.0, float(np.max(counts)))
+    norm = colors.Normalize(vmin=0.5, vmax=vmax)
+
+    mesh = ax_obj.pcolormesh(
+        x_edges,
+        y_edges,
+        counts.T,
+        cmap=cmap,
+        norm=norm,
+        shading='auto',
     )
+    fig_obj.colorbar(mesh, ax=ax_obj, label='Number of samples')
 
-# Load data
-A = pd.read_csv(f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/counts.csv', header=None)
 
+A = pd.read_csv(f'{INPUT_DIR}counts.csv', header=None)
 # Meaning of the columns of `counts.csv` (numbers are offsets from the first 
 # column, which contains the coverage):
 #
@@ -175,54 +208,13 @@ A = pd.read_csv(f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/counts.csv', 
 #       98 pbsv
 #       99 sniffles
 
+
+
+
+# Figure 1: heatmaps with X=coverage, Y=number of calls of the selected SV type, 
+# cell = number of samples.
 fig = plt.figure(figsize=(15, 12))
 x = A.iloc[:, 0].values  # First column is coverage
-
-
-def _make_bin_edges(values, nbins):
-    if values.size == 0:
-        return np.linspace(0.0, 1.0, nbins + 1)
-    vmin = np.min(values)
-    vmax = np.max(values)
-    if vmin == vmax:
-        pad = max(abs(vmin) * 0.01, 0.5)
-        vmin -= pad
-        vmax += pad
-    return np.linspace(vmin, vmax, nbins + 1)
-
-
-def plot_count_heatmap(fig_obj, ax_obj, x_values, y_values):
-    x_values = np.asarray(x_values, dtype=float)
-    y_values = np.asarray(y_values, dtype=float)
-
-    valid_mask = np.isfinite(x_values) & np.isfinite(y_values)
-    x_valid = x_values[valid_mask]
-    y_valid = y_values[valid_mask]
-
-    x_edges = _make_bin_edges(x_valid, HEATMAP_BINS_X)
-    y_edges = _make_bin_edges(y_valid, HEATMAP_BINS_Y)
-    counts, _, _ = np.histogram2d(x_valid, y_valid, bins=[x_edges, y_edges])
-
-    cmap = plt.get_cmap('viridis').copy()
-    cmap.set_under('white')
-    vmax = max(1.0, float(np.max(counts)))
-    norm = colors.Normalize(vmin=0.5, vmax=vmax)
-
-    mesh = ax_obj.pcolormesh(
-        x_edges,
-        y_edges,
-        counts.T,
-        cmap=cmap,
-        norm=norm,
-        shading='auto',
-    )
-    fig_obj.colorbar(mesh, ax=ax_obj, label='Number of samples')
-
-
-
-
-
-
 
 # >=20bp
 # Subplot 1: whole genome
@@ -402,24 +394,16 @@ ax9.grid(True, color='lightgray')
 ax9.tick_params(labelsize=10)
 
 plt.tight_layout()
-plt.savefig(f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/counts_{SELECTED_SV_TYPE}.png', dpi=300, bbox_inches='tight')
+plt.savefig(f'{INPUT_DIR}counts_{CALLER_NAMES[CALLER_ID]}_{SELECTED_SV_TYPE}.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 
 
 
-
-
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 2: heatmaps with X = number of DEL, Y = number of INS, cell = number
-# of samples at those (DEL, INS) counts.
-# Column 1: >=20bp panels.  Column 2: >=50bp panels.
-# ─────────────────────────────────────────────────────────────────────────────
-
+# Figure 2: heatmaps with X=number of DEL, Y=number of INS, cell = number of 
+# samples.
 fig2 = plt.figure(figsize=(10, 12))
+
 
 # >=20bp
 # Subplot 1: whole genome
@@ -460,6 +444,7 @@ ax2_5.set_box_aspect(1)
 ax2_5.set_axisbelow(False)
 ax2_5.grid(True, color='lightgray')
 ax2_5.tick_params(labelsize=10)
+
 
 # >=50bp
 # Subplot 2: whole genome
@@ -502,5 +487,5 @@ ax2_6.grid(True, color='lightgray')
 ax2_6.tick_params(labelsize=10)
 
 fig2.tight_layout()
-fig2.savefig(f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/counts_del_ins.png', dpi=300, bbox_inches='tight')
+fig2.savefig(f'{INPUT_DIR}counts_{CALLER_NAMES[CALLER_ID]}_DEL_INS.png', dpi=300, bbox_inches='tight')
 plt.show()
