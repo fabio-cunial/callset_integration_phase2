@@ -16,13 +16,15 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         String remote_indir_svimasm
         String remote_outdir
         
-        Int match_to_gaps = 1
-        Int svimasm_ins_slack_bp = 200
-        Float svimasm_ins_length_similarity = 0.9
-
+        Int svimasm_ins_use_gaps = 1
+        Int svimasm_ins_use_gaps_slack_bp = 200
+        Float svimasm_ins_use_gaps_length_similarity = 0.9
         Int svimasm_ins_use_remap = 1
         Int svimasm_ins_remap_max_length = 2000000
         Float svimasm_ins_remap_cov_threshold = 0.8
+
+        Int match_to_gaps = 1
+
         File reference_fa
         File reference_fai
         
@@ -49,14 +51,15 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             remote_indir_svimasm = remote_indir_svimasm,
             remote_outdir = remote_outdir,
 
-            svimasm_ins_slack_bp = svimasm_ins_slack_bp,
-            svimasm_ins_length_similarity = svimasm_ins_length_similarity,
-
-            match_to_gaps = match_to_gaps,
-
+            svimasm_ins_use_gaps = svimasm_ins_use_gaps,
+            svimasm_ins_use_gaps_slack_bp = svimasm_ins_use_gaps_slack_bp,
+            svimasm_ins_use_gaps_length_similarity = svimasm_ins_use_gaps_length_similarity,
             svimasm_ins_use_remap = svimasm_ins_use_remap,
             svimasm_ins_remap_max_length = svimasm_ins_remap_max_length,
             svimasm_ins_remap_cov_threshold = svimasm_ins_remap_cov_threshold,
+
+            match_to_gaps = match_to_gaps,
+
             reference_fa = reference_fa,
             reference_fai = reference_fai,
 
@@ -91,14 +94,15 @@ task Impl {
         String remote_indir_svimasm
         String remote_outdir
         
-        Int svimasm_ins_slack_bp
-        Float svimasm_ins_length_similarity
-
-        Int match_to_gaps
-
+        Int svimasm_ins_use_gaps
+        Int svimasm_ins_use_gaps_slack_bp
+        Float svimasm_ins_use_gaps_length_similarity
         Int svimasm_ins_use_remap
         Int svimasm_ins_remap_max_length
         Float svimasm_ins_remap_cov_threshold
+
+        Int match_to_gaps
+
         File reference_fa
         File reference_fai
 
@@ -209,8 +213,8 @@ task Impl {
             if [ ${N_INS} -gt 0 ]; then
                 # 1.3.1 Filtering all INS with the dipcall BED
                 # Approx. 5% of all INS get marked as DUP in this step.
-                if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_slack_bp} ~{svimasm_ins_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                if [ ~{svimasm_ins_use_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_use_gaps_slack_bp} ~{svimasm_ins_use_gaps_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
                     if [ ${N_INS_DUP} -gt 0 ]; then
