@@ -271,6 +271,8 @@ task Impl {
             # Approx. 8% of all DEL get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_del.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_del1.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
@@ -280,11 +282,26 @@ task Impl {
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
                 ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
+                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del2.vcf.gz
                 rm -rf ${SAMPLE_ID}_truvari/
-                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_del_training.vcf.gz
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del_training.vcf.gz
-                rm -f ${SAMPLE_ID}_del1.vcf.gz* ${SAMPLE_ID}_del2.vcf.gz* ${SAMPLE_ID}_gaps.vcf.gz*
+                N_DEL1=$(bcftools index --nrecords ${SAMPLE_ID}_del1.vcf.gz)
+                N_DEL2=$(bcftools index --nrecords ${SAMPLE_ID}_del2.vcf.gz)
+                if [ ${N_DEL1} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_del1.vcf.gz*
+                    mv ${SAMPLE_ID}_del2.vcf.gz ${SAMPLE_ID}_del_training.vcf.gz
+                    mv ${SAMPLE_ID}_del2.vcf.gz.tbi ${SAMPLE_ID}_del_training.vcf.gz.tbi
+                elif [ ${N_DEL2} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_del2.vcf.gz*
+                    mv ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del_training.vcf.gz
+                    mv ${SAMPLE_ID}_del1.vcf.gz.tbi ${SAMPLE_ID}_del_training.vcf.gz.tbi
+                else
+                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_del_training.vcf.gz
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del_training.vcf.gz
+                    rm -f ${SAMPLE_ID}_del1.vcf.gz* ${SAMPLE_ID}_del2.vcf.gz*
+                fi
+                rm -f ${SAMPLE_ID}_gaps.vcf.gz*
             else
                 mv ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del_training.vcf.gz
                 mv ${SAMPLE_ID}_del1.vcf.gz.tbi ${SAMPLE_ID}_del_training.vcf.gz.tbi
@@ -307,14 +324,28 @@ task Impl {
             # asm's INS->DUP.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            N_INSDUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training.vcf.gz)
+            N_INSDUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training_prime.vcf.gz)
+            if [ ${N_INSDUP_TRAINING} -eq 0 ]; then
+                rm -f ${SAMPLE_ID}_insdup_training.vcf.gz*
+                mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+                mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz.tbi ${SAMPLE_ID}_insdup_training.vcf.gz.tbi
+            elif [ ${N_INSDUP_TRAINING_PRIME} -eq 0 ]; then
+                rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz*
+            else
+                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            fi
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             
             # 3.4 INS
@@ -334,6 +365,8 @@ task Impl {
             # Approx. 15% of all INV get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_inv.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
+            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_inv1.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
@@ -343,11 +376,26 @@ task Impl {
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
                 ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
+                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv2.vcf.gz
                 rm -rf ${SAMPLE_ID}_truvari/
-                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_inv_training.vcf.gz
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv_training.vcf.gz
-                rm -f ${SAMPLE_ID}_inv1.vcf.gz* ${SAMPLE_ID}_inv2.vcf.gz* ${SAMPLE_ID}_gaps.vcf.gz*
+                N_INV1=$(bcftools index --nrecords ${SAMPLE_ID}_inv1.vcf.gz)
+                N_INV2=$(bcftools index --nrecords ${SAMPLE_ID}_inv2.vcf.gz)
+                if [ ${N_INV1} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_inv1.vcf.gz*
+                    mv ${SAMPLE_ID}_inv2.vcf.gz ${SAMPLE_ID}_inv_training.vcf.gz
+                    mv ${SAMPLE_ID}_inv2.vcf.gz.tbi ${SAMPLE_ID}_inv_training.vcf.gz.tbi
+                elif [ ${N_INV2} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_inv2.vcf.gz*
+                    mv ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv_training.vcf.gz
+                    mv ${SAMPLE_ID}_inv1.vcf.gz.tbi ${SAMPLE_ID}_inv_training.vcf.gz.tbi
+                else
+                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_inv_training.vcf.gz
+                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv_training.vcf.gz
+                    rm -f ${SAMPLE_ID}_inv1.vcf.gz* ${SAMPLE_ID}_inv2.vcf.gz*
+                fi
+                rm -f ${SAMPLE_ID}_gaps.vcf.gz*
             else
                 mv ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv_training.vcf.gz
                 mv ${SAMPLE_ID}_inv1.vcf.gz.tbi ${SAMPLE_ID}_inv_training.vcf.gz.tbi
