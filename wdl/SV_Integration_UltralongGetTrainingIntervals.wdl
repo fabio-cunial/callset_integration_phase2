@@ -19,6 +19,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Int svimasm_ins_use_gaps = 1
         Int svimasm_ins_use_gaps_slack_bp = 200
         Float svimasm_ins_use_gaps_length_similarity = 0.9
+
         Int svimasm_ins_use_remap = 1
         Int svimasm_ins_remap_max_length = 2000000
         Float svimasm_ins_remap_cov_threshold = 0.8
@@ -54,6 +55,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             svimasm_ins_use_gaps = svimasm_ins_use_gaps,
             svimasm_ins_use_gaps_slack_bp = svimasm_ins_use_gaps_slack_bp,
             svimasm_ins_use_gaps_length_similarity = svimasm_ins_use_gaps_length_similarity,
+
             svimasm_ins_use_remap = svimasm_ins_use_remap,
             svimasm_ins_remap_max_length = svimasm_ins_remap_max_length,
             svimasm_ins_remap_cov_threshold = svimasm_ins_remap_cov_threshold,
@@ -202,7 +204,7 @@ task Impl {
             # anyway, we accept this issue in exchange for the advantage in 
             # runtime.
             #
-            # Remark: one could think of creating an INT for every DUP:INT 
+            # Remark: one could think of creating an INS for every DUP:INT 
             # record from svim-asm. However, we ran svim-asm with default 
             # params, which exclude `--interspersed_duplications_as_insertions`,
             # which means that an interspersed DUP is only represented as its 
@@ -220,8 +222,6 @@ task Impl {
                     if [ ${N_INS_DUP} -gt 0 ]; then
                         ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
                         rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
-                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                        rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
                     fi
                 fi
 
@@ -232,16 +232,25 @@ task Impl {
                     bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
                     ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{svimasm_ins_remap_max_length} --cov-threshold ~{svimasm_ins_remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz*
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
                     rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz* ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
-                    ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
-                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                    rm -f ${SAMPLE_ID}_svimasm_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
+                    ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf --output ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
+                    rm -f ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
+                    if [ -e ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ]; then
+                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                        rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                    else
+                        mv ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        mv ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz.tbi ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz.tbi
+                    fi
                 fi
             fi
             bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
+            if [ ! -e ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ]; then
+                bcftools view --header-only --output-type z ${SAMPLE_ID}_svimasm_ins.vcf.gz --output ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+            fi
 
             # 1.4 INV
             bcftools filter --include 'SVTYPE=="INV"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_inv.vcf.gz
@@ -282,6 +291,7 @@ task Impl {
             fi
 
             # 3.2 DUP
+            # ------------> Fix comment once finalized!!!!!!!!!!!!!!!!!!
             # We compare the query DUPs to the entire DUP truth, which consists
             # of svim-asm's DUPs and svim-asm's INS->DUP.
             # Remark: DUP records from svim-asm seem to be generally 
@@ -293,12 +303,19 @@ task Impl {
             rm -rf ${SAMPLE_ID}_truvari/
 
             # 3.3 INSDUP
-            # We compare the query INS->DUPs to the entire DUP truth, which 
-            # consists of svim-asm's DUPs and svim-asm's INS->DUP.
+            # We compare the query INS->DUPs to both svim-asm's DUP and svim-
+            # asm's INS->DUP.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+            rm -rf ${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             
             # 3.4 INS
             # Remark: we don't use `--dup-to-ins` in truvari, since we 

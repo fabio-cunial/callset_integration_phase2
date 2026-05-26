@@ -4,9 +4,9 @@ from matplotlib import colors
 import numpy as np
 
 
-COHORT_NAME = 'UW'
-CALLER_ID = 0  # 0=pav, 1=pbsv, 2=sniffles
-SELECTED_SV_TYPE = 'DEL'  # DEL, INS, DUP, INV, BND, SUB, UNK
+COHORT_NAME = 'BCM_ONT'
+CALLER_ID = 1  # 0=pav, 1=pbsv, 2=sniffles
+SELECTED_SV_TYPE = 'INV'  # DEL, INS, DUP, INV, BND, SUB, UNK
 INPUT_DIR = f'/Users/fcunial/Downloads/svqc/plot/{COHORT_NAME}/'
 
 
