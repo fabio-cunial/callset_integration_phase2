@@ -25,6 +25,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Float svimasm_ins_remap_cov_threshold = 0.8
 
         Int match_to_gaps = 1
+        Int match_insdups_to_dups = 1
 
         File reference_fa
         File reference_fai
@@ -61,6 +62,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             svimasm_ins_remap_cov_threshold = svimasm_ins_remap_cov_threshold,
 
             match_to_gaps = match_to_gaps,
+            match_insdups_to_dups = match_insdups_to_dups,
 
             reference_fa = reference_fa,
             reference_fai = reference_fai,
@@ -104,6 +106,7 @@ task Impl {
         Float svimasm_ins_remap_cov_threshold
 
         Int match_to_gaps
+        Int match_insdups_to_dups
 
         File reference_fa
         File reference_fai
@@ -169,8 +172,9 @@ task Impl {
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_del.vcf.gz
 
             # 1.2 DUP
-            # The intervals of both DUP:TANDEM and DUP:INT behave like DUPs in
-            # terms of depth, so we include both.
+            # We include the intervals of both DUP:TANDEM and of DUP:INT, even
+            # though the latter (interspersed duplication) behaves like DUP just
+            # in terms of depth, not in terms of breakpoints.
             bcftools filter --include 'SVTYPE=="DUP"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
             java -cp ~{docker_dir} UltralongForceDup ${SAMPLE_ID}_out.vcf | bgzip > ${SAMPLE_ID}_svimasm_dup.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
@@ -322,31 +326,30 @@ task Impl {
             # 3.3 INSDUP
             # We compare the query INS->DUPs to both svim-asm's DUP and svim-
             # asm's INS->DUP.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
+            rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/
-            N_INSDUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training.vcf.gz)
-            N_INSDUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training_prime.vcf.gz)
-            if [ ${N_INSDUP_TRAINING} -eq 0 ]; then
-                rm -f ${SAMPLE_ID}_insdup_training.vcf.gz*
-                mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
-                mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz.tbi ${SAMPLE_ID}_insdup_training.vcf.gz.tbi
-            elif [ ${N_INSDUP_TRAINING_PRIME} -eq 0 ]; then
-                rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz*
-            else
-                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            if [ ~{match_insdups_to_dups} -eq 1 ]; then
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+                rm -rf ${SAMPLE_ID}_truvari/
+                N_INSDUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training.vcf.gz)
+                N_INSDUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training_prime.vcf.gz)
+                if [ ${N_INSDUP_TRAINING} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_insdup_training.vcf.gz*
+                    mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+                    mv ${SAMPLE_ID}_insdup_training_prime.vcf.gz.tbi ${SAMPLE_ID}_insdup_training.vcf.gz.tbi
+                elif [ ${N_INSDUP_TRAINING_PRIME} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz*
+                else
+                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                    rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
+                fi
             fi
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             
             # 3.4 INS
             # Remark: we don't use `--dup-to-ins` in truvari, since we 
@@ -401,7 +404,7 @@ task Impl {
                 mv ${SAMPLE_ID}_inv1.vcf.gz.tbi ${SAMPLE_ID}_inv_training.vcf.gz.tbi
             fi
             
-            # Uploading and deallocating sample
+            # Uploading and deallocating the sample
             gcloud storage mv ${SAMPLE_ID}_'*_training.vcf.gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
