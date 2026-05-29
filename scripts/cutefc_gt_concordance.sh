@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-REMOTE_INDIR_BEFORE="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/v3/15x/workpackage_1"
-REMOTE_INDIR_AFTER="gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/scratch/cunial_intersample_vcf/v3/ultralong_annotate_production/second_attempt"
-REMOTE_INDIR_TRUTH="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/v3/training_resource_for_ultralong_svimasm/individual_vcfs"
+REMOTE_INDIR_BEFORE="???/v3/15x/workpackage_1"
+REMOTE_INDIR_AFTER="???/scratch/cunial_intersample_vcf/v3/ultralong_annotate_production/second_attempt"
+REMOTE_INDIR_TRUTH="???/v3/training_resource_for_ultralong_svimasm/individual_vcfs"
 SAMPLE_IDS_FILE=""
 
 set -euxo pipefail
