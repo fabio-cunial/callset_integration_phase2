@@ -15,6 +15,7 @@ workflow SV_Integration_UltralongAnnotate {
         
         Int ins2dup_bin_length = 100
         Float ins2dup_bin_coverage_ratio = 1.5
+        Int convert_ins_to_dup = 1
         
         Int custom_n_coverage_bins = 10
         Int custom_breakpoint_window_bp = 500
@@ -22,7 +23,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int custom_adjacency_slack_bp = 300
 
         File feature_extraction_py
-        Int use_cutefc = 1
+        Int use_cutefc = 0
 
         File tr_bed
         File segdup_bed
@@ -34,7 +35,8 @@ workflow SV_Integration_UltralongAnnotate {
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam"
-        tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations" 
+        convert_ins_to_dup: "INS records that correspond to duplications are rewritten as DUP records"
+        tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
     }
@@ -50,7 +52,8 @@ workflow SV_Integration_UltralongAnnotate {
 
             ins2dup_bin_length = ins2dup_bin_length,
             ins2dup_bin_coverage_ratio = ins2dup_bin_coverage_ratio,
-            
+            convert_ins_to_dup = convert_ins_to_dup,
+
             custom_n_coverage_bins = custom_n_coverage_bins,
             custom_breakpoint_window_bp = custom_breakpoint_window_bp,
             custom_min_clip_length = custom_min_clip_length,
@@ -113,6 +116,7 @@ task Impl {
 
         Int ins2dup_bin_length
         Float ins2dup_bin_coverage_ratio
+        Int convert_ins_to_dup
         
         Int custom_n_coverage_bins
         Int custom_breakpoint_window_bp
@@ -977,6 +981,13 @@ END
             local BIN_LENGTH=$4
             local BIN_COVERAGE_RATIO=$5
 
+            if [ ~{convert_ins_to_dup} -eq 1 ]; then
+                local INSDUP_MODE=0
+            else
+                local INSDUP_MODE=1
+            fi
+            local INSDUP_QUAL=1
+
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins.vcf
             local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -eq 0 ]; then
@@ -988,7 +999,7 @@ END
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf 1
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ${INSDUP_QUAL} ${INSDUP_MODE}
             rm -f *_breakpoints.tsv
             local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
             if [ ${N_INS_DUP} -eq 0 ]; then
@@ -997,19 +1008,28 @@ END
                 return
             fi
             rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
-            rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
-            # Merging `ins_dup` and `not_ins`.
+            # Merging `ins_dup` and `not_ins` or `ins`.
+            #
             # Remark: `truvari collapse` is run with the same parameters as in
             # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
             # lower QUAL to make truvari choose an original DUP record as a 
             # cluster representative. This collapses ~3-5 variants per sample.
+            #
             # Remark: truvari needs `bcftools merge` and it does not work with 
             # `bcftools concat`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
-            ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
+            if [ ~{convert_ins_to_dup} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
+                rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
+                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
+                ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
+            else
+                ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
+                ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
+                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_ins.vcf* ${SAMPLE_ID}_ins_dup.vcf* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_ins.vcf
+            fi
         }
         
         
@@ -1129,10 +1149,16 @@ END
 
             # Splitting by SVTYPE and uploading
             bcftools filter --include 'SVTYPE="DEL"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_del.vcf.gz &
-            bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=0' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
-            bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=1' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_insdup.vcf.gz &
             bcftools filter --include 'SVTYPE="INV"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_inv.vcf.gz &
-            bcftools filter --include 'SVTYPE="INS"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
+            if [ ~{convert_ins_to_dup} -eq 1 ]; then
+                bcftools filter --include 'SVTYPE="INS"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
+                bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=0' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
+                bcftools filter --include 'SVTYPE="DUP" && INFO/INSDUP=1' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_insdup.vcf.gz &
+            else
+                bcftools filter --include 'SVTYPE="DUP"' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_dup.vcf.gz &
+                bcftools filter --include 'SVTYPE="INS" && INFO/INSDUP=0' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_ins.vcf.gz &
+                bcftools filter --include 'SVTYPE="INS" && INFO/INSDUP=1' --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_insdup.vcf.gz &
+            fi
             wait
             bcftools index -f -t ${SAMPLE_ID}_del.vcf.gz &
             bcftools index -f -t ${SAMPLE_ID}_dup.vcf.gz &

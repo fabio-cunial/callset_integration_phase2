@@ -5,19 +5,22 @@ import java.io.*;
 
 /**
  * Given a VCF that contains only INS records, the program separates records
- * that are likely DUP based on the output of `UltralongDepthGetBreakpoints`.
+ * that are likely DUP based on the output of `UltralongDepthGetBreakpoints`, 
+ * and possibly recodes such INS records as DUP records.
  * 
  * Remark: every record in the output DUP VCF has tag INSDUP that indicates that
  * it is the result of INS conversion, and a field INS_ALT that contains the ALT
- * allele of the original INS record.
+ * allele of the original INS record (if the new record is a DUP).
  * 
  * Remark: the output INS VCF is sorted, but the output DUP VCF is not 
- * necessarily sorted.
+ * necessarily sorted if it contains DUP records.
  */
 public class UltralongInsExtractDups {
     
     /**
-     * @param args 4: fixed QUAL value to be assigned to all INS->DUP records.
+     * @param args 
+     * 4: fixed QUAL value to be assigned to all INS->DUP records;
+     * 5: 0=output INS->DUP records as DUP; 1=output INS->DUP records as INS.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
@@ -25,6 +28,7 @@ public class UltralongInsExtractDups {
         final String OUTPUT_VCF_INS = args[2];
         final String OUTPUT_VCF_DUP = args[3];
         final int INSDUP_QUAL = Integer.parseInt(args[4]);
+        final int OUTPUT_DUP_MODE = Integer.parseInt(args[5]);
         
         int i, p;
         int pos, newPos, newEnd, newLength, nRecords, nDups;
@@ -42,7 +46,7 @@ public class UltralongInsExtractDups {
                 bwIns.write(str+"\n");
                 if (str.startsWith("#CHROM")) {
                     bwDup.write("##INFO=<ID=INSDUP,Number=0,Type=Flag,Description=\"The record is the result of an INS->DUP conversion\">\n");
-                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                    if (OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
                 }
                 bwDup.write(str+"\n");
                 str=br.readLine();
@@ -58,17 +62,20 @@ public class UltralongInsExtractDups {
             if (strPrime==null) bwIns.write(str+"\n");
             else {
                 nDups++;
-                p=strPrime.indexOf("\t");
-                newPos=Integer.parseInt(strPrime.substring(0,p));
-                newEnd=Integer.parseInt(strPrime.substring(p+1));
-                newLength=newEnd-newPos;
-                tokens[1]=newPos+"";
-                alt=tokens[4]; tokens[4]="<DUP>";
-                tokens[5]=INSDUP_QUAL+"";
-                info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
-                info=addOrReplaceInfoField(info,"SVTYPE","DUP");
-                info=addOrReplaceInfoField(info,"END",newEnd+"");
-                info+=";INSDUP;INS_ALT="+alt;
+                if (OUTPUT_DUP_MODE==0) {    
+                    p=strPrime.indexOf("\t");
+                    newPos=Integer.parseInt(strPrime.substring(0,p));
+                    newEnd=Integer.parseInt(strPrime.substring(p+1));
+                    newLength=newEnd-newPos;
+                    tokens[1]=newPos+"";
+                    alt=tokens[4]; tokens[4]="<DUP>";
+                    tokens[5]=INSDUP_QUAL+"";
+                    info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
+                    info=addOrReplaceInfoField(info,"SVTYPE","DUP");
+                    info=addOrReplaceInfoField(info,"END",newEnd+"");
+                    info+=";INS_ALT="+alt;
+                }
+                info+=";INSDUP";
                 tokens[7]=info;
                 bwDup.write(tokens[0]);
                 for (i=1; i<tokens.length; i++) bwDup.write("\t"+tokens[i]);
