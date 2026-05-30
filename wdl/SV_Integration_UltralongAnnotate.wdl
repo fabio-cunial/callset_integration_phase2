@@ -22,6 +22,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int custom_adjacency_slack_bp = 300
 
         File feature_extraction_py
+        Int use_cutefc = 1
 
         File tr_bed
         File segdup_bed
@@ -56,6 +57,7 @@ workflow SV_Integration_UltralongAnnotate {
             custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
             feature_extraction_py = feature_extraction_py,
+            use_cutefc = use_cutefc,
 
             tr_bed = tr_bed,
             segdup_bed = segdup_bed,
@@ -118,6 +120,7 @@ task Impl {
         Int custom_adjacency_slack_bp
 
         File feature_extraction_py
+        Int use_cutefc
 
         File tr_bed
         File segdup_bed
@@ -1000,7 +1003,7 @@ END
             # Remark: `truvari collapse` is run with the same parameters as in
             # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
             # lower QUAL to make truvari choose an original DUP record as a 
-            # representative. This collapses ~3-5 variants per sample.
+            # cluster representative. This collapses ~3-5 variants per sample.
             # Remark: truvari needs `bcftools merge` and it does not work with 
             # `bcftools concat`.
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
@@ -1089,7 +1092,8 @@ END
                 rm -f ${SAMPLE_ID}_start.bed
             fi
 
-            # 4. Merging INS and non-INS VCFs
+            # 4. Merging INS and non-INS VCFs, so that both of them get
+            # annotated in a single pass over the BAM later.
             ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
@@ -1100,11 +1104,13 @@ END
             # are both slow and use threads inefficiently. In practice this does
             # not decrease total runtime.
             FeatureExtraction ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam 0
-            Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0
             FeatureExtraction_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            if [ ~{use_cutefc} -eq 1 ]; then
+                Cutefc ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam $(( ${N_THREADS} / 2 )) 0
+                Cutefc_Annotate ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            fi
             
             # Ensuring that the VCF has the correct header
             bcftools view --header-only ${SAMPLE_ID}_in.vcf > ${SAMPLE_ID}_header.txt
@@ -1112,7 +1118,7 @@ END
             if [ ${FOUND} = "0" ]; then
                 N_ROWS=$(wc -l < ${SAMPLE_ID}_header.txt)
                 head -n $(( ${N_ROWS} - 1 )) ${SAMPLE_ID}_header.txt > ${SAMPLE_ID}_header_new.txt
-                echo '##INFO=<ID=INSDUP,Number=0,Type=Flag,Description="The record is the result of an INS->DUP conversion">' >> ${SAMPLE_ID}_header_new.txt
+                echo '##INFO=<ID=INSDUP,Number=0,Type=Flag,Description="The record is the result of an INS-DUP conversion">' >> ${SAMPLE_ID}_header_new.txt
                 echo '##INFO=<ID=INS_ALT,Number=1,Type=String,Description="The ALT allele of the original INS record">' >> ${SAMPLE_ID}_header_new.txt
                 tail -n 1 ${SAMPLE_ID}_header.txt >> ${SAMPLE_ID}_header_new.txt
                 bcftools reheader --header ${SAMPLE_ID}_header_new.txt ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
