@@ -108,7 +108,7 @@ task Impl {
         Int svimasm_ins_use_gaps
         Int svimasm_ins_use_gaps_slack_bp
         Float svimasm_ins_use_gaps_length_similarity
-        
+
         Int svimasm_ins_use_remap
         Int svimasm_ins_remap_max_length
         Float svimasm_ins_remap_cov_threshold
@@ -148,6 +148,11 @@ task Impl {
         truvari --help 1>&2
         df -h 1>&2
 
+        if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+            INSDUP_MODE="0"
+        else
+            INSDUP_MODE="1"
+        fi
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
@@ -228,7 +233,7 @@ task Impl {
                 # 1.3.1 Filtering all INS with the dipcall BED
                 # Approx. 5% of all INS get marked as DUP in this step.
                 if [ ~{svimasm_ins_use_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_use_gaps_slack_bp} ~{svimasm_ins_use_gaps_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDups ${SAMPLE_ID}_svimasm_ins.vcf ${SAMPLE_ID}_gaps.bed $(wc -l < ${SAMPLE_ID}_gaps.bed) ~{svimasm_ins_use_gaps_slack_bp} ~{svimasm_ins_use_gaps_length_similarity} ${SAMPLE_ID}_svimasm_ins_dup.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf ${INSDUP_MODE}
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins_dup.vcf | wc -l)
                     if [ ${N_INS_DUP} -gt 0 ]; then
@@ -244,7 +249,7 @@ task Impl {
                     bgzip --compress-level 1 ${SAMPLE_ID}_svimasm_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins.vcf.gz
                     ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length ~{svimasm_ins_remap_max_length} --cov-threshold ~{svimasm_ins_remap_cov_threshold} -r ~{reference_fa} ${SAMPLE_ID}_svimasm_ins.vcf.gz -o ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_ins.vcf.gz*
-                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf
+                    ${TIME_COMMAND} java -cp ~{docker_dir} UltralongSvimasmInsExtractDupsPrime ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ${SAMPLE_ID}_svimasm_ins_ins.vcf ${INSDUP_MODE}
                     rm -f ${SAMPLE_ID}_svimasm_ins_remap.vcf.gz* ; mv ${SAMPLE_ID}_svimasm_ins_ins.vcf ${SAMPLE_ID}_svimasm_ins.vcf
                     ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf --output ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
@@ -320,9 +325,10 @@ task Impl {
             fi
 
             # 3.2 DUP
-            # ------------> Fix comment once finalized!!!!!!!!!!!!!!!!!!
-            # We compare the query DUPs to the entire DUP truth, which consists
-            # of svim-asm's DUPs and svim-asm's INS->DUP.
+            # We compare the query DUPs only to svim-asm's DUPs (i.e. we exclude
+            # svim-asm's INS->DUPs) since records that are originally called as 
+            # DUP on both sides are likely enriched in simple DUPs, whereas
+            # INS->DUP records are likely enriched in complex DUPs.
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
@@ -332,15 +338,22 @@ task Impl {
             rm -rf ${SAMPLE_ID}_truvari/
 
             # 3.3 INSDUP
-            # We compare the query INS->DUPs to both svim-asm's DUP and svim-
-            # asm's INS->DUP.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+                TRUVARI_REFDIST=~{truvari_refdist}
+            else
+                TRUVARI_REFDIST=${INFINITY}
+            fi
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            if [ ~{match_insdups_to_dups} -eq 1 ]; then
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            if [ ~{convert_svimasm_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
+                # We compare the query INS->DUPs to both svim-asm's INS->DUP and
+                # svim-asm's DUP. 
+                # Remark: in practice there are few matches with svim-asm's DUPs
+                # so this comparison might be irrelevant.
+                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
                 ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
                 rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
@@ -360,7 +373,7 @@ task Impl {
             fi
             
             # 3.4 INS
-            # Remark: we don't use `--dup-to-ins` in truvari, since we 
+            # Remark: we never use `--dup-to-ins` in truvari, since we 
             # assume that DUP and INS calls are already accurately
             # classified in both the query and the svim-asm VCF.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/

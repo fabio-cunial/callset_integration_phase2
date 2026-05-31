@@ -8,17 +8,20 @@ import java.io.*;
  * assuming that `INFO/remap_coords` contains the accurate span of the entire
  * (possibly complex) duplication.
  * 
- * Remark: the output DUP VCF is not necessarily sorted.
+ * Remark: the output DUP VCF is not necessarily sorted if it contains DUP 
+ * records.
  */
 public class UltralongSvimasmInsExtractDupsPrime {
     
     /**
      * @param args
+     * 3: 0=output INS->DUP records as DUP; 1=output INS->DUP records as INS.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String OUTPUT_VCF_DUP = args[1];
         final String OUTPUT_VCF_INS = args[2];
+        final int OUTPUT_DUP_MODE = Integer.parseInt(args[3]);
 
         int i, p, q;
         int start, end, nRecords, nDups;
@@ -44,17 +47,19 @@ public class UltralongSvimasmInsExtractDupsPrime {
             classification=getInfoField(info,"remap_classification");
             if (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted")) {
                 nDups++;
-                coords=getInfoField(info,"remap_coords");
-                p=coords.indexOf(":");
-                q=coords.indexOf("-");
-                start=Integer.parseInt(coords.substring(p+1,q));
-                end=Integer.parseInt(coords.substring(q+1));
-                tokens[1]=start+"";
-                tokens[4]="<DUP>";
-                info=addOrReplaceInfoField(info,"END",end+"");
-                info=addOrReplaceInfoField(info,"SVLEN",(end-start)+"");
-                info=addOrReplaceInfoField(info,"SVTYPE","DUP");
-                tokens[7]=info;
+                if (OUTPUT_DUP_MODE==0) {
+                    coords=getInfoField(info,"remap_coords");
+                    p=coords.indexOf(":");
+                    q=coords.indexOf("-");
+                    start=Integer.parseInt(coords.substring(p+1,q));
+                    end=Integer.parseInt(coords.substring(q+1));
+                    tokens[1]=start+"";
+                    tokens[4]="<DUP>";
+                    info=addOrReplaceInfoField(info,"END",end+"");
+                    info=addOrReplaceInfoField(info,"SVLEN",(end-start)+"");
+                    info=addOrReplaceInfoField(info,"SVTYPE","DUP");
+                    tokens[7]=info;
+                }
                 bwDup.write(tokens[0]);
                 for (i=1; i<tokens.length; i++) bwDup.write("\t"+tokens[i]);
                 bwDup.write("\n");

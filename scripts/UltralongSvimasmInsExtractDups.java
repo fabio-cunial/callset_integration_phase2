@@ -10,12 +10,14 @@ import java.io.*;
  * Remark: the confident BED is assumed to contain sorted, non-overlapping
  * intervals.
  * 
- * Remark: the output DUP VCF is not necessarily sorted.
+ * Remark: the output DUP VCF is not necessarily sorted if it contains DUP 
+ * records.
  */
 public class UltralongSvimasmInsExtractDups {
     
     /**
      * @param args
+     * 7: 0=output INS->DUP records as DUP; 1=output INS->DUP records as INS.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
@@ -25,6 +27,7 @@ public class UltralongSvimasmInsExtractDups {
         final double LENGTH_SIMILARITY = Double.parseDouble(args[4]);
         final String OUTPUT_VCF_DUP = args[5];
         final String OUTPUT_VCF_INS = args[6];
+        final int OUTPUT_DUP_MODE = Integer.parseInt(args[7]);
 
         boolean found;
         int i, j;
@@ -97,13 +100,15 @@ public class UltralongSvimasmInsExtractDups {
                 else if (pos>bedIntervals[i][1]+SLACK_BP) { i++; continue; }
                 else if (svlen>=(bedIntervals[i][1]-bedIntervals[i][0])*LENGTH_SIMILARITY) {
                     found=true; nDups++;
-                    newPos=bedIntervals[i][0]; newEnd=bedIntervals[i][1]; newLength=newEnd-newPos;
-                    tokens[1]=newPos+"";
-                    tokens[4]="<DUP>";
-                    info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
-                    info=addOrReplaceInfoField(info,"SVTYPE","DUP");
-                    info=addOrReplaceInfoField(info,"END",newEnd+"");
-                    tokens[7]=info;
+                    if (OUTPUT_DUP_MODE==0) {
+                        newPos=bedIntervals[i][0]; newEnd=bedIntervals[i][1]; newLength=newEnd-newPos;
+                        tokens[1]=newPos+"";
+                        tokens[4]="<DUP>";
+                        info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
+                        info=addOrReplaceInfoField(info,"SVTYPE","DUP");
+                        info=addOrReplaceInfoField(info,"END",newEnd+"");
+                        tokens[7]=info;
+                    }
                     bwDup.write(tokens[0]);
                     for (j=1; j<tokens.length; j++) bwDup.write("\t"+tokens[j]);
                     bwDup.write("\n");
