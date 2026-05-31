@@ -16,6 +16,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         String remote_indir_svimasm
         String remote_outdir
         
+        Int convert_svimasm_ins_to_dup = 1
+
         Int svimasm_ins_use_gaps = 1
         Int svimasm_ins_use_gaps_slack_bp = 200
         Float svimasm_ins_use_gaps_length_similarity = 0.9
@@ -40,6 +42,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         samples_csv: "Format: ID, DIPCALL_BED"
         remote_indir_query: "Without final slash. Contains per-sample annotated VCFs created by `SV_Integration_UltralongAnnotate.wdl`."
         remote_indir_svimasm: "Without final slash. Contains per-sample canonized and filtered svim-asm VCFs."
+        convert_svimasm_ins_to_dup: "1=SVIM-asm's INS records that correspond to duplications are rewritten as DUP records"
         truvari_refdist: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
         truvari_pctovl: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
         truvari_pctsize: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
@@ -52,6 +55,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             remote_indir_query = remote_indir_query,
             remote_indir_svimasm = remote_indir_svimasm,
             remote_outdir = remote_outdir,
+
+            convert_svimasm_ins_to_dup = convert_svimasm_ins_to_dup,
 
             svimasm_ins_use_gaps = svimasm_ins_use_gaps,
             svimasm_ins_use_gaps_slack_bp = svimasm_ins_use_gaps_slack_bp,
@@ -98,9 +103,12 @@ task Impl {
         String remote_indir_svimasm
         String remote_outdir
         
+        Int convert_svimasm_ins_to_dup
+
         Int svimasm_ins_use_gaps
         Int svimasm_ins_use_gaps_slack_bp
         Float svimasm_ins_use_gaps_length_similarity
+        
         Int svimasm_ins_use_remap
         Int svimasm_ins_remap_max_length
         Float svimasm_ins_remap_cov_threshold

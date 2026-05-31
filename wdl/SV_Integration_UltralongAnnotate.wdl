@@ -35,7 +35,7 @@ workflow SV_Integration_UltralongAnnotate {
     }
     parameter_meta {
         chunk_csv: "Format: ID,bai,bam"
-        convert_ins_to_dup: "INS records that correspond to duplications are rewritten as DUP records"
+        convert_ins_to_dup: "1=INS records that correspond to duplications are rewritten as DUP records"
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -1029,6 +1029,7 @@ END
                 ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
                 ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf
                 rm -f ${SAMPLE_ID}_ins.vcf* ${SAMPLE_ID}_ins_dup.vcf* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_ins.vcf
+                gunzip ${SAMPLE_ID}_not_ins.vcf.gz
             fi
         }
         
