@@ -341,7 +341,7 @@ task Impl {
             if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
                 TRUVARI_REFDIST=~{truvari_refdist}
             else
-                TRUVARI_REFDIST=${INFINITY}
+                TRUVARI_REFDIST="2000000 --chunksize 2000000"
             fi
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
