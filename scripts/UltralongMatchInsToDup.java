@@ -50,7 +50,7 @@ public class UltralongMatchInsToDup {
             svlen=Double.parseDouble(getInfoField(info,"SVLEN"));
             dupChr[i]=chr; dupPosLen[i][0]=pos; dupPosLen[i][1]=svlen;
             value=getInfoField(info,"INS_ALT");
-            if (value!=null) dupPosLen[i][2]=Double.parseDouble(value);
+            if (value!=null) dupPosLen[i][2]=value.length();
             else dupPosLen[i][2]=dupPosLen[i][1];
             str=br.readLine();
         }
