@@ -68,8 +68,8 @@ public class UltralongSvimasmInsExtractDups {
         str=br.readLine(); nRecords=0; nDups=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                bwDup.write(str+"\n");
                 if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                bwDup.write(str+"\n");
                 bwIns.write(str+"\n");
                 str=br.readLine();
                 continue;
