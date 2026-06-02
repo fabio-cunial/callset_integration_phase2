@@ -32,7 +32,7 @@ public class UltralongSvimasmInsExtractDups {
         boolean found;
         int i, j;
         int pos, newPos, newEnd, newLength, bedLength, svlen, nRecords, nDups;
-        String str, chrom, info;
+        String str, chrom, alt, info;
         BufferedReader br;
         BufferedWriter bwIns, bwDup;
         int[] chrFirst;
@@ -69,6 +69,7 @@ public class UltralongSvimasmInsExtractDups {
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 bwDup.write(str+"\n");
+                if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
                 bwIns.write(str+"\n");
                 str=br.readLine();
                 continue;
@@ -77,6 +78,7 @@ public class UltralongSvimasmInsExtractDups {
             tokens=str.split("\t");
             chrom=tokens[0];
             pos=Integer.parseInt(tokens[1]);
+            alt=tokens[4];
             info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
             i=chrom2index(chrom);
@@ -107,6 +109,7 @@ public class UltralongSvimasmInsExtractDups {
                         info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                         info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                         info=addOrReplaceInfoField(info,"END",newEnd+"");
+                        info+=";INS_ALT="+alt;
                         tokens[7]=info;
                     }
                     bwDup.write(tokens[0]);
