@@ -5,7 +5,7 @@ import java.io.*;
 /**
  * Given a VCF with only ultralong INS and a VCF with only ultralong DUP, the 
  * program finds every INS that has exactly one corresponding DUP (i.e. there is
- * a DUP that contains the INS and that has similar length).
+ * one and only one DUP that contains the INS and that has similar length).
  * 
  * Remark: length similarity is computed as in `truvari bench`.
  * 
@@ -21,9 +21,11 @@ public class UltralongMatchInsToDup {
         final String DUP_VCF_GZ = args[1];
         final int DUP_VCF_NRECORDS = Integer.parseInt(args[2]);
         final double PCTSIZE = Double.parseDouble(args[3]);
+        final int SLACK_BP = Integer.parseInt(args[4]);
 ;
+        boolean found;
         int i;
-        int found;
+        int nIns, nMatches;
         double pos, svlen;
         String str, chr, info;
         BufferedReader br;
@@ -53,23 +55,28 @@ public class UltralongMatchInsToDup {
 
         // Filtering the INS file
         br = new BufferedReader( new InputStreamReader( (INS_VCF_GZ.length()>=7&&INS_VCF_GZ.substring(INS_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INS_VCF_GZ)) : new FileInputStream(INS_VCF_GZ) ) );
-        str=br.readLine();
+        str=br.readLine(); nIns=0; nMatches=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 System.out.println(str);
                 str=br.readLine();
                 continue;
             }
+            nIns++;
             tokens=str.split("\t");
             chr=tokens[0];
             pos=Double.parseDouble(tokens[1]);  // 1-based, exclusive.
             info=tokens[7];
             svlen=Double.parseDouble(getInfoField(info,"SVLEN"));
-            found=0;
+            found=false;
             for (i=0; i<DUP_VCF_NRECORDS; i++) {
-                if (dupChr[i].equals(chr) && pos>=dupPosLen[i][0] && pos<=dupPosLen[i][0]+dupPosLen[i][1] && Math.min(svlen,dupPosLen[i][1])/Math.max(svlen,dupPosLen[i][1])>=PCTSIZE) found++;
+                if (dupChr[i].equals(chr) && pos>=dupPosLen[i][0]-SLACK_BP && pos<=dupPosLen[i][0]+dupPosLen[i][1]+SLACK_BP && Math.min(svlen,dupPosLen[i][1])/Math.max(svlen,dupPosLen[i][1])>=PCTSIZE) {
+                    found=true;
+                    break;
+                }
             }
-            if (found==1) {
+            if (found) {
+                nMatches++;
                 System.out.print(tokens[0]);
                 for (i=1; i<tokens.length; i++) System.out.print("\t"+tokens[i]);
                 System.out.println();
@@ -79,6 +86,7 @@ public class UltralongMatchInsToDup {
             str=br.readLine();
         }
         br.close();
+        System.err.println(nMatches+" INS out of "+nIns+" match a DUP ("+((100.0*nMatches)/nIns)+"%)");
     }
     
     
