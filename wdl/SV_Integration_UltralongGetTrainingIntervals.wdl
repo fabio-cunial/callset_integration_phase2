@@ -26,7 +26,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Int svimasm_ins_remap_max_length = 2000000
         Float svimasm_ins_remap_cov_threshold = 0.8
 
-        Int match_to_gaps = 1
+        Int match_to_gaps = 0
         Int match_insdups_to_dups = 1
 
         File reference_fa
@@ -282,9 +282,10 @@ task Impl {
             # Remark: svim-asm does not emit calls at some query DELs that 
             # correspond to gaps in the dipcall BED. DELs >10kb are likely
             # to create gaps in dipcall's BED by the definition of confident
-            # BED, since such DELs induce split alignments (see above). We 
-            # choose to mark as true every query DEL that matches a gap in
-            # dipcall's BED.
+            # BED, since such DELs induce split alignments (see above). However, 
+            # marking as true every query DEL that matches a gap in dipcall's 
+            # BED does not improve performance, and it decreases it both within
+            # the confident BED and on the whole genome.
             # Approx. 8% of all DEL get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_del.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
@@ -329,6 +330,7 @@ task Impl {
             # svim-asm's INS->DUPs) since records that are originally called as 
             # DUP on both sides are likely enriched in simple DUPs, whereas
             # INS->DUP records are likely enriched in complex DUPs.
+            #
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
@@ -349,10 +351,12 @@ task Impl {
             rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
             if [ ~{convert_svimasm_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
-                # We compare the query INS->DUPs to both svim-asm's INS->DUP and
-                # svim-asm's DUP. 
-                # Remark: in practice there are few matches with svim-asm's DUPs
-                # so this comparison might be irrelevant.
+                # We compare the query INS->DUPs to svim-asm's DUPs, since the
+                # former might contain simple DUPs.
+                # Remark: in practice there are few matches to svim-asm's DUPs
+                # so this comparison might be irrelevant. This is probably due
+                # to the fact that we truvari-collapse query INSDUPs to query
+                # DUPs and favor the latter representation.
                 ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
                 ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
@@ -373,19 +377,37 @@ task Impl {
             fi
             
             # 3.4 INS
-            # Remark: we never use `--dup-to-ins` in truvari, since we 
-            # assume that DUP and INS calls are already accurately
-            # classified in both the query and the svim-asm VCF.
+            # Some query INS might be short DUPs (simple or complex) that are 
+            # represented as CIGAR INS operations in the BAM and do not change
+            # the local depth (i.e. their BAM pattern is identical to the one of
+            # short INS). They may correspond to a DUP or INSDUP in svim-asm,
+            # and if we do not mark them as true, the model may not learn their
+            # BAM pattern if there are no other short INS.
+            #
+            # Remark: it is not useful to convert to intervals short DUPs that 
+            # are represented as INS records in the query VCF, since there is
+            # likely no BAM pattern at the interval's boundaries.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_ins_training.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
+            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
+            CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz"
+            if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz) ~{truvari_pctsize} | bgzip --compress-level 1 > ${SAMPLE_ID}_out3.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out3.vcf.gz
+                CONCAT_STRING="${CONCAT_STRING} ${SAMPLE_ID}_out3.vcf.gz"
+            fi
+            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${CONCAT_STRING} --output ${SAMPLE_ID}_ins_training.vcf.gz
+            rm -f ${SAMPLE_ID}_out*.vcf.gz* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
 
             # 3.5 INV
-            # Remark: svim-asm does not emit calls at some query INVs that 
-            # correspond to gaps in the dipcall BED. We choose to mark as 
-            # true such query INVs, at the risk of polluting the training 
-            # set with events that are not simple INVs.
+            # Remark: svim-asm does not seem to emit calls at some query INVs
+            # that correspond to gaps in the dipcall BED, so it could make sense
+            # to mark as true such query INVs. In practice this degrades 
+            # performance, probably because it adds to the training set several
+            # events that are not simple INVs.
             # Approx. 15% of all INV get marked as true by a dipcall gap.
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_inv.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
