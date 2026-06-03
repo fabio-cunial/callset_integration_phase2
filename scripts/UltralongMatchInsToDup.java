@@ -15,6 +15,7 @@ public class UltralongMatchInsToDup {
     
     /**
      * @param args
+     * 5: only INS of at most this length are considered.
      */
     public static void main(String[] args) throws IOException {
         final String INS_VCF_GZ = args[0];
@@ -22,6 +23,7 @@ public class UltralongMatchInsToDup {
         final int DUP_VCF_NRECORDS = Integer.parseInt(args[2]);
         final double PCTSIZE = Double.parseDouble(args[3]);
         final int SLACK_BP = Integer.parseInt(args[4]);
+        final int MAX_SVLEN = Integer.parseInt(args[5]);
 ;
         boolean found;
         int i;
@@ -71,6 +73,10 @@ public class UltralongMatchInsToDup {
             pos=Double.parseDouble(tokens[1]);  // 1-based, exclusive.
             info=tokens[7];
             svlen=Double.parseDouble(getInfoField(info,"SVLEN"));
+            if (svlen>MAX_SVLEN) {
+                str=br.readLine();
+                continue;
+            }
             found=false;
             for (i=0; i<DUP_VCF_NRECORDS; i++) {
                 if (dupChr[i].equals(chr) && pos>=dupPosLen[i][0]-SLACK_BP && pos<=dupPosLen[i][0]+dupPosLen[i][1]+SLACK_BP && Math.min(svlen,dupPosLen[i][2])/Math.max(svlen,dupPosLen[i][2])>=PCTSIZE) {

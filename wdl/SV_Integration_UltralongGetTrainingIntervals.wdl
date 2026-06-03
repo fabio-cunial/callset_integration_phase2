@@ -18,7 +18,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         
         Int convert_svimasm_ins_to_dup = 1
 
-        Int svimasm_ins_use_gaps = 1
+        Int svimasm_ins_use_gaps = 0
         Int svimasm_ins_use_gaps_slack_bp = 200
         Float svimasm_ins_use_gaps_length_similarity = 0.9
 
@@ -36,6 +36,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         Int truvari_refdist = 500
         Float truvari_pctsize = 0.9
         Float truvari_pctovl = 0
+
+        Int max_read_length = 25000
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
@@ -77,6 +79,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             truvari_refdist = truvari_refdist,
             truvari_pctsize = truvari_pctsize,
             truvari_pctovl = truvari_pctovl,
+
+            max_read_length = max_read_length,
 
             docker_image = docker_image
     }
@@ -125,6 +129,8 @@ task Impl {
         Int truvari_refdist
         Float truvari_pctsize
         Float truvari_pctovl
+
+        Int max_read_length
         
         String docker_image
         Int n_cpu = 2
@@ -394,11 +400,11 @@ task Impl {
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
             CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz"
             if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} | bgzip --compress-level 1 > ${SAMPLE_ID}_out3.vcf.gz
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out3.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out3.vcf.gz
                 CONCAT_STRING="${CONCAT_STRING} ${SAMPLE_ID}_out3.vcf.gz"
             fi
