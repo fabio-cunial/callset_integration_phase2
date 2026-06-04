@@ -74,11 +74,17 @@ task Impl {
         
         cat << 'END' > fix_sample.sh
 #!/bin/bash
-INPUT_VCF_GZ=$1
+DOCKER_DIR=$1
+INPUT_VCF_GZ=$2
 
 bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}.reheader
 rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
-mv ${INPUT_VCF_GZ}.reheader ${INPUT_VCF_GZ}
+
+# Adding SVLEN to symbolic ALTs, to avoid overcollapse in the `bcftools concat`
+# downstream.
+java -cp ${DOCKER_DIR} AddSvlenToSymbolicAlt ${INPUT_VCF_GZ}.reheader | bgzip --compress-level 1 > ${INPUT_VCF_GZ}
+rm -f ${INPUT_VCF_GZ}.reheader
+
 bcftools index -f -t ${INPUT_VCF_GZ}
 END
         chmod +x fix_sample.sh
@@ -98,8 +104,19 @@ END
         df -h 1>&2
         ls -laht 1>&2
         ls *.vcf.gz > list.txt
-        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type z --output ~{svtype}~{suffix}_merged.vcf.gz
+        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir}
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
+
+        # Removing SVLEN from symbolic ALTs
+        bcftools view --header-only out.vcf --output ~{svtype}~{suffix}_merged.vcf
+        ${TIME_COMMAND} bcftools view --no-header out.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+            printf("%s",$1); \
+            for (i=2; i<=NF; i++) printf("\t%s",$i); \
+            printf("\n"); \
+        }' >> ~{svtype}~{suffix}_merged.vcf
+        rm -f out.vcf
+        ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ~{svtype}~{suffix}_merged.vcf
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
         

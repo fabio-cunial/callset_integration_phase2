@@ -31,7 +31,7 @@ public class UltralongInsExtractDups {
         final int OUTPUT_DUP_MODE = Integer.parseInt(args[5]);
         
         int i, p;
-        int pos, newPos, newEnd, newLength, nRecords, nDups;
+        int pos, qual, newPos, newEnd, newLength, nRecords, nDups;
         String str, strPrime, id, info, alt;
         BufferedReader br, brPrime;
         BufferedWriter bwIns, bwDup;
@@ -46,7 +46,11 @@ public class UltralongInsExtractDups {
                 bwIns.write(str+"\n");
                 if (str.startsWith("#CHROM")) {
                     bwDup.write("##INFO=<ID=INSDUP,Number=0,Type=Flag,Description=\"The record is the result of an INS->DUP conversion\">\n");
-                    if (OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                    if (OUTPUT_DUP_MODE==0) {
+                        bwDup.write("##INFO=<ID=INS_POS,Number=1,Type=Integer,Description=\"The POS of the original INS record\">\n");
+                        bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                        bwDup.write("##INFO=<ID=INS_QUAL,Number=1,Type=Integer,Description=\"The QUAL of the original INS record\">\n");
+                    }
                 }
                 bwDup.write(str+"\n");
                 str=br.readLine();
@@ -67,13 +71,13 @@ public class UltralongInsExtractDups {
                     newPos=Integer.parseInt(strPrime.substring(0,p));
                     newEnd=Integer.parseInt(strPrime.substring(p+1));
                     newLength=newEnd-newPos;
-                    tokens[1]=newPos+"";
+                    pos=Integer.parseInt(tokens[1]); tokens[1]=newPos+"";
                     alt=tokens[4]; tokens[4]="<DUP>";
-                    tokens[5]=INSDUP_QUAL+"";
+                    qual=Integer.parseInt(tokens[5]); tokens[5]=INSDUP_QUAL+"";
                     info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                     info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                     info=addOrReplaceInfoField(info,"END",newEnd+"");
-                    info+=";INS_ALT="+alt;
+                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+qual;
                 }
                 info+=";INSDUP";
                 tokens[7]=info;

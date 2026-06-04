@@ -24,7 +24,7 @@ public class UltralongSvimasmInsExtractDupsPrime {
         final int OUTPUT_DUP_MODE = Integer.parseInt(args[3]);
 
         int i, p, q;
-        int start, end, nRecords, nDups;
+        int pos, start, end, nRecords, nDups;
         String str, alt, info, classification, coords;
         BufferedReader br;
         BufferedWriter bwIns, bwDup;
@@ -36,7 +36,11 @@ public class UltralongSvimasmInsExtractDupsPrime {
         str=br.readLine(); nRecords=0; nDups=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) {
+                    bwDup.write("##INFO=<ID=INS_POS,Number=1,Type=Integer,Description=\"The POS of the original INS record\">\n");
+                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                    bwDup.write("##INFO=<ID=INS_QUAL,Number=1,Type=Integer,Description=\"The QUAL of the original INS record\">\n");
+                }
                 bwDup.write(str+"\n");
                 bwIns.write(str+"\n");
                 str=br.readLine();
@@ -44,7 +48,6 @@ public class UltralongSvimasmInsExtractDupsPrime {
             }
             nRecords++;
             tokens=str.split("\t");
-            alt=tokens[4];
             info=tokens[7];
             classification=getInfoField(info,"remap_classification");
             if (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted")) {
@@ -55,12 +58,12 @@ public class UltralongSvimasmInsExtractDupsPrime {
                     q=coords.indexOf("-");
                     start=Integer.parseInt(coords.substring(p+1,q));
                     end=Integer.parseInt(coords.substring(q+1));
-                    tokens[1]=start+"";
-                    tokens[4]="<DUP>";
+                    pos=Integer.parseInt(tokens[1]); tokens[1]=start+"";
+                    alt=tokens[4]; tokens[4]="<DUP>";
                     info=addOrReplaceInfoField(info,"END",end+"");
                     info=addOrReplaceInfoField(info,"SVLEN",(end-start)+"");
                     info=addOrReplaceInfoField(info,"SVTYPE","DUP");
-                    info+=";INS_ALT="+alt;
+                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+tokens[5];
                     tokens[7]=info;
                 }
                 bwDup.write(tokens[0]);

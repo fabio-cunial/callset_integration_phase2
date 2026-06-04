@@ -4,8 +4,8 @@ import java.io.*;
 
 /**
  * Given a VCF with only ultralong INS and a VCF with only ultralong DUP, the 
- * program finds every INS that has exactly one corresponding DUP (i.e. there is
- * one and only one DUP that contains the INS and that has similar length).
+ * program finds every INS that has a corresponding DUP (i.e. there is a DUP 
+ * that contains the INS and that has similar length).
  * 
  * Remark: length similarity is computed as in `truvari bench`.
  * 

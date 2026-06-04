@@ -151,6 +151,48 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
+
+
+        
+        # ---------------------- Steps of the pipeline -------------------------
+
+        # Runs `bcftools concat` making sure it does not over-collapse symbolic
+        # ALTs.
+        #
+        # Remark: the procedure deletes the input VCFs.
+        #
+        function Concat() {
+            local SAMPLE_ID=$1
+            local INPUT1_VCF_GZ=$2
+            local INPUT2_VCF_GZ=$3
+            local OUTPUT_SUFFIX=$4
+
+            # Adding SVLEN to symbolic ALTs
+            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${INPUT1_VCF_GZ} | bgzip --compress-level 1 > ${SAMPLE_ID}_out1.vcf.gz
+            rm -f ${INPUT1_VCF_GZ} ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${INPUT2_VCF_GZ} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
+            rm -f ${INPUT2_VCF_GZ} ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
+
+            # Concatenating
+            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_out1.vcf.gz* ${SAMPLE_ID}_out2.vcf.gz*
+
+            # Removing SVLEN from symbolic ALTs
+            bcftools view --header-only ${SAMPLE_ID}_out.vcf --output ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf
+            ${TIME_COMMAND} bcftools view --no-header ${SAMPLE_ID}_out.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' >> ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf
+            rm -f ${SAMPLE_ID}_out.vcf ; bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
+        }
+
+
+
+
+        # ---------------------------- Main program ----------------------------
+
         INFINITY="1000000000"
         samtools --version 1>&2
         bcftools --version 1>&2
@@ -263,8 +305,7 @@ task Impl {
                     ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf --output ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
                     rm -f ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz
                     if [ -e ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ]; then
-                        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                        rm -f ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz* ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
+                        Concat ${SAMPLE_ID} ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz svimasm_ins_dup
                     else
                         mv ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz
                         mv ${SAMPLE_ID}_svimasm_ins_dup_prime.vcf.gz.tbi ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz.tbi
@@ -324,9 +365,7 @@ task Impl {
                     mv ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del_training.vcf.gz
                     mv ${SAMPLE_ID}_del1.vcf.gz.tbi ${SAMPLE_ID}_del_training.vcf.gz.tbi
                 else
-                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_del_training.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del_training.vcf.gz
-                    rm -f ${SAMPLE_ID}_del1.vcf.gz* ${SAMPLE_ID}_del2.vcf.gz*
+                    Concat ${SAMPLE_ID} ${SAMPLE_ID}_del1.vcf.gz ${SAMPLE_ID}_del2.vcf.gz del_training
                 fi
                 rm -f ${SAMPLE_ID}_gaps.vcf.gz*
             else
@@ -380,8 +419,7 @@ task Impl {
                 elif [ ${N_INSDUP_TRAINING_PRIME} -eq 0 ]; then
                     rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz*
                 else
-                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                    rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
+                    Concat ${SAMPLE_ID} ${SAMPLE_ID}_insdup_training.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz insdup_training
                 fi
             fi
             
@@ -446,9 +484,7 @@ task Impl {
                     mv ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv_training.vcf.gz
                     mv ${SAMPLE_ID}_inv1.vcf.gz.tbi ${SAMPLE_ID}_inv_training.vcf.gz.tbi
                 else
-                    ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_inv_training.vcf.gz
-                    bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv_training.vcf.gz
-                    rm -f ${SAMPLE_ID}_inv1.vcf.gz* ${SAMPLE_ID}_inv2.vcf.gz*
+                    Concat ${SAMPLE_ID} ${SAMPLE_ID}_inv1.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz inv_training
                 fi
                 rm -f ${SAMPLE_ID}_gaps.vcf.gz*
             else

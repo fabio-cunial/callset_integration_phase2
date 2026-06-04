@@ -68,7 +68,11 @@ public class UltralongSvimasmInsExtractDups {
         str=br.readLine(); nRecords=0; nDups=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
-                if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) {
+                    bwDup.write("##INFO=<ID=INS_POS,Number=1,Type=Integer,Description=\"The POS of the original INS record\">\n");
+                    bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                    bwDup.write("##INFO=<ID=INS_QUAL,Number=1,Type=Integer,Description=\"The QUAL of the original INS record\">\n");
+                }
                 bwDup.write(str+"\n");
                 bwIns.write(str+"\n");
                 str=br.readLine();
@@ -78,7 +82,6 @@ public class UltralongSvimasmInsExtractDups {
             tokens=str.split("\t");
             chrom=tokens[0];
             pos=Integer.parseInt(tokens[1]);
-            alt=tokens[4];
             info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
             i=chrom2index(chrom);
@@ -105,11 +108,11 @@ public class UltralongSvimasmInsExtractDups {
                     if (OUTPUT_DUP_MODE==0) {
                         newPos=bedIntervals[i][0]; newEnd=bedIntervals[i][1]; newLength=newEnd-newPos;
                         tokens[1]=newPos+"";
-                        tokens[4]="<DUP>";
+                        alt=tokens[4]; tokens[4]="<DUP>";
                         info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                         info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                         info=addOrReplaceInfoField(info,"END",newEnd+"");
-                        info+=";INS_ALT="+alt;
+                        info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+tokens[5];
                         tokens[7]=info;
                     }
                     bwDup.write(tokens[0]);
