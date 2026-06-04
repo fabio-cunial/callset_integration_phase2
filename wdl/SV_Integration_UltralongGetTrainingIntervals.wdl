@@ -396,7 +396,7 @@ task Impl {
             # Remark: it is not useful to convert to intervals short DUPs that 
             # are represented as INS records in the query VCF, since there is
             # likely no BAM pattern at the interval's boundaries.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl 0 --pick single -o ./${SAMPLE_ID}_truvari/
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
