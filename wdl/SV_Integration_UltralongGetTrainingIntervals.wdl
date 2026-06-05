@@ -35,7 +35,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         
         Int truvari_refdist = 500
         Float truvari_pctsize = 0.9
-        Float truvari_pctovl = 0
+        Float truvari_pctovl = 0.8
 
         Int max_read_length = 25000
         
@@ -219,12 +219,14 @@ task Impl {
             # Remark: we do not handle gaps in the reference explicitly,
             # since we assume that calls in reference gaps have already been 
             # removed from the query VCFs upstream.
-            gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
-            ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_dipcall_sorted.bed
-            ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
-            rm -f ${SAMPLE_ID}_dipcall.bed ${SAMPLE_ID}_dipcall_sorted.bed
-            N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
-            echo "The dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps" 1>&2
+            if [ ~{match_to_gaps} -eq 1 ]; then
+                gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
+                ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_dipcall_sorted.bed
+                ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                rm -f ${SAMPLE_ID}_dipcall.bed ${SAMPLE_ID}_dipcall_sorted.bed
+                N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
+                echo "The dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps" 1>&2
+            fi
 
 
             # 1. Downloading and filtering the truth VCF -----------------------
@@ -237,7 +239,7 @@ task Impl {
 
             # 1.2 DUP
             # We include the intervals of both DUP:TANDEM and of DUP:INT, even
-            # though the latter (interspersed duplication) behaves like DUP just
+            # though the latter (interspersed duplication) behaves like DUP only
             # in terms of depth, not in terms of breakpoints.
             bcftools filter --include 'SVTYPE=="DUP"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
             java -cp ~{docker_dir} UltralongForceDup ${SAMPLE_ID}_out.vcf | bgzip > ${SAMPLE_ID}_svimasm_dup.vcf.gz
@@ -293,7 +295,7 @@ task Impl {
                     fi
                 fi
 
-                # 1.3.2 Filtering the remaining INS with truvari anno remap
+                # 1.3.2 Filtering the remaining INS with `truvari anno remap`.
                 # Approx. 55% of the remaining INS get marked as DUP.
                 N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
                 if [ ~{svimasm_ins_use_remap} -eq 1 -a ${N_INS} -gt 0 ]; then
@@ -403,8 +405,8 @@ task Impl {
                 # former might contain simple DUPs.
                 # Remark: in practice there are few matches to svim-asm's DUPs
                 # so this comparison might be irrelevant. This is probably due
-                # to the fact that we truvari-collapse query INSDUPs to query
-                # DUPs and favor the latter representation.
+                # to the fact that we truvari-collapsed query INSDUPs to query
+                # DUPs, favoring the latter representation.
                 ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
                 mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
                 ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
@@ -446,6 +448,8 @@ task Impl {
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out3.vcf.gz
                 CONCAT_STRING="${CONCAT_STRING} ${SAMPLE_ID}_out3.vcf.gz"
             fi
+            # No need to call function `Concat()` here, since no ALT is
+            # symbolic.
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${CONCAT_STRING} --output ${SAMPLE_ID}_ins_training.vcf.gz
             rm -f ${SAMPLE_ID}_out*.vcf.gz* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
 
