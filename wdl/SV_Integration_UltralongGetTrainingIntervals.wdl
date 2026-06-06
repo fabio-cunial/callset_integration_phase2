@@ -219,6 +219,7 @@ task Impl {
             # Remark: we do not handle gaps in the reference explicitly,
             # since we assume that calls in reference gaps have already been 
             # removed from the query VCFs upstream.
+            N_GAPS="0"
             if [ ~{match_to_gaps} -eq 1 ]; then
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
                 ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_dipcall_sorted.bed
