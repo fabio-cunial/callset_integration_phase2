@@ -152,7 +152,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        RAM_PER_THREAD_GB=$(( ~{ram_size_gb} / ${N_THREADS} ))
+        RAM_PER_THREAD_MB=$(( (~{ram_size_gb} * 1024) / (${N_THREADS} + 1) ))
         
         
         
@@ -964,10 +964,10 @@ BIN_LENGTH=$3
 BIN_COVERAGE_RATIO=$4
 REGION=$5
 ID=$6
-RAM_GB=$7
+RAM_MB=$7
 
 samtools depth -aa -r ${REGION} ${INPUT_BAM} -o ${ID}_depth.tsv
-java -cp ${CLASSPATH} -Xmx${RAM_GB}g UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} > ${ID}_breakpoints.tsv
+java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} > ${ID}_breakpoints.tsv
 rm -f ${ID}_depth.tsv
 END
         chmod +x interval_2_breakpoints.sh
@@ -999,7 +999,7 @@ END
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_GB}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ${INSDUP_QUAL} ${INSDUP_MODE}
             rm -f *_breakpoints.tsv
