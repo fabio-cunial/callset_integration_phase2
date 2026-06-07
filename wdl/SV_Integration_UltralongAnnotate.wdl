@@ -1155,7 +1155,9 @@ END
                 N_ROWS=$(wc -l < ${SAMPLE_ID}_header.txt)
                 head -n $(( ${N_ROWS} - 1 )) ${SAMPLE_ID}_header.txt > ${SAMPLE_ID}_header_new.txt
                 echo '##INFO=<ID=INSDUP,Number=0,Type=Flag,Description="The record is the result of an INS-DUP conversion">' >> ${SAMPLE_ID}_header_new.txt
+                echo '##INFO=<ID=INS_POS,Number=1,Type=Integer,Description="The POS of the original INS record">' >> ${SAMPLE_ID}_header_new.txt
                 echo '##INFO=<ID=INS_ALT,Number=1,Type=String,Description="The ALT allele of the original INS record">' >> ${SAMPLE_ID}_header_new.txt
+                echo '##INFO=<ID=INS_QUAL,Number=1,Type=Integer,Description="The QUAL of the original INS record">' >> ${SAMPLE_ID}_header_new.txt
                 tail -n 1 ${SAMPLE_ID}_header.txt >> ${SAMPLE_ID}_header_new.txt
                 bcftools reheader --header ${SAMPLE_ID}_header_new.txt ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
                 rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
