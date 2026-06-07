@@ -34,7 +34,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int preemptible_number = 3
     }
     parameter_meta {
-        chunk_csv: "Format: ID,bai,bam"
+        chunk_csv: "Format: `ID,?,bai,bam,?,...,?` where `?` means a single string."
         convert_ins_to_dup: "1=INS records that correspond to duplications are rewritten as DUP records"
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -165,8 +165,8 @@ task Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 2)
-            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 3)
+            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
+            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
             
             ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
             gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
