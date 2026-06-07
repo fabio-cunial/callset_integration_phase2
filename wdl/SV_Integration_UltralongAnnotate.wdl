@@ -6,7 +6,7 @@ version 1.0
 #
 workflow SV_Integration_UltralongAnnotate {
     input {
-        File chunk_csv
+        File chunk_tsv
         String remote_indir
         String remote_outdir
         
@@ -34,7 +34,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int preemptible_number = 3
     }
     parameter_meta {
-        chunk_csv: "Format: `ID,?,bai,bam,?,...,?` where `?` means a single string."
+        chunk_tsv: "Format: `ID,?,bai,bam,?,...,?` where `?` means a single string."
         convert_ins_to_dup: "1=INS records that correspond to duplications are rewritten as DUP records"
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -43,7 +43,7 @@ workflow SV_Integration_UltralongAnnotate {
     
     call Impl {
         input:
-            chunk_csv = chunk_csv,
+            chunk_tsv = chunk_tsv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
             
@@ -107,7 +107,7 @@ workflow SV_Integration_UltralongAnnotate {
 #
 task Impl {
     input {
-        File chunk_csv
+        File chunk_tsv
         String remote_indir
         String remote_outdir
         
@@ -159,7 +159,7 @@ task Impl {
         # ----------------------- Steps of the pipeline ------------------------
         
         # @param 
-        # $2 A row of `chunk_csv`.
+        # $2 A row of `chunk_tsv`.
         #
         function LocalizeSample() {
             local SAMPLE_ID=$1
@@ -1061,6 +1061,7 @@ END
         truvari --help 1>&2
         df -h 1>&2
         
+        cat ~{chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
             # Skipping the sample if it has already been processed
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
@@ -1189,7 +1190,7 @@ END
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht 1>&2
-        done 3< ~{chunk_csv}
+        done 3< chunk.csv
     >>>
     
     output {
