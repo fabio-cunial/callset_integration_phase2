@@ -28,6 +28,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
         Int match_to_gaps = 0
         Int match_insdups_to_dups = 1
+        Int match_ins_to_dup = 0
+        Int match_ins_to_insdup = 0
         Int match_ins_to_dup_slack_bp = 200
 
         File reference_fa
@@ -71,6 +73,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
             match_to_gaps = match_to_gaps,
             match_insdups_to_dups = match_insdups_to_dups,
+            match_ins_to_dup = match_ins_to_dup,
+            match_ins_to_insdup = match_ins_to_insdup,
             match_ins_to_dup_slack_bp = match_ins_to_dup_slack_bp,
 
             reference_fa = reference_fa,
@@ -121,6 +125,8 @@ task Impl {
 
         Int match_to_gaps
         Int match_insdups_to_dups
+        Int match_ins_to_dup
+        Int match_ins_to_insdup
         Int match_ins_to_dup_slack_bp
 
         File reference_fa
@@ -434,6 +440,11 @@ task Impl {
             # and if we do not mark them as true, the model may not learn their
             # BAM pattern if there are no other short INS.
             #
+            # Remark: in practice matching query INS to truth DUP and INSDUP
+            # does not improve performance. There are few matches per sample, 
+            # mostly with truth INSDUPs, which might introduce spurious BAM 
+            # patterns in the training set.
+            #
             # Remark: it is not useful to convert to intervals short DUPs that 
             # are represented as INS records in the query VCF, since there is
             # likely no BAM pattern at the interval's boundaries.
@@ -441,18 +452,26 @@ task Impl {
             mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
-            CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz"
-            if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+            CONCAT_STRING=" "
+            if [ ~{match_ins_to_dup} -eq 1 ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
+                CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz"
+            fi
+            if [ ~{match_ins_to_insdup} -eq 1 -a ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out3.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out3.vcf.gz
                 CONCAT_STRING="${CONCAT_STRING} ${SAMPLE_ID}_out3.vcf.gz"
             fi
-            # No need to call function `Concat()` here, since no ALT is
-            # symbolic.
-            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${CONCAT_STRING} --output ${SAMPLE_ID}_ins_training.vcf.gz
-            rm -f ${SAMPLE_ID}_out*.vcf.gz* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
+            if [ ~{match_ins_to_dup} -eq 1 -o ~{match_ins_to_insdup} -eq 1 ]; then
+                # No need to call function `Concat()` here, since no ALT is
+                # symbolic.
+                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${CONCAT_STRING} --output ${SAMPLE_ID}_ins_training.vcf.gz
+                rm -f ${SAMPLE_ID}_out*.vcf.gz* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
+            else
+                mv ${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_ins_training.vcf.gz
+                mv ${SAMPLE_ID}_out1.vcf.gz.tbi ${SAMPLE_ID}_ins_training.vcf.gz.tbi
+            fi
 
             # 3.5 INV
             # Remark: svim-asm does not seem to emit calls at some query INVs
