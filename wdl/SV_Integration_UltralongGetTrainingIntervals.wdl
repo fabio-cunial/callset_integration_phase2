@@ -10,7 +10,7 @@ version 1.0
 #
 workflow SV_Integration_UltralongGetTrainingIntervals {
     input {
-        File samples_csv
+        File samples_tsv
         
         String remote_indir_query
         String remote_indir_svimasm
@@ -44,7 +44,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
     parameter_meta {
-        samples_csv: "Format: ID, DIPCALL_BED"
+        samples_tsv: "Format: ID, DIPCALL_BED"
         remote_indir_query: "Without final slash. Contains per-sample annotated VCFs created by `SV_Integration_UltralongAnnotate.wdl`."
         remote_indir_svimasm: "Without final slash. Contains per-sample canonized and filtered svim-asm VCFs."
         convert_svimasm_ins_to_dup: "1=SVIM-asm's INS records that correspond to duplications are rewritten as DUP records"
@@ -55,7 +55,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
     
     call Impl {
         input:
-            samples_csv = samples_csv,
+            samples_tsv = samples_tsv,
 
             remote_indir_query = remote_indir_query,
             remote_indir_svimasm = remote_indir_svimasm,
@@ -107,7 +107,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 #
 task Impl {
     input {
-        File samples_csv
+        File samples_tsv
         
         String remote_indir_query
         String remote_indir_svimasm
@@ -210,6 +210,7 @@ task Impl {
         else
             INSDUP_MODE="1"
         fi
+        cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
@@ -522,7 +523,7 @@ task Impl {
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             rm -rf ${SAMPLE_ID}_*
             ls -laht 1>&2
-        done 3< ~{samples_csv}        
+        done 3< samples.csv
     >>>
     
     output {
