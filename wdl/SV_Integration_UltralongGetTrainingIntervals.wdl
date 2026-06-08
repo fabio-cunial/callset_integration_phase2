@@ -238,6 +238,11 @@ task Impl {
 
 
             # 1. Downloading and filtering the truth VCF -----------------------
+            # Skipping the sample if there is no truth
+            TEST=$( gcloud storage ls ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz || echo "1" )
+            if [ ${TEST} = "1" ]; then
+                continue
+            fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz ./${SAMPLE_ID}_svimasm.vcf.gz
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz.tbi ./${SAMPLE_ID}_svimasm.vcf.gz.tbi
 
