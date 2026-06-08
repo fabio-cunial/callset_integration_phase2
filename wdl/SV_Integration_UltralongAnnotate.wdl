@@ -962,8 +962,8 @@ CLASSPATH=$1
 INPUT_BAM=$2
 BIN_LENGTH=$3
 BIN_COVERAGE_RATIO=$4
-REGION=$5
-RAM_MB=$6
+RAM_MB=$5
+REGION=$6
 ID=$7
 
 samtools depth -aa -r ${REGION} ${INPUT_BAM} -o ${ID}_depth.tsv
