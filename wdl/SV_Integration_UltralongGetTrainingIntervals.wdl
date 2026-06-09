@@ -28,7 +28,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
         Int match_to_gaps = 0
         Int match_insdups_to_dups = 1
-        Int match_ins_to_dup = 0
+        Int match_ins_to_dup = 1
         Int match_ins_to_insdup = 0
         Int match_ins_to_dup_slack_bp = 200
 
