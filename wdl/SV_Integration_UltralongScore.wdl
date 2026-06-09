@@ -38,11 +38,11 @@ workflow SV_Integration_UltralongScore {
         File reference_fa
         File reference_fai
 
-        Array[String] annotations_custom
-        Array[String] annotations_fex
-        Array[String] annotations_cutefc
+        Array[String]? annotations_custom
+        Array[String]? annotations_fex
+        Array[String]? annotations_cutefc
         Array[String] annotations_all
-        Array[String] annotations_all_except_genotyper
+        Array[String]? annotations_all_except_genotyper
 
         File training_python_script
         File scoring_python_script
@@ -57,59 +57,65 @@ workflow SV_Integration_UltralongScore {
         hyperparameters_json: "Parameters for `gatk TrainVariantAnnotationsModel`."
     }
     
-    call Score as score_custom {
-        input:
-            id = svtype + "_custom",
-            annotations = annotations_custom,
-            input_vcf_gz = input_vcf_gz,
-            input_vcf_gz_tbi = input_vcf_gz_tbi,
-            resource_vcf_gz = resource_vcf_gz,
-            resource_vcf_gz_tbi = resource_vcf_gz_tbi,
-            remote_outdir = remote_outdir,
-            training_resource_bed = training_resource_bed,
-            exclude_chromosomes_string = exclude_chromosomes_string,
-            reference_fa = reference_fa,
-            reference_fai = reference_fai,
-            training_python_script = training_python_script,
-            scoring_python_script = scoring_python_script,
-            hyperparameters_json = hyperparameters_json,
-            docker_image = docker_image
+    if (defined(annotations_custom)) {
+        call Score as score_custom {
+            input:
+                id = svtype + "_custom",
+                annotations = select_first([annotations_custom]),
+                input_vcf_gz = input_vcf_gz,
+                input_vcf_gz_tbi = input_vcf_gz_tbi,
+                resource_vcf_gz = resource_vcf_gz,
+                resource_vcf_gz_tbi = resource_vcf_gz_tbi,
+                remote_outdir = remote_outdir,
+                training_resource_bed = training_resource_bed,
+                exclude_chromosomes_string = exclude_chromosomes_string,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                training_python_script = training_python_script,
+                scoring_python_script = scoring_python_script,
+                hyperparameters_json = hyperparameters_json,
+                docker_image = docker_image
+        }
     }
-    call Score as score_fex {
-        input:
-            id = svtype + "_fex",
-            annotations = annotations_fex,
-            input_vcf_gz = input_vcf_gz,
-            input_vcf_gz_tbi = input_vcf_gz_tbi,
-            resource_vcf_gz = resource_vcf_gz,
-            resource_vcf_gz_tbi = resource_vcf_gz_tbi,
-            remote_outdir = remote_outdir,
-            training_resource_bed = training_resource_bed,
-            exclude_chromosomes_string = exclude_chromosomes_string,
-            reference_fa = reference_fa,
-            reference_fai = reference_fai,
-            training_python_script = training_python_script,
-            scoring_python_script = scoring_python_script,
-            hyperparameters_json = hyperparameters_json,
-            docker_image = docker_image
+    if (defined(annotations_fex)) {
+        call Score as score_fex {
+            input:
+                id = svtype + "_fex",
+                annotations = select_first([annotations_fex]),
+                input_vcf_gz = input_vcf_gz,
+                input_vcf_gz_tbi = input_vcf_gz_tbi,
+                resource_vcf_gz = resource_vcf_gz,
+                resource_vcf_gz_tbi = resource_vcf_gz_tbi,
+                remote_outdir = remote_outdir,
+                training_resource_bed = training_resource_bed,
+                exclude_chromosomes_string = exclude_chromosomes_string,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                training_python_script = training_python_script,
+                scoring_python_script = scoring_python_script,
+                hyperparameters_json = hyperparameters_json,
+                docker_image = docker_image
+        }
     }
-    call Score as score_cutefc {
-        input:
-            id = svtype + "_cutefc",
-            annotations = annotations_cutefc,
-            input_vcf_gz = input_vcf_gz,
-            input_vcf_gz_tbi = input_vcf_gz_tbi,
-            resource_vcf_gz = resource_vcf_gz,
-            resource_vcf_gz_tbi = resource_vcf_gz_tbi,
-            remote_outdir = remote_outdir,
-            training_resource_bed = training_resource_bed,
-            exclude_chromosomes_string = exclude_chromosomes_string,
-            reference_fa = reference_fa,
-            reference_fai = reference_fai,
-            training_python_script = training_python_script,
-            scoring_python_script = scoring_python_script,
-            hyperparameters_json = hyperparameters_json,
-            docker_image = docker_image
+    if (defined(annotations_cutefc)) {
+        call Score as score_cutefc {
+            input:
+                id = svtype + "_cutefc",
+                annotations = select_first([annotations_cutefc]),
+                input_vcf_gz = input_vcf_gz,
+                input_vcf_gz_tbi = input_vcf_gz_tbi,
+                resource_vcf_gz = resource_vcf_gz,
+                resource_vcf_gz_tbi = resource_vcf_gz_tbi,
+                remote_outdir = remote_outdir,
+                training_resource_bed = training_resource_bed,
+                exclude_chromosomes_string = exclude_chromosomes_string,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                training_python_script = training_python_script,
+                scoring_python_script = scoring_python_script,
+                hyperparameters_json = hyperparameters_json,
+                docker_image = docker_image
+        }
     }
     call Score as score_all {
         input:
@@ -129,23 +135,25 @@ workflow SV_Integration_UltralongScore {
             hyperparameters_json = hyperparameters_json,
             docker_image = docker_image
     }
-    call Score as score_all_except_genotyper {
-        input:
-            id = svtype + "_all_except_genotyper",
-            annotations = annotations_all_except_genotyper,
-            input_vcf_gz = input_vcf_gz,
-            input_vcf_gz_tbi = input_vcf_gz_tbi,
-            resource_vcf_gz = resource_vcf_gz,
-            resource_vcf_gz_tbi = resource_vcf_gz_tbi,
-            remote_outdir = remote_outdir,
-            training_resource_bed = training_resource_bed,
-            exclude_chromosomes_string = exclude_chromosomes_string,
-            reference_fa = reference_fa,
-            reference_fai = reference_fai,
-            training_python_script = training_python_script,
-            scoring_python_script = scoring_python_script,
-            hyperparameters_json = hyperparameters_json,
-            docker_image = docker_image
+    if (defined(annotations_all_except_genotyper)) {
+        call Score as score_all_except_genotyper {
+            input:
+                id = svtype + "_all_except_genotyper",
+                annotations = select_first([annotations_all_except_genotyper]),
+                input_vcf_gz = input_vcf_gz,
+                input_vcf_gz_tbi = input_vcf_gz_tbi,
+                resource_vcf_gz = resource_vcf_gz,
+                resource_vcf_gz_tbi = resource_vcf_gz_tbi,
+                remote_outdir = remote_outdir,
+                training_resource_bed = training_resource_bed,
+                exclude_chromosomes_string = exclude_chromosomes_string,
+                reference_fa = reference_fa,
+                reference_fai = reference_fai,
+                training_python_script = training_python_script,
+                scoring_python_script = scoring_python_script,
+                hyperparameters_json = hyperparameters_json,
+                docker_image = docker_image
+        }
     }
     
     output {

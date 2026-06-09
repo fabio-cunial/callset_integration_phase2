@@ -15,7 +15,7 @@ workflow SV_Integration_UltralongMerge {
         String svtype
         String suffix
         
-        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
     }
