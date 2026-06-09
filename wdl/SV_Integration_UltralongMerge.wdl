@@ -35,7 +35,7 @@ workflow SV_Integration_UltralongMerge {
 }
 
 
-# Performance on a 4-core, 4GB VM:
+# Performance on a 4-core, 4GB VM, all HPRC+HGSVC samples:
 #
 # TOOL                                                CPU     RAM     TIME
 # fix_sample.sh                                      300%     11M       4s

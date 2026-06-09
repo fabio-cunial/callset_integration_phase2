@@ -1,0 +1,293 @@
+version 1.0
+
+
+# -------->Given a single-sample VCF, the program scores it with XGBoost, filters it by
+# score, and then splits it into ~100 pieces, in order to run bcftools merge
+# over all samples on parallel chunks.
+#
+workflow SV_Integration_Workpackage3_Ultralong {
+    input {
+        File sv_integration_chunk_tsv
+        String remote_indir
+        String remote_outdir
+
+        File del_indel_scorer_pkl
+        File ins_indel_scorer_pkl
+        File dup_indel_scorer_pkl
+        File insdup_indel_scorer_pkl
+        File inv_indel_scorer_pkl
+
+        File del_indel_calibrationScores_hdf5
+        File ins_indel_calibrationScores_hdf5
+        File dup_indel_calibrationScores_hdf5
+        File insdup_indel_calibrationScores_hdf5
+        File inv_indel_calibrationScores_hdf5
+
+        Array[String] annotations_interval = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
+                                               "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
+                                             ]
+        Array[String] annotations_point = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV","BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
+                                            "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
+                                          ]
+        File scoring_python_script
+
+        String filter_string_lenient = "FORMAT/CALIBRATION_SENSITIVITY<=0.9"
+        String filter_string_stringent = "FORMAT/CALIBRATION_SENSITIVITY<=0.7"
+        
+        String docker_image = "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
+    }
+    parameter_meta {
+        remote_indir: "Without final slash"
+        remote_outdir: "Without final slash"
+    }
+    
+    call Impl {
+        input:
+            sv_integration_chunk_tsv = sv_integration_chunk_tsv,
+            remote_indir = remote_indir,
+            remote_outdir = remote_outdir,
+
+            del_indel_scorer_pkl = del_indel_scorer_pkl,
+            ins_indel_scorer_pkl = ins_indel_scorer_pkl,
+            dup_indel_scorer_pkl = dup_indel_scorer_pkl,
+            insdup_indel_scorer_pkl = insdup_indel_scorer_pkl,
+            inv_indel_scorer_pkl = inv_indel_scorer_pkl,
+
+            del_indel_calibrationScores_hdf5 = del_indel_calibrationScores_hdf5,
+            ins_indel_calibrationScores_hdf5 = ins_indel_calibrationScores_hdf5,
+            dup_indel_calibrationScores_hdf5 = dup_indel_calibrationScores_hdf5,
+            insdup_indel_calibrationScores_hdf5 = insdup_indel_calibrationScores_hdf5,
+            inv_indel_calibrationScores_hdf5 = inv_indel_calibrationScores_hdf5,
+
+            annotations_interval = annotations_interval,
+            annotations_point = annotations_point,
+            scoring_python_script = scoring_python_script,
+
+            filter_string_lenient = filter_string_lenient,
+            filter_string_stringent = filter_string_stringent,
+            
+            docker_image = docker_image
+    }
+    
+    output {
+    }
+}
+
+
+# Remark: we use gsutil instead of gcloud since we found the latter to have
+# issues in practice (maybe the gcloud version in the docker is not up to
+# date?). 
+#
+# Memory bottlenecks (measured on a 4GB VM):
+#
+# ScoreVariantAnnotations               1 GB
+#
+task Impl {
+    input {
+        File sv_integration_chunk_tsv
+        String remote_indir
+        String remote_outdir
+
+        File del_indel_scorer_pkl
+        File ins_indel_scorer_pkl
+        File dup_indel_scorer_pkl
+        File insdup_indel_scorer_pkl
+        File inv_indel_scorer_pkl
+
+        File del_indel_calibrationScores_hdf5
+        File ins_indel_calibrationScores_hdf5
+        File dup_indel_calibrationScores_hdf5
+        File insdup_indel_calibrationScores_hdf5
+        File inv_indel_calibrationScores_hdf5
+
+        Array[String] annotations_interval
+        Array[String] annotations_point
+        File scoring_python_script
+
+        String filter_string_lenient
+        String filter_string_stringent
+        
+        String docker_image
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+        Int disk_size_gb = 20
+        Int preemptible_number = 4
+    }
+    parameter_meta {
+    }
+    
+    String docker_dir = "/root"
+    
+    command <<<
+        set -euxo pipefail
+        
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        export GATK_LOCAL_JAR="/root/gatk.jar"
+        RAM_PER_THREAD_MB=$(( ~{ram_size_gb} * 1024 - 500 ))
+        
+        
+        
+        
+        # ----------------------- Steps of the pipeline ------------------------
+        
+        function LocalizeSample() {
+            local SAMPLE_ID=$1
+            local REMOTE_DIR=$2
+            
+            gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_del.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_ins.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_dup.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_insdup.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_inv.vcf.'gz*' .
+        }
+        
+        
+        # Deletes all files and directories related to the sample.
+        #
+        function DelocalizeSample() {
+            local SAMPLE_ID=$1
+            
+            rm -rf ./${SAMPLE_ID}_*
+        }
+
+
+        # Copies the following fields from INFO to FORMAT, so that they are
+        # preserved by the inter-sample merge downstream:
+        #
+        # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
+        #
+        # Remark: the procedure outputs an indexed `.bcf`.
+        #
+        # @param 2 A VCF where all IDs are distinct. This is guaranteed by the
+        # workpackages upstream.
+        #
+        function CopyInfoToFormat() {
+            local SAMPLE_ID=$1
+            local SVTYPE=$2
+            local INPUT_VCF_GZ=$3
+            
+            echo '##FORMAT=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
+            echo '##FORMAT=<ID=SUPP_SNIFFLES,Number=1,Type=Integer,Description="Supported by sniffles">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
+            echo '##FORMAT=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
+            echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
+            echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
+            bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz
+            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --annotations ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_${SVTYPE}_score.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_score.bcf
+            (bcftools view --no-header ${SAMPLE_ID}_${SVTYPE}_score.bcf | head -n 1 || echo "0") 1>&2
+            
+            # Removing temporary files
+            rm -f ${SAMPLE_ID}_${SVTYPE}_header.txt ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz* ${INPUT_VCF_GZ}*
+        }
+
+
+        # Assumes that `CopyInfoToFormat()` has already been executed.
+        #
+        function PrintDebugInformation() {
+            local SAMPLE_ID=$1
+            local SVTYPE=$2
+            local INPUT_BCF=$3
+            
+            rm -f ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
+            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
+            for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
+                local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+                echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
+            done
+        }
+
+
+        function ScoreAndFilter() {
+            local SAMPLE_ID=$1
+            local SVTYPE=$2
+            local RAM_PER_THREAD_MB=$3
+
+            # Scoring
+            if [ ${SVTYPE} = ins ]; then
+                local ANNOTATIONS=~{sep=" -A " annotations_point}
+            else
+                local ANNOTATIONS=~{sep=" -A " annotations_interval}
+            fi
+            gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG 2> ${SAMPLE_ID}_${SVTYPE}_score.log
+            CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE} ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
+            PrintDebugInformation ${SAMPLE_ID} ${SVTYPE} ${SAMPLE_ID}_${SVTYPE}_score.bcf
+
+            # Filtering
+            bcftools view --threads ${N_THREADS} --include "~{filter_string_lenient}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.bcf --output ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
+            bcftools view --threads ${N_THREADS} --include "~{filter_string_stringent}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.bcf --output ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
+            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
+            rm -f ${SAMPLE_ID}_${SVTYPE}_score.bcf*
+
+            # Adding debug information
+            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_score.bcf)
+            local N_RECORDS_AFTER_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_lenient.bcf)
+            local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records in the lenient VCF" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
+            local N_RECORDS_AFTER_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_stringent.bcf)
+            local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records in the stringent VCF" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
+            cat ${SAMPLE_ID}_${SVTYPE}_xgboost.csv 1>&2
+        }
+
+        
+
+        
+        # ---------------------------- Main program ----------------------------
+
+        # Enforcing a consistent naming scheme on the models
+        mv ~{del_indel_scorer_pkl} del.indel.scorer.pkl
+        mv ~{ins_indel_scorer_pkl} ins.indel.scorer.pkl
+        mv ~{dup_indel_scorer_pkl} dup.indel.scorer.pkl
+        mv ~{insdup_indel_scorer_pkl} insdup.indel.scorer.pkl
+        mv ~{inv_indel_scorer_pkl} inv.indel.scorer.pkl
+        mv ~{del_indel_calibrationScores_hdf5} del.indel.calibrationScores.hdf5
+        mv ~{ins_indel_calibrationScores_hdf5} ins.indel.calibrationScores.hdf5
+        mv ~{dup_indel_calibrationScores_hdf5} dup.indel.calibrationScores.hdf5
+        mv ~{insdup_indel_calibrationScores_hdf5} insdup.indel.calibrationScores.hdf5
+        mv ~{inv_indel_calibrationScores_hdf5} inv.indel.calibrationScores.hdf5
+
+        cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
+        while read -u 3 LINE; do
+            SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
+            
+            # Skipping the sample if it has already been processed
+            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
+            if [ ${TEST} != "0" ]; then
+                continue
+            fi
+            LocalizeSample ${SAMPLE_ID} ~{remote_indir}
+            
+            # Filtering
+            ScoreAndFilter ${SAMPLE_ID} del ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} ins ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} dup ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} insdup ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} inv ${RAM_PER_THREAD_MB}
+
+            # Assembling a single VCF and making sure SVLEN in symbolic ALTs is handled correctly for the downstream consumer.
+            ----------------->
+
+
+
+
+            # Uploading
+            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ./${SAMPLE_ID}_'*_stringent.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir}/
+            touch ${SAMPLE_ID}.done
+            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
+            DelocalizeSample ${SAMPLE_ID}
+            ls -laht
+        done 3< chunk.csv
+    >>>
+    
+    output {
+    }
+    runtime {
+        docker: docker_image
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: preemptible_number
+        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
+    }
+}

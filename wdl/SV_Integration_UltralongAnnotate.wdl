@@ -76,7 +76,7 @@ workflow SV_Integration_UltralongAnnotate {
 }
 
 
-# Performance on a 4-core, 8GB VM.
+# Performance on 15x HPRC+HGSVC samples using a 4-core, 8GB VM.
 #
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m

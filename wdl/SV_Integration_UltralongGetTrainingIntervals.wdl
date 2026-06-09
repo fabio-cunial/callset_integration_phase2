@@ -94,7 +94,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 }
 
 
-# Performance on a 2-core 8GB VM:
+# Performance on a 2-core, 8GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
 # UltralongSvimasmInsExtractDups            200%        70M           1s        
