@@ -152,7 +152,6 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        RAM_PER_THREAD_MB=$(( (~{ram_size_gb} * 1024) / (${N_THREADS} + 1) ))
         
         
         
@@ -982,6 +981,9 @@ END
             local INPUT_BAM=$3
             local BIN_LENGTH=$4
             local BIN_COVERAGE_RATIO=$5
+            local DEPTH_N_THREADS=$6
+
+            local RAM_PER_THREAD_MB=$(( ( (~{ram_size_gb} - 1) * 1024) / ${DEPTH_N_THREADS} ))
 
             if [ ~{convert_ins_to_dup} -eq 1 ]; then
                 local INSDUP_MODE=0
@@ -999,7 +1001,7 @@ END
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ${INSDUP_QUAL} ${INSDUP_MODE}
             rm -f *_breakpoints.tsv
@@ -1076,7 +1078,7 @@ END
             LocalizeSample ${SAMPLE_ID} ${LINE}
             df -h 1>&2
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio}
+            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio} $(( ${N_THREADS} / 2 ))
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
             # 2. Adding custom annotations
