@@ -43,6 +43,7 @@ workflow SV_Integration_UltralongScore {
         Array[String]? annotations_cutefc
         Array[String] annotations_all
         Array[String]? annotations_all_except_genotyper
+        Int annotations_have_gt_count
 
         File training_python_script
         File scoring_python_script
@@ -62,6 +63,7 @@ workflow SV_Integration_UltralongScore {
             input:
                 id = svtype + "_custom",
                 annotations = select_first([annotations_custom]),
+                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -82,6 +84,7 @@ workflow SV_Integration_UltralongScore {
             input:
                 id = svtype + "_fex",
                 annotations = select_first([annotations_fex]),
+                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -102,6 +105,7 @@ workflow SV_Integration_UltralongScore {
             input:
                 id = svtype + "_cutefc",
                 annotations = select_first([annotations_cutefc]),
+                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -121,6 +125,7 @@ workflow SV_Integration_UltralongScore {
         input:
             id = svtype + "_all",
             annotations = annotations_all,
+            annotations_have_gt_count = annotations_have_gt_count,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
             resource_vcf_gz = resource_vcf_gz,
@@ -140,6 +145,7 @@ workflow SV_Integration_UltralongScore {
             input:
                 id = svtype + "_all_except_genotyper",
                 annotations = select_first([annotations_all_except_genotyper]),
+                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -184,6 +190,7 @@ task Score {
         File reference_fai
 
         Array[String] annotations
+        Int annotations_have_gt_count
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
@@ -204,11 +211,45 @@ task Score {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         export GATK_LOCAL_JAR="/root/gatk.jar"
         
+
+
+
+        # ----------------------- Steps of the pipeline ------------------------
+
+        # Adds field `INFO/GT_COUNT` to the input VCF, which is overwritten.
+        #
+        function AddGtCount() {
+            local INPUT_VCF_GZ=$1
+
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                printf("%s\t%d\t%s\t%d\n",$1,$2,$3,GT_COUNT); \
+            }' | bgzip -c > annotations.tsv.gz
+            tabix -f -s1 -b2 -e2 annotations.tsv.gz
+            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT converted to an integer in {0,1,2}.">' > header.txt
+            local COLUMNS='CHROM,POS,~ID,INFO/GT_COUNT'
+            bcftools annotate --annotations annotations.tsv.gz --header-lines header.txt --columns ${COLUMNS} --output-type z ${INPUT_VCF_GZ} --output annotated.vcf.gz
+            rm -f annotations.tsv.gz header.txt ${INPUT_VCF_GZ}
+            mv annotated.vcf.gz ${INPUT_VCF_GZ}
+            bcftools index -f -t ${INPUT_VCF_GZ}
+        }
+
+
+
+
+        # ---------------------------- Main program ----------------------------
+
         # 1. Ensuring that the input VCFs have the correct format
         bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{input_vcf_gz} --output input_cleaned.vcf.gz
         bcftools index -f -t input_cleaned.vcf.gz
         rm -f ~{input_vcf_gz}
         N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
+        if [ ~{annotations_have_gt_count} -eq 1 ]; then
+            AddGtCount input_cleaned.vcf.gz
+        fi
         bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
         bcftools index -f -t resource_cleaned.vcf.gz
         rm -f ~{resource_vcf_gz}

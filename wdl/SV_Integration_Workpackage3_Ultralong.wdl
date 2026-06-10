@@ -31,6 +31,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
                                             "BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
                                             "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
                                           ]
+        Int annotations_have_gt_count
         File scoring_python_script
 
         String filter_string_lenient = "FORMAT/CALIBRATION_SENSITIVITY<=0.9"
@@ -63,6 +64,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
 
             annotations_interval = annotations_interval,
             annotations_point = annotations_point,
+            annotations_have_gt_count = annotations_have_gt_count,
             scoring_python_script = scoring_python_script,
 
             filter_string_lenient = filter_string_lenient,
@@ -104,6 +106,7 @@ task Impl {
 
         Array[String] annotations_interval
         Array[String] annotations_point
+        Int annotations_have_gt_count
         File scoring_python_script
 
         String filter_string_lenient
@@ -148,6 +151,29 @@ task Impl {
             local SAMPLE_ID=$1
             
             rm -rf ./${SAMPLE_ID}_*
+        }
+
+
+        # Adds field `INFO/GT_COUNT` to the input VCF, which is overwritten.
+        #
+        function AddGtCount() {
+            local SAMPLE_ID=$1
+            local SVTYPE=$2
+
+            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\n' ${SAMPLE_ID}_${SVTYPE}.vcf.gz | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
+                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
+                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                printf("%s\t%d\t%s\t%d\n",$1,$2,$3,GT_COUNT); \
+            }' | bgzip -c > ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
+            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_${SVTYPE}_header.txt
+            local COLUMNS='CHROM,POS,~ID,INFO/GT_COUNT'
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --columns ${COLUMNS} --output-type z ${SAMPLE_ID}_${SVTYPE}.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz
+            rm -f ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz ${SAMPLE_ID}_${SVTYPE}_header.txt ${SAMPLE_ID}_${SVTYPE}.vcf.gz
+            mv ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz ${SAMPLE_ID}_${SVTYPE}.vcf.gz
+            bcftools index -@ ${N_THREADS} -f -t ${SAMPLE_ID}_${SVTYPE}.vcf.gz
         }
 
 
@@ -259,6 +285,15 @@ task Impl {
                 continue
             fi
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
+
+            # Adding GT_COUNT
+            if [ ~{annotations_have_gt_count} -eq 1 ]; then
+                AddGtCount ${SAMPLE_ID} del
+                AddGtCount ${SAMPLE_ID} ins
+                AddGtCount ${SAMPLE_ID} dup
+                AddGtCount ${SAMPLE_ID} insdup
+                AddGtCount ${SAMPLE_ID} inv
+            fi
             
             # Filtering
             ScoreAndFilter ${SAMPLE_ID} del ${RAM_PER_THREAD_MB}

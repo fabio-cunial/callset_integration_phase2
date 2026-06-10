@@ -1,7 +1,7 @@
 version 1.0
 
 
-# 
+# Measures the effect of re-genotyping on true SVs of different lengths.
 #
 workflow TestKanpigLength {
     input {
