@@ -161,7 +161,7 @@ task Impl {
             PLOIDY_BED=$(echo ~{ploidy_bed_female})
         fi
         ${TIME_COMMAND} ~{docker_dir}/kanpig gt --threads $(( ${N_THREADS} - 1)) --ploidy-bed ${PLOIDY_BED} ~{kanpig_params_singlesample} --sizemin 10 --sizemax ${INFINITY} --reference ~{reference_fa} --input ~{sample_id}_annotated.vcf.gz --reads ~{alignments_bam} --out ~{sample_id}_kanpig.vcf
-        bcftools query --format '%INFO/SVLEN,%INFO/ORIGINAL_GT,[%GT]\n' ~{sample_id}_kanpig.vcf > ~{sample_id}_counts.csv
+        bcftools query --format '%INFO/SVTYPE,%INFO/SVLEN,%INFO/ORIGINAL_GT,[%GT]\n' ~{sample_id}_kanpig.vcf > ~{sample_id}_counts.csv
     >>>
     
     output {
