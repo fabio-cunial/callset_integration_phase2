@@ -76,7 +76,7 @@ task Impl {
         String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 4
-        Int disk_size_gb = 50
+        Int disk_size_gb = 100
     }
     parameter_meta {
     }
@@ -171,7 +171,7 @@ task Impl {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
         zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
