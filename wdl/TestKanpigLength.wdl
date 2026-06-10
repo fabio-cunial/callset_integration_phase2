@@ -9,7 +9,6 @@ workflow TestKanpigLength {
         String sex
         
         File dipcall_vcf_gz
-        File dipcall_tbi
         File dipcall_bed
 
         File alignments_bam
@@ -34,7 +33,6 @@ workflow TestKanpigLength {
             sex = sex,
 
             dipcall_vcf_gz = dipcall_vcf_gz,
-            dipcall_tbi = dipcall_tbi,
             dipcall_bed = dipcall_bed,
 
             alignments_bam = alignments_bam,
@@ -63,7 +61,6 @@ task Impl {
         String sex
         
         File dipcall_vcf_gz
-        File dipcall_tbi
         File dipcall_bed
 
         File alignments_bam
@@ -104,13 +101,12 @@ task Impl {
         function CanonizeDipcallVcf() {
             local SAMPLE_ID=$1
             local INPUT_VCF_GZ=$2
-            local INPUT_TBI=$3
-            local MIN_SV_LENGTH=$4
-            local MAX_SV_LENGTH=$5
+            local MIN_SV_LENGTH=$3
+            local MAX_SV_LENGTH=$4
             
             
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
-            mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
+            tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             
             # Keeping only records in the dipcall BED
             ${TIME_COMMAND} bcftools filter --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
@@ -147,7 +143,7 @@ task Impl {
         ~{docker_dir}/kanpig --version 1>&2
 
         mv ~{dipcall_bed} ~{sample_id}.bed
-        CanonizeDipcallVcf ~{sample_id} ~{dipcall_vcf_gz} ~{dipcall_tbi} 50 ${INFINITY}
+        CanonizeDipcallVcf ~{sample_id} ~{dipcall_vcf_gz} 50 ${INFINITY}
 
         # Backing up the original GT in INFO
         bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%GT]\n' ~{sample_id}_canonized.vcf.gz | bgzip -c > ~{sample_id}_annotations.tsv.gz
