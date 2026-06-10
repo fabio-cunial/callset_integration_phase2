@@ -6,7 +6,7 @@ version 1.0
 workflow SvimAsm {
     input {
         String sample_id
-        Int min_sv_length
+        Int max_sv_length = 10000000
         
         File hap1_bam
         File hap1_bai
@@ -19,15 +19,16 @@ workflow SvimAsm {
         String remote_output_dir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
-        Int preemptible_number = 2
+        Int preemptible_number = 0
     }
     parameter_meta {
+        max_sv_length: "SVIM-asm's default is 100kb."
     }
     
     call Impl {
         input:
             sample_id = sample_id,
-            min_sv_length = min_sv_length,
+            max_sv_length = max_sv_length,
             hap1_bam = hap1_bam,
             hap1_bai = hap1_bai,
             hap2_bam = hap2_bam,
@@ -51,7 +52,7 @@ workflow SvimAsm {
 task Impl {
     input {
         String sample_id
-        Int min_sv_length
+        Int max_sv_length
         
         File hap1_bam
         File hap1_bai
@@ -80,8 +81,21 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         svim-asm --version 2>&1 || echo "1"
 
-        ${TIME_COMMAND} svim-asm diploid ./svim/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa}
-        mv ./svim/variants.vcf ~{sample_id}_in.vcf
+        # Capturing all SVs, and the destination of interspersed duplications.
+        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} --interspersed_duplications_as_insertions ./svim/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa}
+        bgzip -c ./svim/variants.vcf > ~{sample_id}_in1.vcf.gz
+        bcftools index -f -t ~{sample_id}_in1.vcf.gz
+        rm -rf ./svim/
+
+        # Capturing only the source of interspersed duplications
+        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} ./svim/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa}
+        bcftools filter --include 'SVTYPE="DUP:INT"' --output-type z ./svim/variants.vcf --output ~{sample_id}_in2.vcf.gz
+        bcftools index -f -t ~{sample_id}_in2.vcf.gz
+        rm -rf ./svim/
+        
+        # Concatenating
+        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ~{sample_id}_in1.vcf.gz ~{sample_id}_in2.vcf.gz --output ~{sample_id}_in.vcf
+        rm -f ~{sample_id}_in1.vcf.gz* ~{sample_id}_in2.vcf.gz*
 
         # Splitting multiallelic records into biallelic records, if any.
         ${TIME_COMMAND} bcftools norm --multiallelics -any --output-type v ~{sample_id}_in.vcf --output ~{sample_id}_out.vcf
@@ -100,13 +114,9 @@ task Impl {
         ${TIME_COMMAND} java -cp ~{docker_dir} AddSvtypeSvlen ~{sample_id}_in.vcf > ~{sample_id}_out.vcf
         rm -f ~{sample_id}_in.vcf ; mv ~{sample_id}_out.vcf ~{sample_id}_in.vcf
 
-        # Enforcing the length threshold
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length} --output-type z ~{sample_id}_in.vcf --output ~{sample_id}_out.vcf.gz
-        rm -f ~{sample_id}_in.vcf ; mv ~{sample_id}_out.vcf.gz ~{sample_id}_in.vcf.gz ; bcftools index -f -t ~{sample_id}_in.vcf.gz
-
         # Uploading
-        mv ~{sample_id}_in.vcf.gz ~{sample_id}_canonized.vcf.gz
-        mv ~{sample_id}_in.vcf.gz.tbi ~{sample_id}_canonized.vcf.gz.tbi
+        bgzip -c ~{sample_id}_in.vcf > ~{sample_id}_canonized.vcf.gz
+        bcftools index -f -t ~{sample_id}_canonized.vcf.gz
         gcloud storage cp ~{sample_id}_canonized.vcf.'gz*' ~{remote_output_dir}/
     >>>
     
