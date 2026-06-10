@@ -251,7 +251,7 @@ task Impl {
                 continue
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
-            bcftools filter --include "ABS(SVLEN)>=${svimasm_min_sv_length}" --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
+            bcftools filter --include 'ABS(SVLEN)>='${svimasm_min_sv_length} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
             rm -f ${SAMPLE_ID}_canonized.vcf.gz*
 
@@ -263,6 +263,10 @@ task Impl {
             # We include the intervals of both DUP:TANDEM and of DUP:INT, even
             # though the latter (interspersed duplication) behaves like DUP only
             # in terms of depth, not in terms of breakpoints.
+            #
+            # Remark: SVIM-asm outputs a `FORMAT:CN` field with the copy number 
+            # of a DUP. We could use it to separate simple DUPs from 
+            # triplications etc.: this is left to the future.
             bcftools filter --include 'SVTYPE=="DUP"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_out.vcf
             java -cp ~{docker_dir} UltralongForceDup ${SAMPLE_ID}_out.vcf | bgzip > ${SAMPLE_ID}_svimasm_dup.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_dup.vcf.gz
@@ -296,12 +300,10 @@ task Impl {
             # anyway, we accept this issue in exchange for the advantage in 
             # runtime.
             #
-            # Remark: one could think of creating an INS for every DUP:INT 
-            # record from svim-asm. However, we ran svim-asm with default 
-            # params, which exclude `--interspersed_duplications_as_insertions`,
-            # which means that an interspersed DUP is only represented as its 
-            # source interval and the destination cannot be reconstructed. We 
-            # should have run svim-asm twice, with and without the flag.
+            # Remark: we assume that, for every DUP:INT, svim-asm outputs also
+            # an INS, i.e. that it was run with `--interspersed_duplications_as_
+            # insertions` too. I.e. the svim-asm VCF represents both the source
+            # interval and the destination point of every DUP:INS.
             bcftools filter --include 'SVTYPE=="INS"' --output-type v ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_ins.vcf
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_svimasm_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
