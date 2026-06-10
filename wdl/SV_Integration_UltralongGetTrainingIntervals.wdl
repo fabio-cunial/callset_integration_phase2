@@ -16,7 +16,9 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         String remote_indir_svimasm
         String remote_outdir
         
-        Int convert_svimasm_ins_to_dup = 1
+        Int svimasm_min_sv_length = 5000
+
+        Int svimasm_convert_ins_to_dup = 1
 
         Int svimasm_ins_use_gaps = 0
         Int svimasm_ins_use_gaps_slack_bp = 200
@@ -47,7 +49,8 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         samples_tsv: "Format: ID, DIPCALL_BED"
         remote_indir_query: "Without final slash. Contains per-sample annotated VCFs created by `SV_Integration_UltralongAnnotate.wdl`."
         remote_indir_svimasm: "Without final slash. Contains per-sample canonized and filtered svim-asm VCFs."
-        convert_svimasm_ins_to_dup: "1=SVIM-asm's INS records that correspond to duplications are rewritten as DUP records"
+        svimasm_min_sv_length: "Removes SVs shorter than this from the svim-asm VCF to speed up all steps."
+        svimasm_convert_ins_to_dup: "1=SVIM-asm's INS records that correspond to duplications are rewritten as DUP records"
         truvari_refdist: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
         truvari_pctovl: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
         truvari_pctsize: "Should be set for stringent matches, since position is crucial for detecting BAM patterns."
@@ -61,7 +64,9 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
             remote_indir_svimasm = remote_indir_svimasm,
             remote_outdir = remote_outdir,
 
-            convert_svimasm_ins_to_dup = convert_svimasm_ins_to_dup,
+            svimasm_min_sv_length = svimasm_min_sv_length,
+
+            svimasm_convert_ins_to_dup = svimasm_convert_ins_to_dup,
 
             svimasm_ins_use_gaps = svimasm_ins_use_gaps,
             svimasm_ins_use_gaps_slack_bp = svimasm_ins_use_gaps_slack_bp,
@@ -113,7 +118,9 @@ task Impl {
         String remote_indir_svimasm
         String remote_outdir
         
-        Int convert_svimasm_ins_to_dup
+        Int svimasm_min_sv_length
+
+        Int svimasm_convert_ins_to_dup
 
         Int svimasm_ins_use_gaps
         Int svimasm_ins_use_gaps_slack_bp
@@ -205,7 +212,7 @@ task Impl {
         truvari --help 1>&2
         df -h 1>&2
 
-        if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+        if [ ~{svimasm_convert_ins_to_dup} -eq 1 ]; then
             INSDUP_MODE="0"
         else
             INSDUP_MODE="1"
@@ -243,8 +250,10 @@ task Impl {
             if [ ${TEST} = "1" ]; then
                 continue
             fi
-            gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz ./${SAMPLE_ID}_svimasm.vcf.gz
-            gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz.tbi ./${SAMPLE_ID}_svimasm.vcf.gz.tbi
+            gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
+            bcftools filter --include "ABS(SVLEN)>=${svimasm_min_sv_length}" --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
+            rm -f ${SAMPLE_ID}_canonized.vcf.gz*
 
             # 1.1 DEL
             bcftools filter --include 'SVTYPE=="DEL"' --output-type z ${SAMPLE_ID}_svimasm.vcf.gz --output ${SAMPLE_ID}_svimasm_del.vcf.gz
@@ -403,7 +412,7 @@ task Impl {
             rm -rf ${SAMPLE_ID}_truvari/
 
             # 3.3 INSDUP
-            if [ ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+            if [ ~{svimasm_convert_ins_to_dup} -eq 1 ]; then
                 TRUVARI_REFDIST=~{truvari_refdist}
             else
                 TRUVARI_REFDIST="2000000 --chunksize 2000000"
@@ -413,7 +422,7 @@ task Impl {
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
-            if [ ~{convert_svimasm_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
+            if [ ~{svimasm_convert_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
                 # We compare the query INS->DUPs to svim-asm's DUPs, since the
                 # former might contain simple DUPs.
                 # Remark: in practice there are few matches to svim-asm's DUPs
@@ -464,7 +473,7 @@ task Impl {
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
                 CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz"
             fi
-            if [ ~{match_ins_to_insdup} -eq 1 -a ~{convert_svimasm_ins_to_dup} -eq 1 ]; then
+            if [ ~{match_ins_to_insdup} -eq 1 -a ~{svimasm_convert_ins_to_dup} -eq 1 ]; then
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out3.vcf.gz
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out3.vcf.gz
                 CONCAT_STRING="${CONCAT_STRING} ${SAMPLE_ID}_out3.vcf.gz"
