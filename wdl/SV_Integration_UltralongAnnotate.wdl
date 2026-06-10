@@ -1017,7 +1017,9 @@ END
             # Remark: `truvari collapse` is run with the same parameters as in
             # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
             # lower QUAL to make truvari choose an original DUP record as a 
-            # cluster representative. This collapses ~3-5 variants per sample.
+            # cluster representative. If the DUP record has a GT it will be 
+            # selected, since its column after bcftools merge is the first one.
+            # This collapses ~3-5 variants per sample.
             #
             # Remark: truvari needs `bcftools merge` and it does not work with 
             # `bcftools concat`.

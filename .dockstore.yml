@@ -650,3 +650,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_Workpackage3_Ultralong.wdl
   testParameterFiles:
+- name: TestKanpigLength
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/TestKanpigLength.wdl
+  testParameterFiles:
