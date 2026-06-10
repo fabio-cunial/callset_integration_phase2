@@ -88,9 +88,11 @@ task Impl {
         wait
         bgzip --compress-level 1 ./svim1/variants.vcf
         bcftools index -f -t ./svim1/variants.vcf.gz
-        bcftools filter --include 'SVTYPE="DUP:INT"' --output-type z ./svim2/variants.vcf --output ./svim2/variants_prime.vcf.gz
+        bcftools filter --include 'ALT="<DUP:INT>"' --output-type z ./svim2/variants.vcf --output ./svim2/variants_prime.vcf.gz
         bcftools index -f -t ./svim2/variants_prime.vcf.gz
+        N_DUP_INT=$(bcftools index --nrecords ./svim2/variants_prime.vcf.gz)
         ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ./svim1/variants.vcf.gz ./svim2/variants_prime.vcf.gz --output ~{sample_id}_in.vcf
+        mv ./svim2/sv-lengths.png ./~{sample_id}.png
         rm -rf ./svim1/ ./svim2/
 
         # Splitting multiallelic records into biallelic records, if any.
@@ -113,7 +115,7 @@ task Impl {
         # Uploading
         bgzip -c ~{sample_id}_in.vcf > ~{sample_id}_canonized.vcf.gz
         bcftools index -f -t ~{sample_id}_canonized.vcf.gz
-        gcloud storage cp ~{sample_id}_canonized.vcf.'gz*' ~{remote_output_dir}/
+        gcloud storage cp ~{sample_id}_canonized.vcf.'gz*' ./~{sample_id}.png ~{remote_output_dir}/
     >>>
     
     output {
