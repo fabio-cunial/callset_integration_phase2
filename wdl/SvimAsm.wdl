@@ -65,8 +65,8 @@ task Impl {
         String remote_output_dir
         
         String docker_image
-        Int n_cpu = 1
-        Int ram_size_gb = 3
+        Int n_cpu = 2
+        Int ram_size_gb = 6
         Int disk_size_gb = 20
         Int preemptible_number
     }
@@ -82,20 +82,16 @@ task Impl {
         svim-asm --version 2>&1 || echo "1"
 
         # Capturing all SVs, and the destination of interspersed duplications.
-        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} --interspersed_duplications_as_insertions ./svim/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa}
-        bgzip -c ./svim/variants.vcf > ~{sample_id}_in1.vcf.gz
-        bcftools index -f -t ~{sample_id}_in1.vcf.gz
-        rm -rf ./svim/
-
+        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} --interspersed_duplications_as_insertions ./svim1/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa} &
         # Capturing only the source of interspersed duplications
-        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} ./svim/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa}
-        bcftools filter --include 'SVTYPE="DUP:INT"' --output-type z ./svim/variants.vcf --output ~{sample_id}_in2.vcf.gz
-        bcftools index -f -t ~{sample_id}_in2.vcf.gz
-        rm -rf ./svim/
-        
-        # Concatenating
-        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ~{sample_id}_in1.vcf.gz ~{sample_id}_in2.vcf.gz --output ~{sample_id}_in.vcf
-        rm -f ~{sample_id}_in1.vcf.gz* ~{sample_id}_in2.vcf.gz*
+        ${TIME_COMMAND} svim-asm diploid --max_sv_size ~{max_sv_length} ./svim2/ ~{hap1_bam} ~{hap2_bam} ~{reference_fa} &
+        wait
+        bgzip --compress-level 1 ./svim1/variants.vcf
+        bcftools index -f -t ./svim1/variants.vcf.gz
+        bcftools filter --include 'SVTYPE="DUP:INT"' --output-type z ./svim2/variants.vcf --output ./svim2/variants_prime.vcf.gz
+        bcftools index -f -t ./svim2/variants_prime.vcf.gz
+        ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ./svim1/variants.vcf.gz ./svim2/variants_prime.vcf.gz --output ~{sample_id}_in.vcf
+        rm -rf ./svim1/ ./svim2/
 
         # Splitting multiallelic records into biallelic records, if any.
         ${TIME_COMMAND} bcftools norm --multiallelics -any --output-type v ~{sample_id}_in.vcf --output ~{sample_id}_out.vcf
