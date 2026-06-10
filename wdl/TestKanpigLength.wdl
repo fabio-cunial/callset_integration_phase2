@@ -151,7 +151,7 @@ task Impl {
         echo '##INFO=<ID=ORIGINAL_GT,Number=1,Type=String,Description="Original GT.">' > ~{sample_id}_header.txt
         COLUMNS='CHROM,POS,~ID,REF,ALT,INFO/ORIGINAL_GT'
         ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ~{sample_id}_annotations.tsv.gz --header-lines ~{sample_id}_header.txt --columns ${COLUMNS} --output-type z ~{sample_id}_canonized.vcf.gz --output ~{sample_id}_annotated.vcf.gz
-        bcftools index -@ ${N_THREADS} -f -t ~{sample_id}_annotated.vcf.gz
+        tabix -@ ${N_THREADS} -f ~{sample_id}_annotated.vcf.gz
         rm -f ~{sample_id}_annotations.tsv.gz ~{sample_id}_header.txt
 
         # Re-genotyping
