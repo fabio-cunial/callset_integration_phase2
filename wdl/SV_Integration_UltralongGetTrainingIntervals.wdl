@@ -251,7 +251,7 @@ task Impl {
                 continue
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
-            bcftools filter --include 'ABS(SVLEN)>='${svimasm_min_sv_length} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
+            bcftools filter --include 'ABS(SVLEN)>='~{svimasm_min_sv_length} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
             rm -f ${SAMPLE_ID}_canonized.vcf.gz*
 
