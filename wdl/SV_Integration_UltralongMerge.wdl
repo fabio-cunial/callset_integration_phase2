@@ -3,8 +3,10 @@ version 1.0
 
 # Merges the per-sample, per-SVTYPE VCFs produced by 
 # `SV_Integration_UltralongAnnotate.wdl` and 
-# `SV_Integration_UltralongGetTrainingIntervals.wdl` into a single VCF, removing
-# exact duplicates.
+# `SV_Integration_UltralongGetTrainingIntervals.wdl` into a single, sorted VCF,
+# removing only exact duplicates. The input VCFs are assumed to have standard 
+# symbolic ALT fields, e.g. ALT=<DEL> with SVLEN=23456 in INFO, and not 
+# ALT=<DEL-23456>.
 #
 workflow SV_Integration_UltralongMerge {
     input {
@@ -125,7 +127,8 @@ END
         else
             mv out.vcf ~{svtype}~{suffix}_merged.vcf
         fi
-        ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ~{svtype}~{suffix}_merged.vcf
+        ${TIME_COMMAND} bcftools sort --output-type z ~{svtype}~{suffix}_merged.vcf --output ~{svtype}~{suffix}_merged.vcf.gz
+        rm -f ~{svtype}~{suffix}_merged.vcf
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
         

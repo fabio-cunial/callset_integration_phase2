@@ -169,8 +169,8 @@ task Impl {
         
         # ---------------------- Steps of the pipeline -------------------------
 
-        # Runs `bcftools concat` making sure it does not over-collapse symbolic
-        # ALTs.
+        # Runs `bcftools concat`, making sure that symbolic ALTs are not over-
+        # collapsed and that the output is sorted.
         #
         # Remark: the procedure deletes the input VCFs.
         #
@@ -198,7 +198,38 @@ task Impl {
                 for (i=2; i<=NF; i++) printf("\t%s",$i); \
                 printf("\n"); \
             }' >> ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf
-            rm -f ${SAMPLE_ID}_out.vcf ; bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
+            rm -f ${SAMPLE_ID}_out.vcf
+            bcftools sort --output-type z ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf --output ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
+        }
+
+
+        # Runs `truvari bench`, additionally enforcing a max distance between
+        # each corresponding pair of breakpoints and making sure that the output
+        # is sorted.
+        #
+        # Remark: `StartDistance=EndDistance` for INS.
+        #
+        function Bench() {
+            local SAMPLE_ID=$1
+            local PCTOVL=$2
+            local REFDIST=$3
+            local QUERY_VCF_GZ=$4
+            local TRUTH_VCF_GZ=$5
+            local OUTPUT_VCF_GZ=$6
+
+            local DEFAULT_TRUVARI_CHUNKSIZE="1000"
+            if [ ${REFDIST} -gt ${DEFAULT_TRUVARI_CHUNKSIZE} ]; then
+                CHUNKSIZE=${REFDIST}
+            else
+                CHUNKSIZE=${DEFAULT_TRUVARI_CHUNKSIZE}
+            fi
+            ${TIME_COMMAND} truvari bench -b ${TRUTH_VCF_GZ} -c ${QUERY_VCF_GZ} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${REFDIST} --chunksize ${CHUNKSIZE} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ${PCTOVL} --pick single -o ./${SAMPLE_ID}_truvari/
+            bcftools filter --include 'ABS(StartDistance)<='${REFDIST}' && ABS(EndDistance)<='${REFDIST} --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${OUTPUT_VCF_GZ}
+            ${TIME_COMMAND} bcftools sort --output-type z ${OUTPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf.gz
+            mv ${SAMPLE_ID}_out.vcf.gz ${OUTPUT_VCF_GZ}
+            bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
+            rm -rf ${SAMPLE_ID}_truvari/
         }
 
 
@@ -248,6 +279,7 @@ task Impl {
             # Skipping the sample if there is no truth
             TEST=$( gcloud storage ls ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz || echo "1" )
             if [ ${TEST} = "1" ]; then
+                rm -rf ${SAMPLE_ID}_*
                 continue
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
@@ -363,23 +395,13 @@ task Impl {
             # BED does not improve performance, and it decreases it both within
             # the confident BED and on the whole genome.
             # Approx. 8% of all DEL get marked as true by a dipcall gap.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_del.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_del1.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_del1.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del1.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/
+            Bench ${SAMPLE_ID} ~{truvari_pctovl} ~{truvari_refdist} ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_svimasm_del.vcf.gz ${SAMPLE_ID}_del1.vcf.gz            
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_del.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed DEL >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_del.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
-                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_del2.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_del2.vcf.gz
-                rm -rf ${SAMPLE_ID}_truvari/
+                Bench ${SAMPLE_ID} ~{truvari_pctovl} ~{truvari_refdist} ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
                 N_DEL1=$(bcftools index --nrecords ${SAMPLE_ID}_del1.vcf.gz)
                 N_DEL2=$(bcftools index --nrecords ${SAMPLE_ID}_del2.vcf.gz)
                 if [ ${N_DEL1} -eq 0 ]; then
@@ -408,22 +430,15 @@ task Impl {
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_dup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_dup_training.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/
+            Bench ${SAMPLE_ID} ~{truvari_pctovl} ~{truvari_refdist} ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
 
             # 3.3 INSDUP
             if [ ~{svimasm_convert_ins_to_dup} -eq 1 ]; then
                 TRUVARI_REFDIST=~{truvari_refdist}
             else
-                TRUVARI_REFDIST="2000000 --chunksize 2000000"
+                TRUVARI_REFDIST="2000000"
             fi
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_insdup_training.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/
+            Bench ${SAMPLE_ID} ~{truvari_pctovl} ${TRUVARI_REFDIST} ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
             if [ ~{svimasm_convert_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
                 # We compare the query INS->DUPs to svim-asm's DUPs, since the
                 # former might contain simple DUPs.
@@ -431,11 +446,7 @@ task Impl {
                 # so this comparison might be irrelevant. This is probably due
                 # to the fact that we truvari-collapsed query INSDUPs to query
                 # DUPs, favoring the latter representation.
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_dup.vcf.gz -c ${SAMPLE_ID}_insdup.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ${TRUVARI_REFDIST} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
-                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_insdup_training_prime.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_insdup_training_prime.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup_training_prime.vcf.gz
-                rm -rf ${SAMPLE_ID}_truvari/
+                Bench ${SAMPLE_ID} ~{truvari_pctovl} ${TRUVARI_REFDIST} ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
                 N_INSDUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training.vcf.gz)
                 N_INSDUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training_prime.vcf.gz)
                 if [ ${N_INSDUP_TRAINING} -eq 0 ]; then
@@ -465,10 +476,7 @@ task Impl {
             # Remark: it is not useful to convert to intervals short DUPs that 
             # are represented as INS records in the query VCF, since there is
             # likely no BAM pattern at the interval's boundaries.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_ins.vcf.gz -c ${SAMPLE_ID}_ins.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl 0 --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/
+            Bench ${SAMPLE_ID} 0 ~{truvari_refdist} ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
             CONCAT_STRING=" "
             if [ ~{match_ins_to_dup} -eq 1 ]; then
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
@@ -483,7 +491,7 @@ task Impl {
             if [ ~{match_ins_to_dup} -eq 1 -o ~{match_ins_to_insdup} -eq 1 ]; then
                 # No need to call function `Concat()` here, since no ALT is
                 # symbolic.
-                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${CONCAT_STRING} --output ${SAMPLE_ID}_ins_training.vcf.gz
+                ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${CONCAT_STRING} | bcftools sort --output-type z --output ${SAMPLE_ID}_ins_training.vcf.gz
                 rm -f ${SAMPLE_ID}_out*.vcf.gz* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_training.vcf.gz
             else
                 mv ${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_ins_training.vcf.gz
@@ -497,23 +505,14 @@ task Impl {
             # performance, probably because it adds to the training set several
             # events that are not simple INVs.
             # Approx. 15% of all INV get marked as true by a dipcall gap.
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_inv.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
-            ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_inv1.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv1.vcf.gz
+            Bench ${SAMPLE_ID} ~{truvari_pctovl} ~{truvari_refdist} ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
-                ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_gaps.vcf.gz -c ${SAMPLE_ID}_inv.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --refdist ~{truvari_refdist} --pctseq 0 --pctsize ~{truvari_pctsize} --pctovl ~{truvari_pctovl} --pick single -o ./${SAMPLE_ID}_truvari/
-                mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
-                ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_inv2.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-                mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
-                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_inv2.vcf.gz
-                rm -rf ${SAMPLE_ID}_truvari/
+                Bench ${SAMPLE_ID} ~{truvari_pctovl} ~{truvari_refdist} ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
                 N_INV1=$(bcftools index --nrecords ${SAMPLE_ID}_inv1.vcf.gz)
                 N_INV2=$(bcftools index --nrecords ${SAMPLE_ID}_inv2.vcf.gz)
                 if [ ${N_INV1} -eq 0 ]; then
