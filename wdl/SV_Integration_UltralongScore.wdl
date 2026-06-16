@@ -53,7 +53,7 @@ workflow SV_Integration_UltralongScore {
         String remote_outdir
                 
         File? training_resource_bed
-        String exclude_chromosomes_string = "-XL chr1 -XL chr2 -XL chr3"
+        String exclude_chromosomes_string = " "
         File reference_fa
         File reference_fai
 
@@ -273,7 +273,7 @@ task Score {
         bcftools index -f -t resource_cleaned.vcf.gz
         rm -f ~{resource_vcf_gz}
         N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
-        echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}"
+        echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
 
         # 2. Scoring
         if ~{defined(training_resource_bed)}
