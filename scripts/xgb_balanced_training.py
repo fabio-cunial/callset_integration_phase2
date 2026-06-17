@@ -134,7 +134,7 @@ def main():
     parser.add_argument('--force_balanced_training',
                         type=bool,
                         required=False,
-                        default=False,
+                        default=True,
                         help='')
 
     args = parser.parse_args()
