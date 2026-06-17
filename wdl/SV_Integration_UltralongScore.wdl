@@ -65,6 +65,7 @@ workflow SV_Integration_UltralongScore {
         Int annotations_have_gt_count
 
         File training_python_script
+        Int force_balanced_training = 0
         File scoring_python_script
         File hyperparameters_json
         
@@ -93,6 +94,7 @@ workflow SV_Integration_UltralongScore {
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
+                force_balanced_training = force_balanced_training,
                 scoring_python_script = scoring_python_script,
                 hyperparameters_json = hyperparameters_json,
                 docker_image = docker_image
@@ -114,6 +116,7 @@ workflow SV_Integration_UltralongScore {
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
+                force_balanced_training = force_balanced_training,
                 scoring_python_script = scoring_python_script,
                 hyperparameters_json = hyperparameters_json,
                 docker_image = docker_image
@@ -135,6 +138,7 @@ workflow SV_Integration_UltralongScore {
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
+                force_balanced_training = force_balanced_training,
                 scoring_python_script = scoring_python_script,
                 hyperparameters_json = hyperparameters_json,
                 docker_image = docker_image
@@ -155,6 +159,7 @@ workflow SV_Integration_UltralongScore {
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             training_python_script = training_python_script,
+            force_balanced_training = force_balanced_training,
             scoring_python_script = scoring_python_script,
             hyperparameters_json = hyperparameters_json,
             docker_image = docker_image
@@ -175,6 +180,7 @@ workflow SV_Integration_UltralongScore {
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
+                force_balanced_training = force_balanced_training,
                 scoring_python_script = scoring_python_script,
                 hyperparameters_json = hyperparameters_json,
                 docker_image = docker_image
@@ -211,6 +217,7 @@ task Score {
         Array[String] annotations
         Int annotations_have_gt_count
         File training_python_script
+        Int force_balanced_training
         File scoring_python_script
         File hyperparameters_json
         
@@ -289,7 +296,12 @@ task Score {
         # extract.unlabeled.annot.hdf5
         # extract.vcf.gz
         # extract.vcf.gz.tbi
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 extract.annot.hdf5 --unlabeled-annotations-hdf5 extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} --hyperparameters-json ~{hyperparameters_json} -O train.train --mode INDEL --verbosity DEBUG
+        if [ ~{force_balanced_training} -eq 1 ]; then
+            BALANCED_STRING="--force_balanced_training"
+        else
+            BALANCED_STRING=" "
+        fi
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" TrainVariantAnnotationsModel --annotations-hdf5 extract.annot.hdf5 --unlabeled-annotations-hdf5 extract.unlabeled.annot.hdf5 --model-backend PYTHON_SCRIPT --python-script ~{training_python_script} ${BALANCED_STRING} --hyperparameters-json ~{hyperparameters_json} -O train.train --mode INDEL --verbosity DEBUG
         ls -laht 1>&2
         # Output: 
         # train.train.indel.unlabeledScores.hdf5
