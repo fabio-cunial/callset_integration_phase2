@@ -48,6 +48,8 @@ workflow SV_Integration_Workpackage3_Ultralong {
         String filter_string_stringent = "FORMAT/CALIBRATION_SENSITIVITY<=0.7"
         
         String docker_image = "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
+        File UltralongInsdups2Ins_java
+        File AddSvlenToSymbolicAlt_java
     }
     parameter_meta {
         remote_indir: "Without final slash"
@@ -82,7 +84,9 @@ workflow SV_Integration_Workpackage3_Ultralong {
             filter_string_lenient = filter_string_lenient,
             filter_string_stringent = filter_string_stringent,
             
-            docker_image = docker_image
+            docker_image = docker_image,
+            UltralongInsdups2Ins_java = UltralongInsdups2Ins_java,
+            AddSvlenToSymbolicAlt_java = AddSvlenToSymbolicAlt_java
     }
     
     output {
@@ -127,6 +131,8 @@ task Impl {
         String filter_string_stringent
         
         String docker_image
+        File UltralongInsdups2Ins_java
+        File AddSvlenToSymbolicAlt_java
         Int n_cpu = 2
         Int ram_size_gb = 4
         Int disk_size_gb = 20
@@ -257,7 +263,7 @@ task Impl {
 
             # Converting INSDUP to INS
             if [ ${SVTYPE} = "insdup" ]; then
-                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
+                ${TIME_COMMAND} java UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
                 rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz* ; bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type z ${SAMPLE_ID}_${SVTYPE}_out.vcf --output ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
             fi
 
@@ -293,6 +299,12 @@ task Impl {
 
 
         # ---------------------------- Main program ----------------------------
+
+        # Compiling input scripts
+        mv ~{UltralongInsdups2Ins_java} UltralongInsdups2Ins.java
+        javac UltralongInsdups2Ins.java
+        mv ~{AddSvlenToSymbolicAlt_java} AddSvlenToSymbolicAlt.java
+        javac AddSvlenToSymbolicAlt.java
 
         # Enforcing a consistent naming scheme on all models
         mv ~{del_indel_scorer_pkl} del.indel.scorer.pkl
@@ -339,7 +351,7 @@ task Impl {
             for SUFFIX in lenient stringent all ; do
                 ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_del_${SUFFIX}.bcf ${SAMPLE_ID}_ins_${SUFFIX}.bcf ${SAMPLE_ID}_insdup_${SUFFIX}.bcf ${SAMPLE_ID}_dup_${SUFFIX}.bcf ${SAMPLE_ID}_inv_${SUFFIX}.bcf --output ${SAMPLE_ID}_${SUFFIX}.vcf
                 rm -f ${SAMPLE_ID}_*_${SUFFIX}.bcf*
-                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_${SUFFIX}_out.vcf
+                ${TIME_COMMAND} java AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_${SUFFIX}_out.vcf
                 rm -f ${SAMPLE_ID}_${SUFFIX}.vcf ; mv ${SAMPLE_ID}_${SUFFIX}_out.vcf ${SAMPLE_ID}_${SUFFIX}_in.vcf
                 ${TIME_COMMAND} bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_${SUFFIX}_in.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
                 rm -f ${SAMPLE_ID}_${SUFFIX}_in.vcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SUFFIX}.bcf
