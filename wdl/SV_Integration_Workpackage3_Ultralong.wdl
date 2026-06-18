@@ -2,8 +2,16 @@ version 1.0
 
 
 # A version of `SV_Integration_Workpackage3.wdl` that takes in input the 
-# ultralong calls annotated by `SV_Integration_UltralongAnnotate.wdl` and that 
-# produces output compatible with `SV_Integration_Workpackage12.wdl`.
+# ultralong calls annotated by `SV_Integration_UltralongAnnotate.wdl`, filters
+# them using global models, and produces output compatible with 
+# `SV_Integration_Workpackage12.wdl`.
+#
+# Remark: three VCFs are produced for each sample: a lenient one, a stringent 
+# one, and an unfiltered one that just contains model scores.
+#
+# Remark: INSDUPs are converted back to INS, to preserve as much information as 
+# possible downstream. The breakpoints of the original INSDUPs are saved in
+# INFO.
 #
 workflow SV_Integration_Workpackage3_Ultralong {
     input {
@@ -238,7 +246,7 @@ task Impl {
             local RAM_PER_THREAD_MB=$3
 
             # Scoring
-            if [ ${SVTYPE} = ins ]; then
+            if [ ${SVTYPE} = "ins" ]; then
                 local ANNOTATIONS=~{sep=" -A " annotations_point}
             else
                 local ANNOTATIONS=~{sep=" -A " annotations_interval}
@@ -246,6 +254,12 @@ task Impl {
             gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG 2> ${SAMPLE_ID}_${SVTYPE}_score.log
             CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE}
             PrintDebugInformation ${SAMPLE_ID} ${SVTYPE}
+
+            # Converting INSDUP to INS
+            if [ ${SVTYPE} = "insdup" ]; then
+                ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
+                rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz* ; bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type z ${SAMPLE_ID}_${SVTYPE}_out.vcf --output ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
+            fi
 
             # Filtering
             bcftools view --threads ${N_THREADS} --include "~{filter_string_lenient}"   --output-type b ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
@@ -259,10 +273,18 @@ task Impl {
             # Adding debug information
             local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_all.bcf)
             local N_RECORDS_AFTER_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_lenient.bcf)
-            local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            if [ ${N_RECORDS_BEFORE_FILTERING} -eq 0 ]; then
+                local PERCENT=0
+            else
+                local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            fi
             echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records in the lenient VCF" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
             local N_RECORDS_AFTER_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_stringent.bcf)
-            local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            if [ ${N_RECORDS_BEFORE_FILTERING} -eq 0 ]; then
+                local PERCENT=0
+            else
+                local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
+            fi
             echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records in the stringent VCF" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
             cat ${SAMPLE_ID}_${SVTYPE}_xgboost.csv 1>&2
         }
@@ -311,27 +333,22 @@ task Impl {
             ScoreAndFilter ${SAMPLE_ID} insdup ${RAM_PER_THREAD_MB}
             ScoreAndFilter ${SAMPLE_ID} inv ${RAM_PER_THREAD_MB}
 
-            # - Assembling a single VCF.
-            # - Adding SVLEN to symbolic ALTs, to avoid overcollapse in 
-            #   `bcftools merge` downstream.
-            # - Transforming INSDUPs back to INS, to preserve as much 
-            #   information as possible downstream.
-            for SUFFIX in lenient stringent ; do
+            # Assembling a single VCF.
+            # Adding SVLEN to symbolic ALTs, to avoid overcollapse in `bcftools 
+            # merge` downstream.
+            for SUFFIX in lenient stringent all ; do
                 ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_del_${SUFFIX}.bcf ${SAMPLE_ID}_ins_${SUFFIX}.bcf ${SAMPLE_ID}_insdup_${SUFFIX}.bcf ${SAMPLE_ID}_dup_${SUFFIX}.bcf ${SAMPLE_ID}_inv_${SUFFIX}.bcf --output ${SAMPLE_ID}_${SUFFIX}.vcf
                 rm -f ${SAMPLE_ID}_*_${SUFFIX}.bcf*
-                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_out.vcf
-                rm -f ${SAMPLE_ID}_${SUFFIX}.vcf
-
-#-----> Transform insdup back to INS?            
-
-                ${TIME_COMMAND} bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_out.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
-                rm -f ${SAMPLE_ID}_out.vcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SUFFIX}.bcf
+                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_${SUFFIX}_out.vcf
+                rm -f ${SAMPLE_ID}_${SUFFIX}.vcf ; mv ${SAMPLE_ID}_${SUFFIX}_out.vcf ${SAMPLE_ID}_${SUFFIX}_in.vcf
+                ${TIME_COMMAND} bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_${SUFFIX}_in.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
+                rm -f ${SAMPLE_ID}_${SUFFIX}_in.vcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SUFFIX}.bcf
             done
 
             # Uploading
-            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir_lenient}/
+            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ~{remote_outdir_lenient}/
             gsutil mv ./${SAMPLE_ID}_'*_stringent.bcf*' ~{remote_outdir_stringent}/
-            gsutil mv ./${SAMPLE_ID}_'*_all.bcf*' ~{remote_outdir_all}/
+            gsutil mv ./${SAMPLE_ID}_'*_all.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir_all}/
             touch ${SAMPLE_ID}.done
             gsutil mv ${SAMPLE_ID}.done ~{remote_outdir_all}/ && echo 0 || echo 1
             DelocalizeSample ${SAMPLE_ID}
