@@ -1,15 +1,16 @@
 version 1.0
 
 
-# -------->Given a single-sample VCF, the program scores it with XGBoost, filters it by
-# score, and then splits it into ~100 pieces, in order to run bcftools merge
-# over all samples on parallel chunks.
+# A version of `SV_Integration_Workpackage3.wdl` that takes in input the 
+# ultralong calls annotated by `SV_Integration_UltralongAnnotate.wdl` and that 
+# produces output compatible with `SV_Integration_Workpackage12.wdl`.
 #
 workflow SV_Integration_Workpackage3_Ultralong {
     input {
         File sv_integration_chunk_tsv
         String remote_indir
-        String remote_outdir
+        String remote_outdir_lenient
+        String remote_outdir_stringent
 
         File del_indel_scorer_pkl
         File ins_indel_scorer_pkl
@@ -23,15 +24,15 @@ workflow SV_Integration_Workpackage3_Ultralong {
         File insdup_indel_calibrationScores_hdf5
         File inv_indel_calibrationScores_hdf5
 
-        Array[String] annotations_interval = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+        Array[String] annotations_interval = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
                                                "BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
-                                               "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
+                                               "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
                                              ]
-        Array[String] annotations_point = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+        Array[String] annotations_point = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
                                             "BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
                                             "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
-                                          ]
-        Int annotations_have_gt_count
+                                        ]
+        Int annotations_have_gt_count = 1
         File scoring_python_script
 
         String filter_string_lenient = "FORMAT/CALIBRATION_SENSITIVITY<=0.9"
@@ -41,7 +42,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
     }
     parameter_meta {
         remote_indir: "Without final slash"
-        remote_outdir: "Without final slash"
+        remote_outdir_lenient: "Without final slash"
     }
     
     call Impl {
@@ -90,7 +91,8 @@ task Impl {
     input {
         File sv_integration_chunk_tsv
         String remote_indir
-        String remote_outdir
+        String remote_outdir_lenient
+        String remote_outdir_stringent
 
         File del_indel_scorer_pkl
         File ins_indel_scorer_pkl
@@ -173,7 +175,7 @@ task Impl {
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --columns ${COLUMNS} --output-type z ${SAMPLE_ID}_${SVTYPE}.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz
             rm -f ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz ${SAMPLE_ID}_${SVTYPE}_header.txt ${SAMPLE_ID}_${SVTYPE}.vcf.gz
             mv ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz ${SAMPLE_ID}_${SVTYPE}.vcf.gz
-            bcftools index -@ ${N_THREADS} -f -t ${SAMPLE_ID}_${SVTYPE}.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SVTYPE}.vcf.gz
         }
 
 
@@ -181,8 +183,6 @@ task Impl {
         # preserved by the inter-sample merge downstream:
         #
         # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
-        #
-        # Remark: the procedure outputs an indexed `.bcf`.
         #
         # @param 2 A VCF where all IDs are distinct. This is guaranteed by the
         # workpackages upstream.
@@ -199,9 +199,9 @@ task Impl {
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' >> ${SAMPLE_ID}_${SVTYPE}_header.txt
             bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz
             tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --annotations ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_${SVTYPE}_score.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_score.bcf
-            (bcftools view --no-header ${SAMPLE_ID}_${SVTYPE}_score.bcf | head -n 1 || echo "0") 1>&2
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --annotations ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
+            (bcftools view --no-header ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz | head -n 1 || echo "0") 1>&2
             
             # Removing temporary files
             rm -f ${SAMPLE_ID}_${SVTYPE}_header.txt ${SAMPLE_ID}_${SVTYPE}_format.tsv.gz* ${INPUT_VCF_GZ}*
@@ -213,12 +213,12 @@ task Impl {
         function PrintDebugInformation() {
             local SAMPLE_ID=$1
             local SVTYPE=$2
-            local INPUT_BCF=$3
+            local INPUT_VCF_GZ=$3
             
             rm -f ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
-            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
+            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_VCF_GZ})
             for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
-                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_VCF_GZ} | wc -l )
                 local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
             done
@@ -238,17 +238,17 @@ task Impl {
             fi
             gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG 2> ${SAMPLE_ID}_${SVTYPE}_score.log
             CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE} ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
-            PrintDebugInformation ${SAMPLE_ID} ${SVTYPE} ${SAMPLE_ID}_${SVTYPE}_score.bcf
+            PrintDebugInformation ${SAMPLE_ID} ${SVTYPE} ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
 
             # Filtering
-            bcftools view --threads ${N_THREADS} --include "~{filter_string_lenient}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.bcf --output ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
-            bcftools view --threads ${N_THREADS} --include "~{filter_string_stringent}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.bcf --output ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
-            bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
-            rm -f ${SAMPLE_ID}_${SVTYPE}_score.bcf*
+            bcftools view --threads ${N_THREADS} --include "~{filter_string_lenient}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
+            bcftools view --threads ${N_THREADS} --include "~{filter_string_stringent}" --output-type b ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
+            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_lenient.bcf
+            bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_stringent.bcf
+            rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz*
 
             # Adding debug information
-            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_score.bcf)
+            local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz)
             local N_RECORDS_AFTER_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_lenient.bcf)
             local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
             echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records in the lenient VCF" >> ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
@@ -258,12 +258,12 @@ task Impl {
             cat ${SAMPLE_ID}_${SVTYPE}_xgboost.csv 1>&2
         }
 
-        
 
-        
+
+
         # ---------------------------- Main program ----------------------------
 
-        # Enforcing a consistent naming scheme on the models
+        # Enforcing a consistent naming scheme on all models
         mv ~{del_indel_scorer_pkl} del.indel.scorer.pkl
         mv ~{ins_indel_scorer_pkl} ins.indel.scorer.pkl
         mv ~{dup_indel_scorer_pkl} dup.indel.scorer.pkl
@@ -280,8 +280,9 @@ task Impl {
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
-            if [ ${TEST} != "0" ]; then
+            TEST1=$( gsutil ls ~{remote_outdir_lenient}/${SAMPLE_ID}.done || echo "0" )
+            TEST2=$( gsutil ls ~{remote_outdir_stringent}/${SAMPLE_ID}.done || echo "0" )
+            if [ "${TEST1}" != "0" -a "${TEST2}" != "0" ]; then
                 continue
             fi
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
@@ -302,16 +303,27 @@ task Impl {
             ScoreAndFilter ${SAMPLE_ID} insdup ${RAM_PER_THREAD_MB}
             ScoreAndFilter ${SAMPLE_ID} inv ${RAM_PER_THREAD_MB}
 
-            # Assembling a single VCF and making sure SVLEN in symbolic ALTs is handled correctly for the downstream consumer.
-            ----------------->
+            # - Assembling a single VCF.
+            # - Adding SVLEN to symbolic ALTs, to avoid overcollapse in 
+            #   `bcftools merge` downstream.
+            for SUFFIX in lenient stringent ; do
+                ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_del_${SUFFIX}.bcf ${SAMPLE_ID}_ins_${SUFFIX}.bcf ${SAMPLE_ID}_insdup_${SUFFIX}.bcf ${SAMPLE_ID}_dup_${SUFFIX}.bcf ${SAMPLE_ID}_inv_${SUFFIX}.bcf --output ${SAMPLE_ID}_${SUFFIX}.vcf
+                rm -f ${SAMPLE_ID}_*_${SUFFIX}.bcf*
+                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_out.vcf
+                rm -f ${SAMPLE_ID}_${SUFFIX}.vcf
+                ${TIME_COMMAND} bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_out.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
+                rm -f ${SAMPLE_ID}_out.vcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SUFFIX}.bcf
+            done
 
 
-
+-----> Transform insdup back to INS?
 
             # Uploading
-            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ./${SAMPLE_ID}_'*_stringent.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir}/
+            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir_lenient}/
+            gsutil mv ./${SAMPLE_ID}_'*_stringent.bcf*' ~{remote_outdir_stringent}/
             touch ${SAMPLE_ID}.done
-            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
+            gsutil cp ${SAMPLE_ID}.done ~{remote_outdir_lenient}/ && echo 0 || echo 1
+            gsutil mv ${SAMPLE_ID}.done ~{remote_outdir_stringent}/ && echo 0 || echo 1
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done 3< chunk.csv
