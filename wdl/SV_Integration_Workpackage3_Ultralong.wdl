@@ -44,8 +44,8 @@ workflow SV_Integration_Workpackage3_Ultralong {
         Int annotations_have_gt_count = 1
         File scoring_python_script
 
-        String filter_string_lenient = "FORMAT/CALIBRATION_SENSITIVITY<=0.9"
-        String filter_string_stringent = "FORMAT/CALIBRATION_SENSITIVITY<=0.7"
+        String filter_string_lenient
+        String filter_string_stringent
         
         String docker_image = "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
         File UltralongInsdups2Ins_java
@@ -54,6 +54,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
     parameter_meta {
         remote_indir: "Without final slash"
         remote_outdir_lenient: "Without final slash"
+        filter_string_lenient: "Example: FORMAT/CALIBRATION_SENSITIVITY<=0.9"
     }
     
     call Impl {
@@ -252,9 +253,9 @@ task Impl {
 
             # Scoring
             if [ ${SVTYPE} = "ins" ]; then
-                local ANNOTATIONS=~{sep=" -A " annotations_point}
+                local ANNOTATIONS="~{sep=" -A " annotations_point}"
             else
-                local ANNOTATIONS=~{sep=" -A " annotations_interval}
+                local ANNOTATIONS="~{sep=" -A " annotations_interval}"
             fi
             gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG 2> ${SAMPLE_ID}_${SVTYPE}_score.log
             CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE}
@@ -262,8 +263,9 @@ task Impl {
 
             # Converting INSDUP to INS
             if [ ${SVTYPE} = "insdup" ]; then
-                java UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
-                rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz* ; bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type z ${SAMPLE_ID}_${SVTYPE}_out.vcf --output ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
+                java UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz | bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type z --output ${SAMPLE_ID}_${SVTYPE}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz*
+                mv ${SAMPLE_ID}_${SVTYPE}_out.vcf.gz ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
             fi
 
             # Filtering
