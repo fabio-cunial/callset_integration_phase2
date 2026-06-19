@@ -1,5 +1,12 @@
 #!/bin/bash
 #
+# Copies the model files from the output directory of a submission of 
+# `SV_Integration_UltralongScore.wdl` to a designated output directory.
+# Such files are only those used by `SV_Integration_Workpackage3_Ultralong.wdl`.
+#
+# Remark: the original files are kept, for safety: they should be deleted
+# manually if desired.
+#
 BUCKET="???"
 
 set -euxo pipefail
