@@ -302,9 +302,8 @@ task Impl {
 
         # Compiling input scripts
         mv ~{UltralongInsdups2Ins_java} UltralongInsdups2Ins.java
-        javac UltralongInsdups2Ins.java
         mv ~{AddSvlenToSymbolicAlt_java} AddSvlenToSymbolicAlt.java
-        javac AddSvlenToSymbolicAlt.java
+        javac *.java
 
         # Enforcing a consistent naming scheme on all models
         mv ~{del_indel_scorer_pkl} del.indel.scorer.pkl
