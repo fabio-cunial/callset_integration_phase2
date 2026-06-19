@@ -186,7 +186,7 @@ workflow SV_Integration_UltralongScore {
 }
 
 
-# Performane on a 2-core, 16GB VM, all HPRC+HGSVC samples:
+# Performance on a 2-core, 16GB VM, all HPRC+HGSVC samples:
 #
 # TOOL                                  CPU            RAM              TIME
 # ExtractVariantAnnotations             ???             8G               20s

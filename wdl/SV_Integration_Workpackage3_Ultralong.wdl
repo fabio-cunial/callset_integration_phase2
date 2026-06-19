@@ -188,7 +188,7 @@ task Impl {
                 else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
                 printf("%s\t%d\t%s\t%d\n",$1,$2,$3,GT_COUNT); \
             }' | bgzip -c > ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
+            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
             echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_${SVTYPE}_header.txt
             local COLUMNS='CHROM,POS,~ID,INFO/GT_COUNT'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --columns ${COLUMNS} --output-type z ${SAMPLE_ID}_${SVTYPE}.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz
