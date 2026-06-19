@@ -235,7 +235,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_${SVTYPE}_xgboost.csv
             local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz)
             for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
-                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz | wc -l )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID\n' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz | wc -l )
                 if [ ${N_RECORDS_BEFORE_FILTERING} -eq 0 ]; then
                     local PERCENT=0
                 else
@@ -257,7 +257,7 @@ task Impl {
             else
                 local ANNOTATIONS="~{sep=" -A " annotations_interval}"
             fi
-            gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG 2> ${SAMPLE_ID}_${SVTYPE}_score.log
+            gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
             CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE}
             PrintDebugInformation ${SAMPLE_ID} ${SVTYPE}
 
@@ -358,9 +358,9 @@ task Impl {
             done
 
             # Uploading
-            gsutil mv ./${SAMPLE_ID}_'*_lenient.bcf*' ~{remote_outdir_lenient}/
-            gsutil mv ./${SAMPLE_ID}_'*_stringent.bcf*' ~{remote_outdir_stringent}/
-            gsutil mv ./${SAMPLE_ID}_'*_all.bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir_all}/
+            gsutil mv ./${SAMPLE_ID}_lenient.'bcf*' ~{remote_outdir_lenient}/
+            gsutil mv ./${SAMPLE_ID}_stringent.'bcf*' ~{remote_outdir_stringent}/
+            gsutil mv ./${SAMPLE_ID}_all.'bcf*' ./${SAMPLE_ID}_'*_xgboost.csv' ~{remote_outdir_all}/
             touch ${SAMPLE_ID}.done
             gsutil mv ${SAMPLE_ID}.done ~{remote_outdir_all}/ && echo 0 || echo 1
             DelocalizeSample ${SAMPLE_ID}

@@ -53,6 +53,7 @@ public class UltralongInsdups2Ins {
                 info=deleteInfoField(info,"INS_ALT");
                 info=deleteInfoField(info,"INS_QUAL");
                 info=addOrReplaceInfoField(info,"SVLEN",(insAlt.length()-1)+"");
+                info=addOrReplaceInfoField(info,"END",insPos+"");
                 info+=";INSDUP_POS="+pos+";INSDUP_SVLEN="+svlen;
                 tokens[7]=info;
                 System.out.print(tokens[0]);
