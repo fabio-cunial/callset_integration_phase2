@@ -21,17 +21,31 @@ workflow SV_Integration_Workpackage3_Ultralong {
         String remote_outdir_stringent
         String remote_outdir_all
 
-        File del_indel_scorer_pkl
-        File ins_indel_scorer_pkl
-        File dup_indel_scorer_pkl
-        File insdup_indel_scorer_pkl
-        File inv_indel_scorer_pkl
+        File del_indel_scorer_15x_pkl
+        File ins_indel_scorer_15x_pkl
+        File dup_indel_scorer_15x_pkl
+        File insdup_indel_scorer_15x_pkl
+        File inv_indel_scorer_15x_pkl
 
-        File del_indel_calibrationScores_hdf5
-        File ins_indel_calibrationScores_hdf5
-        File dup_indel_calibrationScores_hdf5
-        File insdup_indel_calibrationScores_hdf5
-        File inv_indel_calibrationScores_hdf5
+        File del_indel_calibrationScores_15x_hdf5
+        File ins_indel_calibrationScores_15x_hdf5
+        File dup_indel_calibrationScores_15x_hdf5
+        File insdup_indel_calibrationScores_15x_hdf5
+        File inv_indel_calibrationScores_15x_hdf5
+
+        File del_indel_scorer_30x_pkl
+        File ins_indel_scorer_30x_pkl
+        File dup_indel_scorer_30x_pkl
+        File insdup_indel_scorer_30x_pkl
+        File inv_indel_scorer_30x_pkl
+
+        File del_indel_calibrationScores_30x_hdf5
+        File ins_indel_calibrationScores_30x_hdf5
+        File dup_indel_calibrationScores_30x_hdf5
+        File insdup_indel_calibrationScores_30x_hdf5
+        File inv_indel_calibrationScores_30x_hdf5
+
+        File sample_coverages_csv
 
         Array[String] annotations_interval = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
                                                "BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
@@ -55,6 +69,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
         remote_indir: "Without final slash"
         remote_outdir_lenient: "Without final slash"
         filter_string_lenient: "Example: FORMAT/CALIBRATION_SENSITIVITY<=0.9"
+        sample_coverages_csv: "One line per sample, with columns: `SAMPLE_ID,COVERAGE`. Used to select the appropriate model for each sample."
     }
     
     call Impl {
@@ -65,17 +80,31 @@ workflow SV_Integration_Workpackage3_Ultralong {
             remote_outdir_stringent = remote_outdir_stringent,
             remote_outdir_all = remote_outdir_all,
 
-            del_indel_scorer_pkl = del_indel_scorer_pkl,
-            ins_indel_scorer_pkl = ins_indel_scorer_pkl,
-            dup_indel_scorer_pkl = dup_indel_scorer_pkl,
-            insdup_indel_scorer_pkl = insdup_indel_scorer_pkl,
-            inv_indel_scorer_pkl = inv_indel_scorer_pkl,
+            del_indel_scorer_15x_pkl = del_indel_scorer_15x_pkl,
+            ins_indel_scorer_15x_pkl = ins_indel_scorer_15x_pkl,
+            dup_indel_scorer_15x_pkl = dup_indel_scorer_15x_pkl,
+            insdup_indel_scorer_15x_pkl = insdup_indel_scorer_15x_pkl,
+            inv_indel_scorer_15x_pkl = inv_indel_scorer_15x_pkl,
 
-            del_indel_calibrationScores_hdf5 = del_indel_calibrationScores_hdf5,
-            ins_indel_calibrationScores_hdf5 = ins_indel_calibrationScores_hdf5,
-            dup_indel_calibrationScores_hdf5 = dup_indel_calibrationScores_hdf5,
-            insdup_indel_calibrationScores_hdf5 = insdup_indel_calibrationScores_hdf5,
-            inv_indel_calibrationScores_hdf5 = inv_indel_calibrationScores_hdf5,
+            del_indel_scorer_30x_pkl = del_indel_scorer_30x_pkl,
+            ins_indel_scorer_30x_pkl = ins_indel_scorer_30x_pkl,
+            dup_indel_scorer_30x_pkl = dup_indel_scorer_30x_pkl,
+            insdup_indel_scorer_30x_pkl = insdup_indel_scorer_30x_pkl,
+            inv_indel_scorer_30x_pkl = inv_indel_scorer_30x_pkl,
+
+            del_indel_calibrationScores_15x_hdf5 = del_indel_calibrationScores_15x_hdf5,
+            ins_indel_calibrationScores_15x_hdf5 = ins_indel_calibrationScores_15x_hdf5,
+            dup_indel_calibrationScores_15x_hdf5 = dup_indel_calibrationScores_15x_hdf5,
+            insdup_indel_calibrationScores_15x_hdf5 = insdup_indel_calibrationScores_15x_hdf5,
+            inv_indel_calibrationScores_15x_hdf5 = inv_indel_calibrationScores_15x_hdf5,
+
+            del_indel_calibrationScores_30x_hdf5 = del_indel_calibrationScores_30x_hdf5,
+            ins_indel_calibrationScores_30x_hdf5 = ins_indel_calibrationScores_30x_hdf5,
+            dup_indel_calibrationScores_30x_hdf5 = dup_indel_calibrationScores_30x_hdf5,
+            insdup_indel_calibrationScores_30x_hdf5 = insdup_indel_calibrationScores_30x_hdf5,
+            inv_indel_calibrationScores_30x_hdf5 = inv_indel_calibrationScores_30x_hdf5,
+
+            sample_coverages_csv = sample_coverages_csv,
 
             annotations_interval = annotations_interval,
             annotations_point = annotations_point,
@@ -101,7 +130,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
 #
 # Memory bottlenecks (measured on a 4GB VM):
 #
-# ScoreVariantAnnotations               1 GB
+# ScoreVariantAnnotations               200 MB
 #
 task Impl {
     input {
@@ -111,17 +140,31 @@ task Impl {
         String remote_outdir_stringent
         String remote_outdir_all
 
-        File del_indel_scorer_pkl
-        File ins_indel_scorer_pkl
-        File dup_indel_scorer_pkl
-        File insdup_indel_scorer_pkl
-        File inv_indel_scorer_pkl
+        File del_indel_scorer_15x_pkl
+        File ins_indel_scorer_15x_pkl
+        File dup_indel_scorer_15x_pkl
+        File insdup_indel_scorer_15x_pkl
+        File inv_indel_scorer_15x_pkl
 
-        File del_indel_calibrationScores_hdf5
-        File ins_indel_calibrationScores_hdf5
-        File dup_indel_calibrationScores_hdf5
-        File insdup_indel_calibrationScores_hdf5
-        File inv_indel_calibrationScores_hdf5
+        File del_indel_calibrationScores_15x_hdf5
+        File ins_indel_calibrationScores_15x_hdf5
+        File dup_indel_calibrationScores_15x_hdf5
+        File insdup_indel_calibrationScores_15x_hdf5
+        File inv_indel_calibrationScores_15x_hdf5
+
+        File del_indel_scorer_30x_pkl
+        File ins_indel_scorer_30x_pkl
+        File dup_indel_scorer_30x_pkl
+        File insdup_indel_scorer_30x_pkl
+        File inv_indel_scorer_30x_pkl
+
+        File del_indel_calibrationScores_30x_hdf5
+        File ins_indel_calibrationScores_30x_hdf5
+        File dup_indel_calibrationScores_30x_hdf5
+        File insdup_indel_calibrationScores_30x_hdf5
+        File inv_indel_calibrationScores_30x_hdf5
+
+        File sample_coverages_csv
 
         Array[String] annotations_interval
         Array[String] annotations_point
@@ -248,8 +291,9 @@ task Impl {
 
         function ScoreAndFilter() {
             local SAMPLE_ID=$1
-            local SVTYPE=$2
-            local RAM_PER_THREAD_MB=$3
+            local COVERAGE=$2
+            local SVTYPE=$3
+            local RAM_PER_THREAD_MB=$4
 
             # Scoring
             if [ ${SVTYPE} = "ins" ]; then
@@ -257,7 +301,7 @@ task Impl {
             else
                 local ANNOTATIONS="~{sep=" -A " annotations_interval}"
             fi
-            gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
+            gatk --java-options "-Xmx${RAM_PER_THREAD_MB}m" ScoreVariantAnnotations -V ${SAMPLE_ID}_${SVTYPE}.vcf.gz -O ${SAMPLE_ID}_${SVTYPE}_score -A ${ANNOTATIONS} --model-prefix ${COVERAGE}.${SVTYPE} --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
             CopyInfoToFormat ${SAMPLE_ID} ${SVTYPE}
             PrintDebugInformation ${SAMPLE_ID} ${SVTYPE}
 
@@ -306,17 +350,28 @@ task Impl {
         mv ~{AddSvlenToSymbolicAlt_java} AddSvlenToSymbolicAlt.java
         javac *.java
 
-        # Enforcing a consistent naming scheme on all models
-        mv ~{del_indel_scorer_pkl} del.indel.scorer.pkl
-        mv ~{ins_indel_scorer_pkl} ins.indel.scorer.pkl
-        mv ~{dup_indel_scorer_pkl} dup.indel.scorer.pkl
-        mv ~{insdup_indel_scorer_pkl} insdup.indel.scorer.pkl
-        mv ~{inv_indel_scorer_pkl} inv.indel.scorer.pkl
-        mv ~{del_indel_calibrationScores_hdf5} del.indel.calibrationScores.hdf5
-        mv ~{ins_indel_calibrationScores_hdf5} ins.indel.calibrationScores.hdf5
-        mv ~{dup_indel_calibrationScores_hdf5} dup.indel.calibrationScores.hdf5
-        mv ~{insdup_indel_calibrationScores_hdf5} insdup.indel.calibrationScores.hdf5
-        mv ~{inv_indel_calibrationScores_hdf5} inv.indel.calibrationScores.hdf5
+        # Enforcing a consistent naming scheme on all model files
+        mv ~{del_indel_scorer_15x_pkl} 15x.del.indel.scorer.pkl
+        mv ~{ins_indel_scorer_15x_pkl} 15x.ins.indel.scorer.pkl
+        mv ~{dup_indel_scorer_15x_pkl} 15x.dup.indel.scorer.pkl
+        mv ~{insdup_indel_scorer_15x_pkl} 15x.insdup.indel.scorer.pkl
+        mv ~{inv_indel_scorer_15x_pkl} 15x.inv.indel.scorer.pkl
+        mv ~{del_indel_calibrationScores_15x_hdf5} 15x.del.indel.calibrationScores.hdf5
+        mv ~{ins_indel_calibrationScores_15x_hdf5} 15x.ins.indel.calibrationScores.hdf5
+        mv ~{dup_indel_calibrationScores_15x_hdf5} 15x.dup.indel.calibrationScores.hdf5
+        mv ~{insdup_indel_calibrationScores_15x_hdf5} 15x.insdup.indel.calibrationScores.hdf5
+        mv ~{inv_indel_calibrationScores_15x_hdf5} 15x.inv.indel.calibrationScores.hdf5
+
+        mv ~{del_indel_scorer_30x_pkl} 30x.del.indel.scorer.pkl
+        mv ~{ins_indel_scorer_30x_pkl} 30x.ins.indel.scorer.pkl
+        mv ~{dup_indel_scorer_30x_pkl} 30x.dup.indel.scorer.pkl
+        mv ~{insdup_indel_scorer_30x_pkl} 30x.insdup.indel.scorer.pkl
+        mv ~{inv_indel_scorer_30x_pkl} 30x.inv.indel.scorer.pkl
+        mv ~{del_indel_calibrationScores_30x_hdf5} 30x.del.indel.calibrationScores.hdf5
+        mv ~{ins_indel_calibrationScores_30x_hdf5} 30x.ins.indel.calibrationScores.hdf5
+        mv ~{dup_indel_calibrationScores_30x_hdf5} 30x.dup.indel.calibrationScores.hdf5
+        mv ~{insdup_indel_calibrationScores_30x_hdf5} 30x.insdup.indel.calibrationScores.hdf5
+        mv ~{inv_indel_calibrationScores_30x_hdf5} 30x.inv.indel.calibrationScores.hdf5
 
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
@@ -339,11 +394,23 @@ task Impl {
             fi
             
             # Filtering
-            ScoreAndFilter ${SAMPLE_ID} del ${RAM_PER_THREAD_MB}
-            ScoreAndFilter ${SAMPLE_ID} ins ${RAM_PER_THREAD_MB}
-            ScoreAndFilter ${SAMPLE_ID} dup ${RAM_PER_THREAD_MB}
-            ScoreAndFilter ${SAMPLE_ID} insdup ${RAM_PER_THREAD_MB}
-            ScoreAndFilter ${SAMPLE_ID} inv ${RAM_PER_THREAD_MB}
+            awk -F ',' -v sample="${SAMPLE_ID}" '$1 == sample { print $2 }' ~{sample_coverages_csv} > ${SAMPLE_ID}_coverage.txt
+            N_ROWS=$(wc -l < ${SAMPLE_ID}_coverage.txt)
+            if [ ${N_ROWS} -ne 1 ]; then
+                echo "Expected exactly one row for sample ${SAMPLE_ID}, found ${N_ROWS}" 1>&2
+                exit 1
+            fi
+            COVERAGE=$(head -n 1 ${SAMPLE_ID}_coverage.txt)
+            if [ $(echo "${COVERAGE} < 22.5" | bc) -eq 1 ]; then
+                PREFIX="15x"
+            else
+                PREFIX="30x"
+            fi
+            ScoreAndFilter ${SAMPLE_ID} ${PREFIX} del ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} ${PREFIX} ins ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} ${PREFIX} dup ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} ${PREFIX} insdup ${RAM_PER_THREAD_MB}
+            ScoreAndFilter ${SAMPLE_ID} ${PREFIX} inv ${RAM_PER_THREAD_MB}
 
             # Assembling a single VCF.
             # Adding SVLEN to symbolic ALTs, to avoid overcollapse in `bcftools 
