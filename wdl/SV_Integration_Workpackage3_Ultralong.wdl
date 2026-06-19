@@ -151,7 +151,6 @@ task Impl {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export GATK_LOCAL_JAR="/root/gatk.jar"
         RAM_PER_THREAD_MB=$(( ~{ram_size_gb} * 1024 - 500 ))
-        TIME_COMMAND="time"
         
         
         
@@ -191,7 +190,7 @@ task Impl {
             tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz
             echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_${SVTYPE}_header.txt
             local COLUMNS='CHROM,POS,~ID,INFO/GT_COUNT'
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --columns ${COLUMNS} --output-type z ${SAMPLE_ID}_${SVTYPE}.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz
+            bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_${SVTYPE}_header.txt --columns ${COLUMNS} --output-type z ${SAMPLE_ID}_${SVTYPE}.vcf.gz --output ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz
             rm -f ${SAMPLE_ID}_${SVTYPE}_annotations.tsv.gz ${SAMPLE_ID}_${SVTYPE}_header.txt ${SAMPLE_ID}_${SVTYPE}.vcf.gz
             mv ${SAMPLE_ID}_${SVTYPE}_annotated.vcf.gz ${SAMPLE_ID}_${SVTYPE}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${SVTYPE}.vcf.gz
@@ -263,7 +262,7 @@ task Impl {
 
             # Converting INSDUP to INS
             if [ ${SVTYPE} = "insdup" ]; then
-                ${TIME_COMMAND} java UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
+                java UltralongInsdups2Ins ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz > ${SAMPLE_ID}_${SVTYPE}_out.vcf
                 rm -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz* ; bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type z ${SAMPLE_ID}_${SVTYPE}_out.vcf --output ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SVTYPE}_score.vcf.gz
             fi
 
@@ -348,11 +347,11 @@ task Impl {
             # Adding SVLEN to symbolic ALTs, to avoid overcollapse in `bcftools 
             # merge` downstream.
             for SUFFIX in lenient stringent all ; do
-                ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_del_${SUFFIX}.bcf ${SAMPLE_ID}_ins_${SUFFIX}.bcf ${SAMPLE_ID}_insdup_${SUFFIX}.bcf ${SAMPLE_ID}_dup_${SUFFIX}.bcf ${SAMPLE_ID}_inv_${SUFFIX}.bcf --output ${SAMPLE_ID}_${SUFFIX}.vcf
+                bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_del_${SUFFIX}.bcf ${SAMPLE_ID}_ins_${SUFFIX}.bcf ${SAMPLE_ID}_insdup_${SUFFIX}.bcf ${SAMPLE_ID}_dup_${SUFFIX}.bcf ${SAMPLE_ID}_inv_${SUFFIX}.bcf --output ${SAMPLE_ID}_${SUFFIX}.vcf
                 rm -f ${SAMPLE_ID}_*_${SUFFIX}.bcf*
-                ${TIME_COMMAND} java AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_${SUFFIX}_out.vcf
+                java AddSvlenToSymbolicAlt ${SAMPLE_ID}_${SUFFIX}.vcf > ${SAMPLE_ID}_${SUFFIX}_out.vcf
                 rm -f ${SAMPLE_ID}_${SUFFIX}.vcf ; mv ${SAMPLE_ID}_${SUFFIX}_out.vcf ${SAMPLE_ID}_${SUFFIX}_in.vcf
-                ${TIME_COMMAND} bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_${SUFFIX}_in.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
+                bcftools sort --max-mem ${RAM_PER_THREAD_MB}M --output-type b ${SAMPLE_ID}_${SUFFIX}_in.vcf --output ${SAMPLE_ID}_${SUFFIX}.bcf
                 rm -f ${SAMPLE_ID}_${SUFFIX}_in.vcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_${SUFFIX}.bcf
             done
 
