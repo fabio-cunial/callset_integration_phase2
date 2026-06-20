@@ -449,7 +449,7 @@ LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmax
 LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" >> ${ID}_counts.txt
+echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" > ${ID}_counts.txt
 rm -f ${ID}_*maximal_sorted.txt
 END
         chmod +x annotate_clipped_alignments_2_interval.sh
@@ -468,7 +468,7 @@ PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
 PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
 PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
 PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
-echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}" >> ${ID}_counts.txt
+echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}" > ${ID}_counts.txt
 rm -f ${ID}_*maximal_sorted.txt
 END
         chmod +x annotate_clipped_alignments_2_point.sh
@@ -489,7 +489,7 @@ END
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
-            rm -f *_counts.tsv
+            rm -f *_counts.txt
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
@@ -539,7 +539,7 @@ END
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
-            rm -f *_counts.tsv
+            rm -f *_counts.txt
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
@@ -803,7 +803,7 @@ END
                 else if ($12=="+-") STRAND=2; \
                 else if ($12=="++") STRAND=3; \
                 \
-                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
+                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
             }' | bgzip -c > ${SAMPLE_ID}_cutefc_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_cutefc.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_cutefc_annotations.tsv.gz

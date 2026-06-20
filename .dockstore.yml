@@ -655,3 +655,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TestKanpigLength.wdl
   testParameterFiles:
+- name: SV_Integration_BndAnnotate
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_BndAnnotate.wdl
+  testParameterFiles:
