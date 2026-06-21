@@ -23,8 +23,8 @@ public class UltralongBndGetBins {
         final String INPUT_FAI = args[1];
         final int BREAKPOINT_BIN_LENGTH = Integer.parseInt(args[2]);
         
-        char c, d;
-        int p, q;
+        char separator;
+        int p, q, first;
         int chromLength, pos;
         String str, chrom, id, alt, info;
         BufferedReader br;
@@ -50,23 +50,17 @@ public class UltralongBndGetBins {
 
             // Second breakpoint
             alt=tokens[4];
-            c=alt.charAt(0); d=alt.charAt(alt.length()-1);
-            if (c=='[' || c==']') {
-                p=alt.indexOf(":",1);
-                chrom=alt.substring(1,p);
-                q=alt.indexOf(c+"");
-                pos=Integer.parseInt(alt.substring(p+1,q));
-            }
-            else if (d=='[' || d==']') {
-                p=alt.indexOf(d+"");
-                q=alt.indexOf(":",p+1);
-                chrom=alt.substring(p+1,q);
-                pos=Integer.parseInt(alt.substring(q+1,alt.length()-1));
-            }
+            p=alt.indexOf('['); q=alt.indexOf(']'); first=-1; separator='_';
+            if (p>=0) { separator='['; first=p; }
+            else if (q>=0) { separator=']'; first=q; }
             else {
                 System.err.println("ERROR: unrecognized BND ALT: "+alt);
                 System.exit(1);
             }
+            p=alt.indexOf(':',first+1);
+            chrom=alt.substring(first+1,p);
+            q=alt.indexOf(separator,p+1);
+            pos=Integer.parseInt(alt.substring(p+1,q));    
             chromLength=fai.get(chrom).intValue();
             p=pos-BREAKPOINT_BIN_LENGTH/2;
             System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"\t1");
