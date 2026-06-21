@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Creates the input tables for `SV_Integration_Workpackage14.wdl` based on the
-# output of `SV_Integration_Workpackage13.wdl`.
+# Creates the input Terra tables for `SV_Integration_Workpackage14.wdl` based on
+# the output of `SV_Integration_Workpackage13.wdl`.
 #
 BUCKET="???"
 REMOTE_WORKPACKAGE_13_PREFIX="${BUCKET}/scratch/cunial_intersample_vcf/v3/workpackage_13_ultralong_filtered"
