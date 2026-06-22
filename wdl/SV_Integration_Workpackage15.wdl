@@ -80,7 +80,7 @@ task SingleChromosome {
         
         
         TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
-        if [ ${TEST} != "0" ]; then
+        if [ "${TEST}" != "0" ]; then
             # Skipping the chromosome if it has already been processed
             :
         else
@@ -90,7 +90,7 @@ task SingleChromosome {
                 :
             else
                 echo "ERROR: ~{chromosome} has no truvari collapse chunks."
-                exit
+                exit 1
             fi
             ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
             ls chunk_*.bcf | sort -V > chunk_list.txt
@@ -109,20 +109,27 @@ task SingleChromosome {
                 mv ${CHUNK_FILE}.csi in.bcf.csi
             fi
             
-            # Enforcing a distinct ID in every record, and annotating every
-            # record with the number of samples it occurs in. Note that the
-            # latter is not equal to the QUAL field in input to truvari collapse
-            # upstream, so we have to recompute this number.
+            # Enforcing a distinct ID in every record
             CHR=~{chromosome}
             CHR=${CHR#chr}
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
+            ( bcftools view --header-only in.bcf ; bcftools view --no-header in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' ) | bgzip -c > out.vcf.gz
+            rm in.bcf* ; mv out.vcf.gz in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t in.vcf.gz
+
+            # Annotating every record with the number of samples it occurs in.
+            # Note that this is not equal to the QUAL field in input to `truvari
+            # collapse` upstream, so it has to be computed.
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf
+            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,N_DISCOVERY_SAMPLES --output-type b in.vcf.gz --output out.bcf
             df -h 1>&2
-            rm -f in.bcf* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-            gcloud storage cp in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
-            gcloud storage cp in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
+            rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+
+            # Uploading
+            gcloud storage mv in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
+            gcloud storage mv in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
+            touch ~{chromosome}.done
+            gcloud storage mv ~{chromosome}.done ~{remote_outdir}/~{chromosome}/~{chromosome}.done
         fi
         echo "~{chromosome}" > out.txt
     >>>
@@ -179,10 +186,10 @@ task AllChromosomes {
         echo ${CHROMOSOMES} | tr ',' '\n' > chr_list.txt
         rm -f file_list.txt
         while read -u 3 CHROMOSOME; do
-            TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo 1 )
-            if [ ${TEST} -eq 1 ]; then
+            TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo "0" )
+            if [ "${TEST}" = "0" ]; then
                 echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
-                exit
+                exit 1
             fi
             gcloud storage cp ~{remote_outdir}/${CHROMOSOME}/'*.bcf*' .
             mv truvari_collapsed.bcf ${CHROMOSOME}_truvari_collapsed.bcf
