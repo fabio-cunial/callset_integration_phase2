@@ -18,8 +18,8 @@ public class UltralongInsdups2Ins {
         final String INPUT_VCF_GZ = args[0];
         
         int i;
-        int pos, insPos, svlen, insQual, nRecords, nInsdup;
-        String str, insAlt, info;
+        int pos, insPos, insLen, svlen, insQual, nRecords, nInsdup;
+        String str, insAlt, info, insLen_str;
         BufferedReader br;
         String[] tokens;
 
@@ -45,6 +45,9 @@ public class UltralongInsdups2Ins {
                 svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
                 insPos=Integer.parseInt(getInfoField(info,"INS_POS"));
                 insAlt=getInfoField(info,"INS_ALT");
+                insLen_str=getInfoField(info,"INS_SVLEN");
+                if (insLen_str!=null) insLen=Integer.parseInt(insLen_str);
+                else insLen=insAlt.length();
                 insQual=Integer.parseInt(getInfoField(info,"INS_QUAL"));
                 tokens[1]=insPos+"";
                 tokens[4]=insAlt;
@@ -52,7 +55,9 @@ public class UltralongInsdups2Ins {
                 info=deleteInfoField(info,"INS_POS");
                 info=deleteInfoField(info,"INS_ALT");
                 info=deleteInfoField(info,"INS_QUAL");
-                info=addOrReplaceInfoField(info,"SVLEN",(insAlt.length()-1)+"");
+                if (insLen_str!=null) info=deleteInfoField(info,"INS_SVLEN");
+                info=addOrReplaceInfoField(info,"SVTYPE","INS");
+                info=addOrReplaceInfoField(info,"SVLEN",insLen+"");
                 info=addOrReplaceInfoField(info,"END",insPos+"");
                 info+=";INSDUP_POS="+pos+";INSDUP_SVLEN="+svlen;
                 tokens[7]=info;

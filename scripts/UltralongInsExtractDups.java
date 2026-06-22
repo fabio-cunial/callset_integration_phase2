@@ -49,6 +49,7 @@ public class UltralongInsExtractDups {
                     if (OUTPUT_DUP_MODE==0) {
                         bwDup.write("##INFO=<ID=INS_POS,Number=1,Type=Integer,Description=\"The POS of the original INS record\">\n");
                         bwDup.write("##INFO=<ID=INS_ALT,Number=1,Type=String,Description=\"The ALT allele of the original INS record\">\n");
+                        bwDup.write("##INFO=<ID=INS_SVLEN,Number=1,Type=Integer,Description=\"The length of the ALT allele of the original INS record\">\n");
                         bwDup.write("##INFO=<ID=INS_QUAL,Number=1,Type=Integer,Description=\"The QUAL of the original INS record\">\n");
                     }
                 }
@@ -77,7 +78,7 @@ public class UltralongInsExtractDups {
                     info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                     info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                     info=addOrReplaceInfoField(info,"END",newEnd+"");
-                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+qual;
+                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_SVLEN="+alt.length()+";INS_QUAL="+qual;
                 }
                 info+=";INSDUP";
                 tokens[7]=info;

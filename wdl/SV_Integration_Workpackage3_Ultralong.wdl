@@ -21,6 +21,8 @@ workflow SV_Integration_Workpackage3_Ultralong {
         String remote_outdir_stringent
         String remote_outdir_all
 
+        Int remove_symbolic_ins = 1
+
         File del_indel_scorer_15x_pkl
         File ins_indel_scorer_15x_pkl
         File dup_indel_scorer_15x_pkl
@@ -70,6 +72,7 @@ workflow SV_Integration_Workpackage3_Ultralong {
         remote_outdir_lenient: "Without final slash"
         filter_string_lenient: "Example: FORMAT/CALIBRATION_SENSITIVITY<=0.9"
         sample_coverages_csv: "One line per sample, with columns: `SAMPLE_ID,COVERAGE`. Used to select the appropriate model for each sample."
+        remove_symbolic_ins: "It might happen that some records with ALT=<INS> were still present in the VCFs in input to `SV_Integration_UltralongAnnotate.wdl`. The current version of the pipeline supports them but an older version didn't: for the latter, we can discard them here before further processing."
     }
     
     call Impl {
@@ -79,6 +82,8 @@ workflow SV_Integration_Workpackage3_Ultralong {
             remote_outdir_lenient = remote_outdir_lenient,
             remote_outdir_stringent = remote_outdir_stringent,
             remote_outdir_all = remote_outdir_all,
+
+            remove_symbolic_ins = remove_symbolic_ins,
 
             del_indel_scorer_15x_pkl = del_indel_scorer_15x_pkl,
             ins_indel_scorer_15x_pkl = ins_indel_scorer_15x_pkl,
@@ -139,6 +144,8 @@ task Impl {
         String remote_outdir_lenient
         String remote_outdir_stringent
         String remote_outdir_all
+
+        Int remove_symbolic_ins
 
         File del_indel_scorer_15x_pkl
         File ins_indel_scorer_15x_pkl
@@ -208,6 +215,24 @@ task Impl {
             gsutil cp ${REMOTE_DIR}/${SAMPLE_ID}_del.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_ins.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_dup.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_insdup.vcf.'gz*' ${REMOTE_DIR}/${SAMPLE_ID}_inv.vcf.'gz*' .
         }
         
+
+        # Removes records that had ALT=<INS> in the VCFs in input to 
+        # `SV_Integration_UltralongAnnotate.wdl`.
+        #
+        function RemoveSymbolicIns() {
+            local SAMPLE_ID=$1
+
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_ins.vcf.gz.tbi)
+            bcftools filter --exclude 'ALT="<INS>"' --output-type z ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_ins.vcf.gz.tbi)
+
+            N_RECORDS_BEFORE=$(bcftools index --nrecords ${SAMPLE_ID}_insdup.vcf.gz.tbi)
+            bcftools filter --exclude 'INS_ALT="<INS>"' --output-type z ${SAMPLE_ID}_insdup.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_insdup.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_insdup.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_insdup.vcf.gz
+            N_RECORDS_AFTER=$(bcftools index --nrecords ${SAMPLE_ID}_insdup.vcf.gz.tbi)
+        }
+
         
         # Deletes all files and directories related to the sample.
         #
@@ -383,6 +408,11 @@ task Impl {
                 continue
             fi
             LocalizeSample ${SAMPLE_ID} ~{remote_indir}
+
+            # Removing symbolic <INS>
+            if [ ~{remove_symbolic_ins} -eq 1 ]; then
+                RemoveSymbolicIns ${SAMPLE_ID}
+            fi
 
             # Adding GT_COUNT
             if [ ~{annotations_have_gt_count} -eq 1 ]; then
