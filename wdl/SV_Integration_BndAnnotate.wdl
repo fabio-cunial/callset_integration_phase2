@@ -67,24 +67,16 @@ workflow SV_Integration_BndAnnotate {
 # TOOL                                                CPU     RAM     TIME
 # BAM download                                                          5m
 #
-# samtools bedcov (1 thread)                          80%    900M      15m
 # samtools bedcov (4 threads)                        350%    900M       5m
-# annotate_mapq_secondary.sh                         400%     15M      10s
+# annotate_mapq_secondary.sh                         400%     15M      30s
 # bcftools annotate                                  100%     15M      50s
-# java UltralongIntervalGetBins                      200%     50M       1s
-# java UltralongIntervalCreateBedcovAnnotations      200%     50M       1s
-# annotate_clipped_alignments_1.sh                   300%    500M       2m
-# annotate_clipped_alignments_2.sh                   300%     50M       2m
+# java UltralongBndGetBins                           200%     50M       1s
+# java UltralongBndCreateBedcovAnnotations           200%     50M       1s
+# annotate_clipped_alignments_1.sh                   400%    600M       2m
+# annotate_clipped_alignments_2.sh                   400%     50M       2m
 #
-# cutefc (1 thread)                                   30%    1.5G      50m
-# cutefc (2 threads)                                  50%    1.5G      25m
-# cutefc (4 threads)                                  30%    1.5G      50m
-# cutefc (2 threads, extracted BAM)                  200%    900M       2m
-# samtools view (for extracted BAM, 2 threads)       100%     20M      10m
-#
-# feature_extraction.py (1 thread)                   100%     12G       7m
-# feature_extraction.py (4 threads, 4 chunks)         50%   2-12G     3-9m 
-# feature_extraction.py (4 threads, per-call paral.) 300%     12G      10m
+# feature_extraction.py (1 thread)                   100%      2G       1m
+# cutefc (2 threads)                                  50%    1.5G      30m
 #
 task Impl {
     input {
