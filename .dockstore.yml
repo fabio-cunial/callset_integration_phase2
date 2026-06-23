@@ -660,3 +660,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_BndAnnotate.wdl
   testParameterFiles:
+- name: SV_Integration_BndGetTrainingIntervals
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_BndGetTrainingIntervals.wdl
+  testParameterFiles:
