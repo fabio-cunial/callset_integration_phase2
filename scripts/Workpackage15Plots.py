@@ -1,3 +1,5 @@
+# Warning: this has been vibe-coded very quickly.
+#
 import sys
 import numpy as np
 import pandas as pd
