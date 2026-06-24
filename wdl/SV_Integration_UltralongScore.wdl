@@ -42,6 +42,27 @@ version 1.0
 #                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                                    ]
 #
+# For BND:
+#
+# annotations_custom = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"
+#                      ]
+# annotations_fex =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
+#                      ]
+# annotations_cutefc = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
+#                      ]
+# annotations_all =    [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
+#                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
+#                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND" 
+#                      ]
+# annotations_all_except_genotyper = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                                      "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
+#                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
+#                                    ]
+#
 workflow SV_Integration_UltralongScore {
     input {
         String svtype
@@ -262,16 +283,25 @@ task Score {
         # ---------------------------- Main program ----------------------------
 
         # 1. Ensuring that the input VCFs have the correct format
-        bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{input_vcf_gz} --output input_cleaned.vcf.gz
-        bcftools index -f -t input_cleaned.vcf.gz
-        rm -f ~{input_vcf_gz}
+        if [ ~{svtype} != "bnd" ]; then
+            bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{input_vcf_gz} --output input_cleaned.vcf.gz
+            bcftools index -f -t input_cleaned.vcf.gz
+            rm -f ~{input_vcf_gz}
+            bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
+            bcftools index -f -t resource_cleaned.vcf.gz
+            rm -f ~{resource_vcf_gz}
+        else
+            # We do not run the command above, since it seems to destroy 
+            # BND's ALTs (example: N]chr5:181473415] -> GNcNNNNNNNNNNNNNN ):
+            mv ~{input_vcf_gz} input_cleaned.vcf.gz
+            mv ~{input_vcf_gz_tbi} input_cleaned.vcf.gz.tbi
+            mv ~{resource_vcf_gz} resource_cleaned.vcf.gz
+            mv ~{resource_vcf_gz_tbi} resource_cleaned.vcf.gz.tbi
+        fi
         N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
         if [ ~{annotations_have_gt_count} -eq 1 ]; then
             AddGtCount input_cleaned.vcf.gz
         fi
-        bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
-        bcftools index -f -t resource_cleaned.vcf.gz
-        rm -f ~{resource_vcf_gz}
         N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
         echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
 
