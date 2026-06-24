@@ -216,6 +216,7 @@ workflow SV_Integration_UltralongScore {
 #
 task Score {
     input {
+        String svtype
         String id
         
         File input_vcf_gz
