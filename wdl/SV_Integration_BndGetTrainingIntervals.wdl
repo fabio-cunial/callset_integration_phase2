@@ -6,7 +6,7 @@ version 1.0
 workflow SV_Integration_BndGetTrainingIntervals {
     input {
         File samples_tsv
-        Int truvari_bnddist = 500
+        Int truvari_bnddist = 1000
         
         String remote_indir_query
         String remote_indir_svimasm

@@ -85,7 +85,7 @@ rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
 
 # Adding SVLEN to symbolic ALTs, to avoid overcollapse by `bcftools concat`
 # downstream.
-if [ ${SVTYPE} != "ins" -a ${SVTYPE} != "INS" ]; then
+if [ ${SVTYPE} != "ins" -a ${SVTYPE} != "INS" -a ${SVTYPE} != "bnd" -a ${SVTYPE} != "BND" ]; then
     java -cp ${DOCKER_DIR} AddSvlenToSymbolicAlt ${INPUT_VCF_GZ}_reheader.vcf.gz | bgzip --compress-level 1 > ${INPUT_VCF_GZ}
     rm -f ${INPUT_VCF_GZ}_reheader.vcf.gz
 else
@@ -115,7 +115,7 @@ END
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
 
         # Removing SVLEN from symbolic ALTs
-        if [ ~{svtype} != "ins" -a ~{svtype} != "INS" ]; then
+        if [ ~{svtype} != "ins" -a ~{svtype} != "INS" -a ~{svtype} != "bnd" -a ~{svtype} != "BND" ]; then
             bcftools view --header-only out.vcf --output ~{svtype}~{suffix}_merged.vcf
             ${TIME_COMMAND} bcftools view --no-header out.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
