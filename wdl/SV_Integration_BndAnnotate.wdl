@@ -3,6 +3,12 @@ version 1.0
 
 # Annotates BND VCFs with multiple BAM- and genotyper-derived features.
 #
+# Remark: for BNDs, `feature_extraction.py` outputs empty values for features:
+#
+# FEX_DEPTH_MAD, FEX_READ_LEN_MED, FEX_STRAND_BIAS
+#
+# These (along with SVLEN) should not be used for scoring.
+#
 workflow SV_Integration_BndAnnotate {
     input {
         File chunk_tsv
