@@ -1,7 +1,6 @@
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 import java.io.*;
-import java.util.function.Consumer;
+import java.util.zip.GZIPInputStream;
 
 
 /**
@@ -30,10 +29,21 @@ import java.util.function.Consumer;
  *   might not be merged just because different samples represent them from 
  *   different sides. This is because both `bcftools merge` and `truvari 
  *   collapse` work on local windows of the ref.
+ * - The point above applies also to truvari bench against SVIM-asm's truth (the
+ *   truth VCF should also be canonized).
  * 
- * Remark: the output VCF is not necessarily sorted.
+ * Remarks: 
+ * 1. the output VCF is not necessarily sorted;
+ * 2. for simplicity, a symmetrized record uses N in REF and ALT;
+ * 3. for simplicity, BNDs that do not follow the simple form (with no inserted
+ *    sequence) are discarded; no such BND occurs in the 292 HPRC Y2 samples at
+ *    15x.
  */
 public class BndCanonize {
+    /**
+     * Not using `_` since it can appear in contig names.
+     */
+    private static final char CANONICAL_SEPARATOR = '@';
     
     /**
      * @param args
@@ -41,7 +51,7 @@ public class BndCanonize {
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         
-        int nPaired, nUnpaired, error, nRecordsInput, nRecordsOutput, nErrorUnrecognized, nErrorSame;
+        int nPaired, nUnpaired, error, nRecordsInput, nRecordsOutput, nErrorUnrecognized, nErrorSame, nErrorInsertion;
         String str, key, value;
         StringBuilder sb;
         HashMap<String,String> canonized;
@@ -52,10 +62,11 @@ public class BndCanonize {
         canonized = new HashMap<String,String>();
         sb = new StringBuilder();
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        nRecordsInput=0; nRecordsOutput=0; nPaired=0; nUnpaired=0; nErrorUnrecognized=0; nErrorSame=0;
+        nRecordsInput=0; nRecordsOutput=0; nPaired=0; nUnpaired=0; nErrorUnrecognized=0; nErrorSame=0; nErrorInsertion=0;
         str=br.readLine();
         while (str!=null) {
             if (str.charAt(0)=='#') {
+                if (str.startsWith("#CHROM")) System.out.println("##INFO=<ID=SYMMETRIZED,Number=0,Type=Flag,Description=\"The BND record has been symmetrized to represent it in canonical form\">");
                 System.out.println(str);
                 str=br.readLine();
                 continue;
@@ -64,7 +75,8 @@ public class BndCanonize {
             tokens=str.split("\t");
             error=canonize(tokens[0],Integer.parseInt(tokens[1]),tokens[4],sb);
             if (error==1) nErrorUnrecognized++;
-            else if (error==2) nErrorSame++;
+            else if (error==2) nErrorInsertion++;
+            else if (error==3) nErrorSame++;
             else {
                 key=sb.toString(); value=canonized.get(key);
                 if (value==null) canonized.put(key,str);
@@ -80,8 +92,8 @@ public class BndCanonize {
         }
         br.close();
         nUnpaired=canonized.size();
-        if (nRecordsInput!=nPaired+nUnpaired+nErrorUnrecognized+nErrorSame) {
-            System.err.println("ERROR: nRecordsInput = "+nRecordsInput+" != nPaired+nUnpaired+nErrorUnrecognized+nErrorSame = "+(nPaired+nUnpaired+nErrorUnrecognized+nErrorSame));
+        if (nRecordsInput!=nPaired+nUnpaired+nErrorUnrecognized+nErrorSame+nErrorInsertion) {
+            System.err.println("ERROR: nRecordsInput = "+nRecordsInput+" != nPaired+nUnpaired+nErrorUnrecognized+nErrorSame+nErrorInsertion = "+(nPaired+nUnpaired+nErrorUnrecognized+nErrorSame+nErrorInsertion));
             System.exit(1);
         }
 
@@ -100,6 +112,7 @@ public class BndCanonize {
         // Basic counts
         System.err.println(nErrorUnrecognized+" records discarded because of unrecognized ALT ("+((nErrorUnrecognized*100.0)/nRecordsInput)+"%).");
         System.err.println(nErrorSame+" records discarded because of same CHROM,POS at their endpoints ("+((nErrorSame*100.0)/nRecordsInput)+"%).");
+        System.err.println(nErrorInsertion+" records discarded because of BND with insertion ("+((nErrorInsertion*100.0)/nRecordsInput)+"%).");
         System.err.println(nPaired+" paired input records ("+((nPaired*100.0)/nRecordsInput)+"%).");
         System.err.println(nUnpaired+" unpaired input records ("+((nUnpaired*100.0)/nRecordsInput)+"%).");
         System.err.println(nRecordsInput+" total input records");
@@ -113,7 +126,8 @@ public class BndCanonize {
      * @return
      * 0: success;
      * 1: unrecognized BND ALT;
-     * 2: REF and ALT have the same CHROM and POS.
+     * 2: BND has insertion;
+     * 3: REF and ALT have the same CHROM and POS.
      */
     private static final int canonize(String refChrom, int refPos, String alt, StringBuilder out) {
         char separator, refDirection, altDirection;
@@ -128,35 +142,37 @@ public class BndCanonize {
         if (p>=0) { separator='['; first=p; }
         else if (q>=0) { separator=']'; first=q; }
         else return 1;
+        if (p>1 || q>1) return 2;
         p=alt.indexOf(':',first+1);
         altChrom=alt.substring(first+1,p);
         q=alt.indexOf(separator,p+1);
+        if (q<alt.length()-2) return 2;
         altPos=Integer.parseInt(alt.substring(p+1,q));
         
         // Canonizing
-        out.delete(0,out.length()); separator='_';
+        out.delete(0,out.length());
         p=refChrom.compareTo(altChrom);
         if (p<0) { 
-            out.append(refChrom); out.append(separator); out.append(refPos); out.append(separator); out.append(refDirection); out.append(separator); 
-            out.append(altChrom); out.append(separator); out.append(altPos); out.append(separator); out.append(altDirection);
+            out.append(refChrom); out.append(CANONICAL_SEPARATOR); out.append(refPos); out.append(CANONICAL_SEPARATOR); out.append(refDirection); out.append(CANONICAL_SEPARATOR); 
+            out.append(altChrom); out.append(CANONICAL_SEPARATOR); out.append(altPos); out.append(CANONICAL_SEPARATOR); out.append(altDirection);
             return 0;
         }
         else if (p>0) {
-            out.append(altChrom); out.append(separator); out.append(altPos); out.append(separator); out.append(altDirection); out.append(separator); 
-            out.append(refChrom); out.append(separator); out.append(refPos); out.append(separator); out.append(refDirection);
+            out.append(altChrom); out.append(CANONICAL_SEPARATOR); out.append(altPos); out.append(CANONICAL_SEPARATOR); out.append(altDirection); out.append(CANONICAL_SEPARATOR); 
+            out.append(refChrom); out.append(CANONICAL_SEPARATOR); out.append(refPos); out.append(CANONICAL_SEPARATOR); out.append(refDirection);
             return 0;
         }
         if (refPos<altPos) {
-            out.append(refChrom); out.append(separator); out.append(refPos); out.append(separator); out.append(refDirection); out.append(separator); 
-            out.append(altChrom); out.append(separator); out.append(altPos); out.append(separator); out.append(altDirection);
+            out.append(refChrom); out.append(CANONICAL_SEPARATOR); out.append(refPos); out.append(CANONICAL_SEPARATOR); out.append(refDirection); out.append(CANONICAL_SEPARATOR); 
+            out.append(altChrom); out.append(CANONICAL_SEPARATOR); out.append(altPos); out.append(CANONICAL_SEPARATOR); out.append(altDirection);
             return 0;
         }
         else if (refPos>altPos) {
-            out.append(altChrom); out.append(separator); out.append(altPos); out.append(separator); out.append(altDirection); out.append(separator); 
-            out.append(refChrom); out.append(separator); out.append(refPos); out.append(separator); out.append(refDirection);
+            out.append(altChrom); out.append(CANONICAL_SEPARATOR); out.append(altPos); out.append(CANONICAL_SEPARATOR); out.append(altDirection); out.append(CANONICAL_SEPARATOR); 
+            out.append(refChrom); out.append(CANONICAL_SEPARATOR); out.append(refPos); out.append(CANONICAL_SEPARATOR); out.append(refDirection);
             return 0;
         }
-        else return 2;
+        else return 3;
     }
 
 
@@ -166,12 +182,11 @@ public class BndCanonize {
      * @return TRUE iff the current record agrees with its canonical form.
      */
     private static final boolean isCanonical(String[] tokens, String key) {
-        final char SEPARATOR = '_';
         int p, q;
 
-        p=key.indexOf(SEPARATOR);
+        p=key.indexOf(CANONICAL_SEPARATOR);
         if (key.substring(0,p).equals(tokens[0])) {
-            q=key.indexOf(SEPARATOR,p+1);
+            q=key.indexOf(CANONICAL_SEPARATOR,p+1);
             return key.substring(p+1,q).equals(tokens[1]); 
         }
         else return false;
@@ -180,7 +195,7 @@ public class BndCanonize {
 
     /**
      * Symmetrizes a BND record stored in `tokens` by changing only
-     * CHROM,POS,REF,ALT.
+     * CHROM,POS,REF,ALT and adding the SYMMETRIZED flag to INFO.
      */
     private static final void symmetrize(String[] tokens) {
         boolean refDirection, altDirection;
@@ -212,6 +227,7 @@ public class BndCanonize {
         separator=refDirection?']':'[';
         if (altDirection) tokens[4]="N"+separator+refChrom+":"+refPos+separator;
         else tokens[4]=separator+refChrom+":"+refPos+separator+"N";
+        tokens[7]=tokens[7].equals(".")?"SYMMETRIZED":tokens[7]+";SYMMETRIZED";
     }
 
 }
