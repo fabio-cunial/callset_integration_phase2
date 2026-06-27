@@ -8,7 +8,7 @@ import java.util.zip.GZIPInputStream;
  * 3 callers contains only Sniffles and pbsv calls.
  * 
  * - Pbsv emits two BND records per breakend, with correct MATEID fields.
- * - Sniffles emits one BND record per breakend (obviously with no MATEID); such
+ * - Sniffles emits one BND record per breakend (obviously without MATEID); such
  *   a record is not always the one from, say, the smallest chromosome, e.g.:
  * 
  *   chr20   29256203     id      N       N]chr4:188558260]
@@ -16,28 +16,34 @@ import java.util.zip.GZIPInputStream;
  * - Intra-sample truvari collapse is run in such a way that pbsv records are
  *   preferred over Sniffles records.
  *  
- * It follows that, if truvari collapse merged a pbsv and a Sniffles record,
+ * It follows that, if truvari collapse merges a pbsv and a Sniffles record,
  * the result of the merge has a paired record in output even though the merge
- * happened on just one side.
+ * happened on just one side; but if a Sniffles record is not merged with any
+ * pbsv record, the result is asymmetric. Thus, if we then perform inter-sample 
+ * `bcftools merge` and `truvari collapse`, the result remains asymmetric.
+ * Moreover, inter-sample collapse may not merge the same event across samples 
+ * just because different samples represent it from different sides: this is 
+ * because both `bcftools merge` and `truvari collapse` work on local windows of
+ * the ref. (of course we could manually post-process the output, but it is
+ * inelegant).
+ * 
+ * SVIM-asm outputs two BND records per breakend (without MATEID). An asymmetric
+ * Sniffles record might match a symmetric SVIM-asm record: this is ok, but it 
+ * introduces an imbalance between TPs from pbsv (represented twice) and TPs 
+ * from Sniffles (represented once). Of course this is a general problem that
+ * affects all records, not just TPs.
  * 
  * This program makes sure that every breakend is represented by just one BND
- * record in canonical form:
- * - Using just one record is motivated by the resulting speedup in annotation/
- *   scoring downstream.
- * - Given that we use just one record, representing it in canonical form is 
- *   necessary for the inter-sample merge downstream. Otherwise some breakends 
- *   might not be merged just because different samples represent them from 
- *   different sides. This is because both `bcftools merge` and `truvari 
- *   collapse` work on local windows of the ref.
- * - The point above applies also to truvari bench against SVIM-asm's truth (the
- *   truth VCF should also be canonized).
+ * record in canonical form. This should solve all issues above and might give a
+ * speedup in annotation/scoring.
  * 
  * Remarks: 
  * 1. the output VCF is not necessarily sorted;
  * 2. for simplicity, a symmetrized record uses N in REF and ALT;
- * 3. for simplicity, BNDs that do not follow the simple form (with no inserted
+ * 3. for simplicity, BNDs that do not follow the simple form (without inserted
  *    sequence) are discarded; no such BND occurs in the 292 HPRC Y2 samples at
- *    15x.
+ *    15x;
+ * 4. SVIM-asm's truth should also be canonized.
  */
 public class BndCanonize {
     /**
