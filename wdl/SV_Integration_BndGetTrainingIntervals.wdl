@@ -88,19 +88,40 @@ task Impl {
 
             # Downloading and filtering the truth VCF (skipping the sample if 
             # there is no truth).
+            # Remark: we use both BND calls and ultralong calls from the truth,
+            # since read-derived BNDs might describe breakpoints of variants
+            # that are too large for read-based callers but that are short
+            # enough for svim-asm.
             TEST=$( gcloud storage ls ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz || echo "1" )
             if [ "${TEST}" = "1" ]; then
                 rm -rf ${SAMPLE_ID}_*
                 continue
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="BND"' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_bnd.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="BND"' --output-type v ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_bnd.vcf
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_svimasm_bnd.vcf | bgzip -c > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            rm -f ${SAMPLE_ID}_svimasm_bnd.vcf
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVLEN>10000' --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
             rm -f ${SAMPLE_ID}_canonized.vcf.gz*
+            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz ${SAMPLE_ID}_svimasm_ultralong.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
+            rm -f ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz* ${SAMPLE_ID}_svimasm_ultralong.vcf.gz*
 
-            # Computing matches of the query VCF
+            # Computing matches between query and truth VCF.
+            # Remarks:
+            # 1. Truvari bench decomposes a simple SV into its BNDs 
+            #    automatically.
+            # 2. We use `--pick multi` since an SV can be decomposed into
+            #    multiple BNDs, in which case it would be matched only to one
+            #    of them by default.
+            # See https://github.com/acenglish/truvari/wiki/bench#cross-representation-matching
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
-            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm_bnd.vcf.gz -c ${SAMPLE_ID}_bnd.vcf.gz --bnddist ~{truvari_bnddist} --pick single -o ./${SAMPLE_ID}_truvari/
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_bnd.vcf.gz | bgzip -c > ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            rm -f ${SAMPLE_ID}_bnd.vcf.gz*
+            ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm.vcf.gz -c ${SAMPLE_ID}_bnd_canonized.vcf.gz --bnddist ~{truvari_bnddist} --pick multi -o ./${SAMPLE_ID}_truvari/
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${SAMPLE_ID}_bnd_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/
