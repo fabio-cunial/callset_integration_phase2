@@ -103,7 +103,7 @@ task Impl {
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="BND"' --output-type v ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_bnd.vcf
-            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_svimasm_bnd.vcf | bgzip -c > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_svimasm_bnd.vcf | bcftools sort - --output-type z > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
             rm -f ${SAMPLE_ID}_svimasm_bnd.vcf
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include '(SVTYPE="DEL" || SVTYPE="DUP" || SVTYPE="INV") && SVLEN>='~{min_sv_length_truth} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
@@ -122,7 +122,7 @@ task Impl {
             #    of them by default.
             # See https://github.com/acenglish/truvari/wiki/bench#cross-representation-matching
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
-            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_bnd.vcf.gz | bgzip -c > ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_bnd.vcf.gz | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_canonized.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_canonized.vcf.gz
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm.vcf.gz -c ${SAMPLE_ID}_bnd_canonized.vcf.gz --bnddist ~{truvari_bnddist} --pick multi -o ./${SAMPLE_ID}_truvari/
