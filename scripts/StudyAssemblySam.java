@@ -13,7 +13,9 @@ public class StudyAssemblySam {
     /**
      * @param args
      * 0: all alignments with the same QNAME are assumed to form a contiguous
-     *    block (e.g. `samtools sort -@ 8 -m 3G -n -O BAM hap1.bam`).
+     *    block (e.g. `samtools sort -@ 8 -m 3G -n -O BAM hap1.bam`);
+     * 1: opened for append;
+     * 2: opened for append.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_SAM = args[0];
@@ -37,8 +39,8 @@ public class StudyAssemblySam {
         alignments = new Vector<Alignment>();
         tmpMap = new HashMap<String,Integer>();
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_SAM)));
-        bwMatrix = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(OUTPUT_MATRIX_FILE)));
-        bwLengths = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(OUTPUT_LENGTHS_FILE)));
+        bwMatrix = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(OUTPUT_MATRIX_FILE,true)));
+        bwLengths = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(OUTPUT_LENGTHS_FILE,true)));
         str=br.readLine(); nRecords=0; lastReadId="";
         while (str!=null) {
             if (str.charAt(0)=='@') { str=br.readLine(); continue; }
@@ -123,7 +125,11 @@ public class StudyAssemblySam {
     /**
      * @param alignments assumed to be all and only the alignments in a contig;
      * @param tmpMap temporary space;
-     * @param out format: `readLength,alignmentType` where `alignmentType` is:
+     * @param out format:
+     * 
+     * readLength,alignmentType,mapq,mostFrequentChr,mostFrequentOrientation,alignmentChr,alignmentOrientation
+     * 
+     * where `alignmentType` is:
      * 0: same `(chr,orientation)` combination as the most frequent alignment in 
      *    the contig, and position concordant (within `distanceThreshold`) with
      *    the previous and next alignment with the same `(chr,orientation)` 
@@ -176,7 +182,7 @@ public class StudyAssemblySam {
                 else alignmentType=2;
             }
             else alignmentType=3;
-            out.write((alignments.get(i).readLast-alignments.get(i).readFirst)+"\t"+alignmentType+"\t"+mostFrequentChr+"\t"+(mostFrequentIsRc?"RC":"FW")+"\t"+alignmentChr+"\t"+(alignmentIsRc?"RC":"FW")+"\n");
+            out.write((alignments.get(i).readLast-alignments.get(i).readFirst)+"\t"+alignmentType+"\t"+alignments.get(i).mapq+"\t"+mostFrequentChr+"\t"+(mostFrequentIsRc?"RC":"FW")+"\t"+alignmentChr+"\t"+(alignmentIsRc?"RC":"FW")+"\n");
         }
     }
 

@@ -5,7 +5,7 @@ WARNING: this script is AI-generated.
 Plot an assembly-to-reference alignment TSV as a "matrix of arrows".
 
 Input TSV (tab-separated, no header), one row per alignment, as produced by
-StudyAssemblySam.java:
+`StudyAssemblySam.java`:
 
     contigID  contigLength  alignmentStartInContig  alignmentEndInContig
     alignedChromosomeId  alignmentStartInChromosome  alignmentEndInChromosome
@@ -25,6 +25,7 @@ Usage:
 import argparse
 import csv
 import math
+import os
 import sys
 from collections import OrderedDict
 
@@ -53,11 +54,15 @@ def parse_args():
                     help="Order of contig rows top-to-bottom (default: input order).")
     ap.add_argument("--hist-tsv", default=None,
                     help="Optional TSV (tab-separated, no header) with columns "
-                         "'length<TAB>type<TAB>...', where type is an integer "
-                         "label. If given, an extra histogram plot is written.")
+                         "'length<TAB>type<TAB>mapq<TAB>...', where type is an "
+                         "integer label. If given, an extra histogram plot is written.")
     ap.add_argument("--hist-output", default=None,
                     help="Output image for the per-type length histogram "
                          "(required if --hist-tsv is given).")
+    ap.add_argument("--hist-mapq-output", default=None,
+                    help="Output image for the per-type MAPQ histogram. If "
+                         "omitted, it is derived from --hist-output by inserting "
+                         "'_mapq' before the extension.")
     ap.add_argument("--hist-bins", type=int, default=50,
                     help="Number of histogram bins (default: 50).")
     return ap.parse_args()
@@ -183,11 +188,11 @@ def order_contigs(contigs, how):
     return [c for c, _ in items]
 
 
-def load_lengths_by_type(path):
-    """Return an OrderedDict type(int) -> list of length values(float).
+def load_metrics_by_type(path):
+    """Return an OrderedDict type(int) -> {"length": [float], "mapq": [float]}.
 
-    Reads a tab-separated file with columns 'length<TAB>type<TAB>...'; any
-    further columns are ignored. Types are kept in first-seen order.
+    Reads a tab-separated file with columns 'length<TAB>type<TAB>mapq<TAB>...';
+    any further columns are ignored. Types are kept in first-seen order.
     """
     by_type = OrderedDict()
     with open(path, newline="") as fh:
@@ -195,67 +200,86 @@ def load_lengths_by_type(path):
         for lineno, fields in enumerate(reader, start=1):
             if not fields or (len(fields) == 1 and not fields[0].strip()):
                 continue
-            if len(fields) < 2:
+            if len(fields) < 3:
                 sys.stderr.write(
-                    f"Warning: hist line {lineno} has {len(fields)} columns (<2), skipping.\n")
+                    f"Warning: hist line {lineno} has {len(fields)} columns (<3), skipping.\n")
                 continue
             try:
                 length = float(fields[0])
                 type_label = int(fields[1])
+                mapq = float(fields[2])
             except ValueError as e:
                 sys.stderr.write(
                     f"Warning: hist line {lineno} failed to parse ({e}), skipping.\n")
                 continue
-            by_type.setdefault(type_label, []).append(length)
+            metrics = by_type.setdefault(type_label, {"length": [], "mapq": []})
+            metrics["length"].append(length)
+            metrics["mapq"].append(mapq)
     return by_type
 
 
-def plot_length_histograms(by_type, output_image, n_bins, width, dpi):
-    """Plot the histogram of 'length' for each type in its own panel.
+def plot_histograms_by_type(values_by_type, output_image, n_bins, width, dpi,
+                            xlabel, log_x, log_y=False):
+    """Plot the histogram of one metric for each type in its own panel.
 
-    All panels share log-scaled, logarithmically-binned X axes so the
-    distributions are directly comparable across categories.
+    `values_by_type` maps type(int) -> list of values. All panels share the
+    same X axis and bin edges so the distributions are directly comparable
+    across categories. With `log_x=True` the axis is log-scaled and the bins
+    are logarithmically spaced (non-positive values are dropped); otherwise the
+    axis and bins are linear. With `log_y=True` the count (Y) axis is
+    log-scaled.
     """
-    all_lengths = [v for vals in by_type.values() for v in vals]
-    # Log-scale X axis: positive values only, with logarithmically-spaced bin
-    # edges so bars are uniform-width on the log axis.
-    positive = [v for v in all_lengths if v > 0]
-    n_dropped = len(all_lengths) - len(positive)
-    if n_dropped:
-        sys.stderr.write(
-            f"Warning: dropped {n_dropped} non-positive length(s) (incompatible "
-            f"with a log X axis).\n")
-    if not positive:
-        sys.stderr.write("No positive length values to plot. Nothing written.\n")
+    all_vals = [v for vals in values_by_type.values() for v in vals]
+    if log_x:
+        # Positive values only, with logarithmically-spaced bin edges so bars
+        # are uniform-width on the log axis.
+        usable = [v for v in all_vals if v > 0]
+        n_dropped = len(all_vals) - len(usable)
+        if n_dropped:
+            sys.stderr.write(
+                f"Warning: dropped {n_dropped} non-positive {xlabel} value(s) "
+                f"(incompatible with a log X axis).\n")
+    else:
+        usable = list(all_vals)
+    if not usable:
+        sys.stderr.write(f"No {xlabel} values to plot. Nothing written to {output_image}.\n")
         return
     # Shared bin edges so the per-panel histograms are directly comparable.
-    lo, hi = min(positive), max(positive)
-    if lo == hi:
-        hi = lo * 10.0  # avoid a degenerate single-edge range
-    log_lo, log_hi = math.log10(lo), math.log10(hi)
-    bins = [10.0 ** (log_lo + (log_hi - log_lo) * k / n_bins)
-            for k in range(n_bins + 1)]
+    lo, hi = min(usable), max(usable)
+    if log_x:
+        if lo == hi:
+            hi = lo * 10.0  # avoid a degenerate single-edge range
+        log_lo, log_hi = math.log10(lo), math.log10(hi)
+        bins = [10.0 ** (log_lo + (log_hi - log_lo) * k / n_bins)
+                for k in range(n_bins + 1)]
+    else:
+        if lo == hi:
+            hi = lo + 1.0  # avoid a degenerate single-edge range
+        bins = [lo + (hi - lo) * k / n_bins for k in range(n_bins + 1)]
 
-    types = sorted(by_type)
+    types = sorted(values_by_type)
     n_panels = len(types)
     fig, axes = plt.subplots(n_panels, 1, sharex=True,
                              figsize=(width, max(2.0, 2.2 * n_panels)),
                              squeeze=False)
     for ax, type_label in zip(axes[:, 0], types):
-        vals = [v for v in by_type[type_label] if v > 0]
+        vals = [v for v in values_by_type[type_label] if (v > 0 or not log_x)]
         ax.hist(vals, bins=bins, color="C0")
-        ax.set_xscale("log")
+        if log_x:
+            ax.set_xscale("log")
+        if log_y:
+            ax.set_yscale("log")
         ax.set_ylabel("count")
         title = CATEGORY_NAMES.get(type_label, f"type {type_label}")
         ax.set_title(f"{title}  (n={len(vals)})", fontsize=10)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-    axes[-1, 0].set_xlabel("length")
+    axes[-1, 0].set_xlabel(xlabel)
 
     fig.tight_layout()
     fig.savefig(output_image, dpi=dpi, bbox_inches="tight")
     sys.stderr.write(
-        f"Wrote {output_image}: {n_panels} panels, {len(all_lengths)} values.\n")
+        f"Wrote {output_image}: {n_panels} panels, {len(all_vals)} values.\n")
 
 
 def main():
@@ -265,12 +289,24 @@ def main():
         if not args.hist_output:
             sys.stderr.write("Error: --hist-output is required when --hist-tsv is given.\n")
             sys.exit(1)
-        by_type = load_lengths_by_type(args.hist_tsv)
+        by_type = load_metrics_by_type(args.hist_tsv)
         if not by_type:
             sys.stderr.write("No histogram values to plot. Nothing written.\n")
         else:
-            plot_length_histograms(by_type, args.hist_output,
-                                   args.hist_bins, args.width, args.dpi)
+            length_by_type = OrderedDict(
+                (t, m["length"]) for t, m in by_type.items())
+            plot_histograms_by_type(length_by_type, args.hist_output,
+                                    args.hist_bins, args.width, args.dpi,
+                                    xlabel="length", log_x=True, log_y=True)
+            mapq_output = args.hist_mapq_output
+            if mapq_output is None:
+                root, ext = os.path.splitext(args.hist_output)
+                mapq_output = f"{root}_mapq{ext}"
+            mapq_by_type = OrderedDict(
+                (t, m["mapq"]) for t, m in by_type.items())
+            plot_histograms_by_type(mapq_by_type, mapq_output,
+                                    args.hist_bins, args.width, args.dpi,
+                                    xlabel="MAPQ", log_x=False, log_y=True)
     contigs, rows = load_alignments(args.input_tsv, args.min_mapq)
 
     if not rows:
