@@ -16,6 +16,8 @@ workflow SV_Integration_UltralongMerge {
         
         String svtype
         String suffix
+
+        Int bnd_remove_orientations = 0
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
@@ -29,6 +31,7 @@ workflow SV_Integration_UltralongMerge {
             remote_outdir = remote_outdir,
             svtype = svtype,
             suffix = suffix,
+            bnd_remove_orientations = bnd_remove_orientations,
             docker_image = docker_image
     }
     
@@ -51,6 +54,8 @@ task Impl {
         
         String svtype
         String suffix
+
+        Int bnd_remove_orientations = 0
         
         String docker_image
         Int n_cpu = 4
@@ -78,7 +83,8 @@ task Impl {
 #!/bin/bash
 DOCKER_DIR=$1
 SVTYPE=$2
-INPUT_VCF_GZ=$3
+BND_REMOVE_ORIENTATIONS=$3
+INPUT_VCF_GZ=$4
 
 bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}_reheader.vcf.gz
 rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
@@ -92,10 +98,16 @@ else
     mv ${INPUT_VCF_GZ}_reheader.vcf.gz ${INPUT_VCF_GZ}
 fi
 
-# Canonizing BNDs
+# Canonizing BNDs and removing orientations, if needed.
 if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
-    java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type z > ${INPUT_VCF_GZ}_canonized.vcf.gz
-    rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_canonized.vcf.gz ${INPUT_VCF_GZ}
+    java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type v > ${INPUT_VCF_GZ}_canonized.vcf
+    rm -f ${INPUT_VCF_GZ}
+    if [ ${BND_REMOVE_ORIENTATIONS} -eq 1 ]; then
+        java -cp ${DOCKER_DIR} BndRemoveOrientations ${INPUT_VCF_GZ}_canonized.vcf | bgzip > ${INPUT_VCF_GZ}
+    else
+        bgzip -c ${INPUT_VCF_GZ}_canonized.vcf > ${INPUT_VCF_GZ}
+    fi
+    rm -f ${INPUT_VCF_GZ}_canonized.vcf
 fi
 
 bcftools index -f -t ${INPUT_VCF_GZ}
@@ -117,7 +129,7 @@ END
         df -h 1>&2
         ls -laht 1>&2
         ls *.vcf.gz > list.txt
-        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype}
+        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
 
         # Removing SVLEN from symbolic ALTs
