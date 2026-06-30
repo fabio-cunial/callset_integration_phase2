@@ -93,9 +93,9 @@ task Impl {
             # Downloading and filtering the truth VCF (skipping the sample if 
             # there is no truth).
             # Remark: we use both BND calls and ultralong calls from the truth,
-            # since read-derived BNDs might describe breakpoints of variants
-            # that are too large for read-based callers but that are short
-            # enough for svim-asm.
+            # since read-derived BNDs may describe breakpoints of variants that 
+            # are too large for read-based callers but that are short enough for
+            # svim-asm.
             TEST=$( gcloud storage ls ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz || echo "1" )
             if [ "${TEST}" = "1" ]; then
                 rm -rf ${SAMPLE_ID}_*

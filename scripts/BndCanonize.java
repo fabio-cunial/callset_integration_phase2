@@ -35,7 +35,9 @@ import java.util.zip.GZIPInputStream;
  * 
  * This program makes sure that every breakend is represented by just one BND
  * record in canonical form. This should solve all issues above and might give a
- * speedup in annotation/scoring.
+ * speedup in annotation/scoring. The program also ensures that every POS is >0
+ * (POS=0 is permitted by the VCF spec, to represent telomeric breakends, but it
+ * is not handled correctly in the TBI).
  * 
  * Remarks: 
  * 1. the output VCF is not necessarily sorted;
@@ -79,16 +81,17 @@ public class BndCanonize {
             }
             nRecordsInput++;
             tokens=str.split("\t");
+            removeZeros(tokens);
             error=canonize(tokens[0],Integer.parseInt(tokens[1]),tokens[4],sb);
             if (error==1) nErrorUnrecognized++;
             else if (error==2) nErrorInsertion++;
             else if (error==3) nErrorSame++;
             else {
                 key=sb.toString(); value=canonized.get(key);
-                if (value==null) canonized.put(key,str);
+                if (value==null) canonized.put(key,String.join("\t",tokens));
                 else {
                     nPaired+=2;
-                    if (isCanonical(tokens,key)) System.out.println(str);
+                    if (isCanonical(tokens,key)) System.out.println(String.join("\t",tokens));
                     else System.out.println(value);
                     nRecordsOutput++;
                     canonized.remove(key);
@@ -126,8 +129,32 @@ public class BndCanonize {
     }
 
 
+    private static final void removeZeros(String[] tokens) {
+        char separator;
+        int p, q;
+        int first;
+        String alt;
+
+        // REF
+        if (tokens[1].equals("0")) tokens[1]="1";
+        
+        // ALT
+        alt=tokens[4];
+        p=alt.indexOf('['); q=alt.indexOf(']'); first=-1; separator='_';
+        if (p>=0) { separator='['; first=p; }
+        else if (q>=0) { separator=']'; first=q; }
+        else return;
+        if (p>1 || q>1) return;
+        p=alt.indexOf(':',first+1);
+        q=alt.indexOf(separator,p+1);
+        if (q<alt.length()-2) return;
+        if (q==p+2 && alt.charAt(p+1)=='0') tokens[4]=alt.substring(0,p+1)+"1"+alt.substring(q);
+    }
+
+
     /**
-     * Stores in `out` a representation of the input BND in canonical form.
+     * Stores in `out` a representation of the input BND in canonical form and 
+     * with no zero POS.
      * 
      * @return
      * 0: success;
