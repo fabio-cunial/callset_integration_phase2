@@ -2,10 +2,10 @@ version 1.0
 
 
 # Merges the per-sample, per-SVTYPE VCFs produced by 
-# `SV_Integration_UltralongAnnotate.wdl` and 
-# `SV_Integration_UltralongGetTrainingIntervals.wdl` into a single, sorted VCF,
-# removing only exact duplicates. The input VCFs are assumed to have standard 
-# symbolic ALT fields, e.g. ALT=<DEL> with SVLEN=23456 in INFO, and not 
+# `SV_Integration_{Ultralong,Bnd}Annotate.wdl` and 
+# `SV_Integration_{Ultralong,Bnd}GetTrainingIntervals.wdl` into a single, sorted
+# VCF, removing only exact duplicates. The input VCFs are assumed to have
+# standard symbolic ALT fields, e.g. ALT=<DEL> with SVLEN=23456 in INFO, and not 
 # ALT=<DEL-23456>.
 #
 workflow SV_Integration_UltralongMerge {
@@ -90,6 +90,12 @@ if [ ${SVTYPE} != "ins" -a ${SVTYPE} != "INS" -a ${SVTYPE} != "bnd" -a ${SVTYPE}
     rm -f ${INPUT_VCF_GZ}_reheader.vcf.gz
 else
     mv ${INPUT_VCF_GZ}_reheader.vcf.gz ${INPUT_VCF_GZ}
+fi
+
+# Canonizing BNDs
+if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
+    java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type z > ${INPUT_VCF_GZ}_canonized.vcf.gz
+    rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_canonized.vcf.gz ${INPUT_VCF_GZ}
 fi
 
 bcftools index -f -t ${INPUT_VCF_GZ}
