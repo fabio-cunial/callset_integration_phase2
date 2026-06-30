@@ -8,9 +8,10 @@ workflow SV_Integration_BndGetTrainingIntervals {
         File samples_tsv
         Int truvari_bnddist = 500
         Int min_sv_length_truth = 1000
+        Int remove_orientations = 0
         
         String remote_indir_query
-        String remote_indir_svimasm
+        String remote_indir_svimasms
         String remote_outdir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
@@ -27,6 +28,7 @@ workflow SV_Integration_BndGetTrainingIntervals {
             samples_tsv = samples_tsv,
             truvari_bnddist = truvari_bnddist,
             min_sv_length_truth = min_sv_length_truth,
+            remove_orientations = remove_orientations,
 
             remote_indir_query = remote_indir_query,
             remote_indir_svimasm = remote_indir_svimasm,
@@ -50,6 +52,7 @@ task Impl {
         File samples_tsv
         Int truvari_bnddist
         Int min_sv_length_truth
+        Int remove_orientations
         
         String remote_indir_query
         String remote_indir_svimasm
@@ -103,9 +106,15 @@ task Impl {
             fi
             gcloud storage cp ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.'gz*' .
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include 'SVTYPE="BND"' --output-type v ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_bnd.vcf
-            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_svimasm_bnd.vcf | bcftools sort - --output-type z > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_svimasm_bnd.vcf > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_svimasm_bnd.vcf
+            if [ ~{remove_orientations} -eq 1 ]; then
+                java -cp ~{docker_dir} BndRemoveOrientations ${SAMPLE_ID}_svimasm_bnd_canonized.vcf | bcftools sort - --output-type z > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            else
+                bcftools sort --output-type z ${SAMPLE_ID}_svimasm_bnd_canonized.vcf > ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
+            fi
+            rm -f ${SAMPLE_ID}_svimasm_bnd_canonized.vcf
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include '(SVTYPE="DEL" || SVTYPE="DUP" || SVTYPE="INV") && SVLEN>='~{min_sv_length_truth} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
             rm -f ${SAMPLE_ID}_canonized.vcf.gz*
@@ -122,9 +131,15 @@ task Impl {
             #    of them by default.
             # See https://github.com/acenglish/truvari/wiki/bench#cross-representation-matching
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
-            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_bnd.vcf.gz | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_canonized.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            java -cp ~{docker_dir} BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
+            if [ ~{remove_orientations} -eq 1 ]; then
+                java -cp ~{docker_dir} BndRemoveOrientations ${SAMPLE_ID}_bnd_canonized.vcf | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            else
+                bcftools sort --output-type z ${SAMPLE_ID}_bnd_canonized.vcf > ${SAMPLE_ID}_bnd_canonized.vcf.gz
+            fi
+            rm -f ${SAMPLE_ID}_bnd_canonized.vcf
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_canonized.vcf.gz
             ${TIME_COMMAND} truvari bench -b ${SAMPLE_ID}_svimasm.vcf.gz -c ${SAMPLE_ID}_bnd_canonized.vcf.gz --bnddist ~{truvari_bnddist} --pick multi -o ./${SAMPLE_ID}_truvari/
             ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${SAMPLE_ID}_bnd_training.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
