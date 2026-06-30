@@ -11,7 +11,7 @@ workflow SV_Integration_BndGetTrainingIntervals {
         Int remove_orientations = 0
         
         String remote_indir_query
-        String remote_indir_svimasms
+        String remote_indir_svimasm
         String remote_outdir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
