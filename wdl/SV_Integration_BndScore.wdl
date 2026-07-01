@@ -115,7 +115,7 @@ task Score {
             local CALLER_ID=$2
             local OUTPUT_VCF_GZ=$3
 
-            bcftools filter --include 'ID~"'${CALLER_ID}'"' --output-type v ${INPUT_VCF_GZ} --output ${CALLER_ID}.vcf
+            bcftools view ${INPUT_VCF_GZ} | awk '/^#/ || $3 ~ /'${CALLER_ID}'/' > ${CALLER_ID}.vcf
             if [ ${CALLER_ID} = "sniffles" ]; then
                 bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/SUPPORT\t%INFO/COVERAGE\t%INFO/STRAND\t%INFO/STDEV_POS\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${CALLER_ID}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                     STRAND=-1; \
