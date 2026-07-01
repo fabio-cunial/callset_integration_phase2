@@ -123,11 +123,23 @@ task Score {
                     else if ($6=="-+") STRAND=1; \
                     else if ($6=="+-") STRAND=2; \
                     else if ($6=="++") STRAND=3; \
+                    STDEV_POS_1=-1; STDEV_POS_2=-1; \
+                    p=0; \
+                    for (i=1; i<=length($7); i++) { \
+                        if (substr($7,i,1)==",") { p=i; break; } \
+                    } \
+                    if (p>0) { \
+                        STDEV_POS_1=substr($7,1,p-1); \
+                        STDEV_POS_2=substr($7,p+1); \
+                    } else { \
+                        STDEV_POS_1=$7; \
+                        STDEV_POS_2=$7; \
+                    } \
                     GT_COUNT=-1; \
                     if ($8=="0/0" || $8=="0|0" || $8=="./."  || $8==".|." || $8=="./0" || $8==".|0" || $8=="0/." || $8=="0|." || $8=="0" || $8==".") GT_COUNT=0; \
                     else if ($8=="0/1" || $8=="0|1" || $8=="1/0" || $8=="1|0" || $8=="./1" || $8==".|1" || $8=="1/." || $8=="1|." || $8=="1") GT_COUNT=1; \
                     else if ($8=="1/1" || $8=="1|1") GT_COUNT=2; \
-                    printf("%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,STRAND,$7,GT_COUNT,$9,$10,$11); \
+                    printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,STRAND,STDEV_POS_1,STDEV_POS_2,GT_COUNT,$9,$10,$11); \
                 }' | tr ',' '\t' | bgzip -c > ${CALLER_ID}_annotations.tsv.gz
                 echo '##INFO=<ID=SNIFFLES_SUPPORT,Number=1,Type=Integer,Description="...">' > ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_COVERAGE_1,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
@@ -136,12 +148,13 @@ task Score {
                 echo '##INFO=<ID=SNIFFLES_COVERAGE_4,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_COVERAGE_5,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_STRAND,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
-                echo '##INFO=<ID=SNIFFLES_STDEV_POS,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
+                echo '##INFO=<ID=SNIFFLES_STDEV_POS_1,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
+                echo '##INFO=<ID=SNIFFLES_STDEV_POS_2,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_GT_COUNT,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_GQ,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_DR,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_DV,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
-                local COLUMNS='CHROM,POS,~ID,INFO/SNIFFLES_SUPPORT,INFO/SNIFFLES_COVERAGE_1,INFO/SNIFFLES_COVERAGE_2,INFO/SNIFFLES_COVERAGE_3,INFO/SNIFFLES_COVERAGE_4,INFO/SNIFFLES_COVERAGE_5,INFO/SNIFFLES_STRAND,INFO/SNIFFLES_STDEV_POS,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
+                local COLUMNS='CHROM,POS,~ID,INFO/SNIFFLES_SUPPORT,INFO/SNIFFLES_COVERAGE_1,INFO/SNIFFLES_COVERAGE_2,INFO/SNIFFLES_COVERAGE_3,INFO/SNIFFLES_COVERAGE_4,INFO/SNIFFLES_COVERAGE_5,INFO/SNIFFLES_STRAND,INFO/SNIFFLES_STDEV_POS_1,INFO/SNIFFLES_STDEV_POS_2,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
             elif [ ${CALLER_ID} = "pbsv" ]; then
                 bcftools view ${INPUT_VCF_GZ} | awk '/^#/ || $3 ~ /pbsv/' > ${CALLER_ID}.vcf
                 bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CIPOS\t[%GT]\t[%AD]\t[%DP]\n' ${CALLER_ID}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
@@ -173,7 +186,7 @@ task Score {
         ExtractBndsOfCaller ~{input_vcf_gz} ~{caller_id} input_cleaned.vcf.gz
         ExtractBndsOfCaller ~{resource_vcf_gz} ~{caller_id} resource_cleaned.vcf.gz
         if [ ~{caller_id} = "sniffles" ]; then
-            ANNOTATIONS_STRING="-A SNIFFLES_SUPPORT -A SNIFFLES_COVERAGE_1 -A SNIFFLES_COVERAGE_2 -A SNIFFLES_COVERAGE_3 -A SNIFFLES_COVERAGE_4 -A SNIFFLES_COVERAGE_5 -A SNIFFLES_STRAND -A SNIFFLES_STDEV_POS -A SNIFFLES_GT_COUNT -A SNIFFLES_GQ -A SNIFFLES_DR -A SNIFFLES_DV"
+            ANNOTATIONS_STRING="-A SNIFFLES_SUPPORT -A SNIFFLES_COVERAGE_1 -A SNIFFLES_COVERAGE_2 -A SNIFFLES_COVERAGE_3 -A SNIFFLES_COVERAGE_4 -A SNIFFLES_COVERAGE_5 -A SNIFFLES_STRAND -A SNIFFLES_STDEV_POS_1 -A SNIFFLES_STDEV_POS_2 -A SNIFFLES_GT_COUNT -A SNIFFLES_GQ -A SNIFFLES_DR -A SNIFFLES_DV"
         else
             ANNOTATIONS_STRING="-A PBSV_CIPOS_1 -A PBSV_CIPOS_2 -A PBSV_GT_COUNT -A PBSV_AD_1 -A PBSV_AD_2 -A PBSV_DP"
         fi
