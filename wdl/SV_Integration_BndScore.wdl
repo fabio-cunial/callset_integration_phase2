@@ -127,7 +127,7 @@ task Score {
                     if ($8=="0/0" || $8=="0|0" || $8=="./."  || $8==".|." || $8=="./0" || $8==".|0" || $8=="0/." || $8=="0|." || $8=="0" || $8==".") GT_COUNT=0; \
                     else if ($8=="0/1" || $8=="0|1" || $8=="1/0" || $8=="1|0" || $8=="./1" || $8==".|1" || $8=="1/." || $8=="1|." || $8=="1") GT_COUNT=1; \
                     else if ($8=="1/1" || $8=="1|1") GT_COUNT=2; \
-                    printf("%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,STRAND,$7,GT_COUNT,$9,$10,$11); \
+                    printf("%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,STRAND,$7,GT_COUNT,$9,$10,$11); \
                 }' | tr ',' '\t' | bgzip -c > ${CALLER_ID}_annotations.tsv.gz
                 echo '##INFO=<ID=SNIFFLES_SUPPORT,Number=1,Type=Integer,Description="...">' > ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_COVERAGE_1,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
