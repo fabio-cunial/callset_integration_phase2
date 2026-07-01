@@ -115,8 +115,8 @@ task Score {
             local CALLER_ID=$2
             local OUTPUT_VCF_GZ=$3
 
-            bcftools view ${INPUT_VCF_GZ} | awk '/^#/ || $3 ~ /'${CALLER_ID}'/' > ${CALLER_ID}.vcf
             if [ ${CALLER_ID} = "sniffles" ]; then
+                bcftools view ${INPUT_VCF_GZ} | awk '/^#/ || $3 ~ /Sniffles2/' > ${CALLER_ID}.vcf
                 bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/SUPPORT\t%INFO/COVERAGE\t%INFO/STRAND\t%INFO/STDEV_POS\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\n' ${CALLER_ID}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                     STRAND=-1; \
                     if ($6=="--") STRAND=0; \
@@ -142,7 +142,8 @@ task Score {
                 echo '##INFO=<ID=SNIFFLES_DR,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 echo '##INFO=<ID=SNIFFLES_DV,Number=1,Type=Integer,Description="...">' >> ${CALLER_ID}_header.txt
                 local COLUMNS='CHROM,POS,~ID,INFO/SNIFFLES_SUPPORT,INFO/SNIFFLES_COVERAGE_1,INFO/SNIFFLES_COVERAGE_2,INFO/SNIFFLES_COVERAGE_3,INFO/SNIFFLES_COVERAGE_4,INFO/SNIFFLES_COVERAGE_5,INFO/SNIFFLES_STRAND,INFO/SNIFFLES_STDEV_POS,INFO/SNIFFLES_GT_COUNT,INFO/SNIFFLES_GQ,INFO/SNIFFLES_DR,INFO/SNIFFLES_DV'
-            else
+            elif [ ${CALLER_ID} = "pbsv" ]; then
+                bcftools view ${INPUT_VCF_GZ} | awk '/^#/ || $3 ~ /pbsv/' > ${CALLER_ID}.vcf
                 bcftools query --format '%CHROM\t%POS\t%ID\t%INFO/CIPOS\t[%GT]\t[%AD]\t[%DP]\n' ${CALLER_ID}.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                     GT_COUNT=-1; \
                     if ($5=="0/0" || $5=="0|0" || $5=="./."  || $5==".|." || $5=="./0" || $5==".|0" || $5=="0/." || $5=="0|." || $5=="0" || $5==".") GT_COUNT=0; \
