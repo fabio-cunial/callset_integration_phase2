@@ -1,7 +1,9 @@
 version 1.0
 
 
-# 
+# Remark: in SVIM-asm, INS and DELs have explicit ALT; DUPs have implicit 
+# <DUP:TANDEM> or <DUP:INT> ALT; INVs have explicit ALT; BNDs have explicit ALT
+# with no inserted sequence.
 #
 workflow SvimAsm {
     input {

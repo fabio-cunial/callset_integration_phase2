@@ -370,32 +370,32 @@ END
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
 
-            echo '##INFO=<ID=0R,Number=1,Type=Integer,Description="First breakpoint, left bin: number of right-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L,Number=1,Type=Integer,Description="First breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=2R,Number=1,Type=Integer,Description="Second breakpoint, left bin: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=3L,Number=1,Type=Integer,Description="Second breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R,Number=1,Type=Integer,Description="First breakpoint, left bin: number of right-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L,Number=1,Type=Integer,Description="First breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2R,Number=1,Type=Integer,Description="Second breakpoint, left bin: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3L,Number=1,Type=Integer,Description="Second breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
             
-            echo '##INFO=<ID=0R_2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=0R_3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=0R_3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=1L_2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=1L_3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=1L_3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
             
-            local COLUMNS='CHROM,POS,~ID,INFO/0R,INFO/1L,INFO/2R,INFO/3L,INFO/0R_2R_1,INFO/0R_2R_2,INFO/0R_2R_3,INFO/0R_2R_4,INFO/0R_3L_1,INFO/0R_3L_2,INFO/0R_3L_3,INFO/0R_3L_4,INFO/1L_2R_1,INFO/1L_2R_2,INFO/1L_2R_3,INFO/1L_2R_4,INFO/1L_3L_1,INFO/1L_3L_2,INFO/1L_3L_3,INFO/1L_3L_4'
+            local COLUMNS='CHROM,POS,~ID,INFO/C0R,INFO/C1L,INFO/C2R,INFO/C3L,INFO/C0R_C2R_1,INFO/C0R_C2R_2,INFO/C0R_C2R_3,INFO/C0R_C2R_4,INFO/C0R_C3L_1,INFO/C0R_C3L_2,INFO/C0R_C3L_3,INFO/C0R_C3L_4,INFO/C1L_C2R_1,INFO/C1L_C2R_2,INFO/C1L_C2R_3,INFO/C1L_C2R_4,INFO/C1L_C3L_1,INFO/C1L_C3L_2,INFO/C1L_C3L_3,INFO/C1L_C3L_4'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -678,7 +678,7 @@ END
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_end_track.tsv
             ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_end_track.tsv
             sort -k 3,3 ${SAMPLE_ID}_end_track.tsv > ${SAMPLE_ID}_end_track_sorted.tsv ; rm -f ${SAMPLE_ID}_end_track.tsv
-            
+
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 3 ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
             rm -f ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv
             # Remark: we don't do `tabix -0` here, since the point-coordinates
