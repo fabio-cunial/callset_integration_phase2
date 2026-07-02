@@ -666,21 +666,26 @@ END
         function AnnotateTrack_Bnd() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
-            local POINT_BED=$3
-            local POINT_ID=$4
+            local START_BED=$3
+            local END_BED=$4
             local TRACK_BED=$5
             local TRACK_ID=$6
 
-            ${TIME_COMMAND} bedtools intersect -wa -u -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_${POINT_ID}_track.tsv
-            ${TIME_COMMAND} bedtools intersect -wa -v -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_${POINT_ID}_track.tsv
-            sort -k 1,1 -k 2,2n ${SAMPLE_ID}_${POINT_ID}_track.tsv | bgzip > ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
+            ${TIME_COMMAND} bedtools intersect -wa -u -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_start_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_start_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_end_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_end_track.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 3 ${SAMPLE_ID}_start_track.tsv ${SAMPLE_ID}_end_track.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
+            rm -f ${SAMPLE_ID}_start_track.tsv ${SAMPLE_ID}_end_track.tsv
             # Remark: we don't do `tabix -0` here, since the point-coordinates
-            # are one-based even though ${POINT_BED} should be zero-based.
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
-            echo '##INFO=<ID='${POINT_ID}'_'${TRACK_ID}',Number=1,Type=Integer,Description="'${POINT_ID}' breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
-            COLUMNS='CHROM,POS,~ID,INFO/'${POINT_ID}'_'${TRACK_ID}
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
-            rm -f ${SAMPLE_ID}_${POINT_ID}_track* ${SAMPLE_ID}_header.txt
+            # are one-based even though `START_BED, END_BED` should be zero-
+            # based.
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_track.tsv.gz
+            echo '##INFO=<ID=START_'${TRACK_ID}',Number=1,Type=Integer,Description="START breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=END_'${TRACK_ID}',Number=1,Type=Integer,Description="END breakpoint is contained in a '${TRACK_ID}'">' >> ${SAMPLE_ID}_header.txt
+            COLUMNS='CHROM,POS,~ID,INFO/START_'${TRACK_ID}',INFO/END_'${TRACK_ID}
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_track* ${SAMPLE_ID}_header.txt
         }
 
         
@@ -719,21 +724,13 @@ END
 
             # 3. Repeat tracks
             VcfToBed_StartEnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf
-
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed "START" ~{tr_bed} "TR"
+            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed ~{tr_bed} "TR"
             rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_end.bed "END" ~{tr_bed} "TR"
+            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed ~{segdup_bed} "SD"
             rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
-
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed "START" ~{segdup_bed} "SD"
+            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed ~{gc_content_bed} "GC"
             rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_end.bed "END" ~{segdup_bed} "SD"
-            rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
-
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_start.bed "START" ~{gc_content_bed} "GC"
-            rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
-            AnnotateTrack_Bnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${SAMPLE_ID}_end.bed "END" ~{gc_content_bed} "GC"
-            rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
+            rm -f ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed
 
             # 4. Adding annotations from cuteFC and Kalra et al.
             # Remark: we could run these two annotations in parallel, since they
