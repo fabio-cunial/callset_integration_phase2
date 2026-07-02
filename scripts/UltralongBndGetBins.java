@@ -5,8 +5,8 @@ import java.io.*;
 
 /**
  * Given a VCF that contains only BND records, the program prints an output BED 
- * (zero-based, left-inclusive, right-exclusive) with two bins per record, one 
- * bin centered at each end of the BND.
+ * (i.e. zero-based, left-inclusive, right-exclusive) with 4 bins per record,
+ * one bin on each side of each endpoint of the BND.
  */
 public class UltralongBndGetBins {
     
@@ -16,12 +16,15 @@ public class UltralongBndGetBins {
      * Output format: CHROM,START,END,RECORDID,BINID
      *
      * @param args
-     * 2: fixed length of a breakpoint bin.
+     * 2: fixed length of a breakpoint bin;
+     * 3: additional length added to the right of the left-side bin (resp. to
+     * the left of the right-side bin).
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String INPUT_FAI = args[1];
         final int BREAKPOINT_BIN_LENGTH = Integer.parseInt(args[2]);
+        final int SLACK_BP = Integer.parseInt(args[3]);
         
         char separator;
         int p, q, first;
@@ -45,8 +48,9 @@ public class UltralongBndGetBins {
             chrom=tokens[0];
             chromLength=fai.get(chrom).intValue();
             pos=Integer.parseInt(tokens[1]);  // 1-based, exclusive.
-            p=pos-BREAKPOINT_BIN_LENGTH/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"\t0");
+            p=pos-BREAKPOINT_BIN_LENGTH;
+            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(pos+SLACK_BP<=chromLength?pos+SLACK_BP:chromLength)+"\t"+id+"\t0");
+            if (BREAKPOINT_BIN_LENGTH>0) System.out.println(chrom+"\t"+(pos-SLACK_BP>=0?pos-SLACK_BP:0)+"\t"+(pos+BREAKPOINT_BIN_LENGTH<=chromLength?pos+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"\t1");
 
             // Second breakpoint
             alt=tokens[4];
@@ -60,10 +64,11 @@ public class UltralongBndGetBins {
             p=alt.indexOf(':',first+1);
             chrom=alt.substring(first+1,p);
             q=alt.indexOf(separator,p+1);
-            pos=Integer.parseInt(alt.substring(p+1,q));    
+            pos=Integer.parseInt(alt.substring(p+1,q));
             chromLength=fai.get(chrom).intValue();
-            p=pos-BREAKPOINT_BIN_LENGTH/2;
-            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(p+BREAKPOINT_BIN_LENGTH<=chromLength?p+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"\t1");
+            p=pos-BREAKPOINT_BIN_LENGTH;
+            System.out.println(chrom+"\t"+(p>=0?p:0)+"\t"+(pos+SLACK_BP<=chromLength?pos+SLACK_BP:chromLength)+"\t"+id+"\t2");
+            if (BREAKPOINT_BIN_LENGTH>0) System.out.println(chrom+"\t"+(pos-SLACK_BP>=0?pos-SLACK_BP:0)+"\t"+(pos+BREAKPOINT_BIN_LENGTH<=chromLength?pos+BREAKPOINT_BIN_LENGTH:chromLength)+"\t"+id+"\t3");
             
             // Next iteration
             str=br.readLine();

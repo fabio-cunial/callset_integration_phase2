@@ -19,6 +19,7 @@ workflow SV_Integration_BndAnnotate {
         File reference_fai
         
         Int custom_breakpoint_window_bp = 500
+        Int custom_breakpoint_window_slack_bp = 150
         Int custom_min_clip_length = 200
         Int custom_adjacency_slack_bp = 300
 
@@ -49,6 +50,7 @@ workflow SV_Integration_BndAnnotate {
             reference_fai = reference_fai,
 
             custom_breakpoint_window_bp = custom_breakpoint_window_bp,
+            custom_breakpoint_window_slack_bp = custom_breakpoint_window_slack_bp,
             custom_min_clip_length = custom_min_clip_length,
             custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
@@ -94,6 +96,7 @@ task Impl {
         File reference_fai
         
         Int custom_breakpoint_window_bp
+        Int custom_breakpoint_window_slack_bp
         Int custom_min_clip_length
         Int custom_adjacency_slack_bp
 
@@ -194,7 +197,7 @@ task Impl {
         # ------------------------- Custom annotations -------------------------        
         
         # Given an input VCF containing only BND records, the procedure
-        # annotates each record with the coverage of a window around POS and ALT
+        # annotates each record with the coverage of windows around POS and ALT
         # extracted from a BAM.
         #
         # Remark: `samtools bedcov` skips reads with any of the following flags
@@ -206,7 +209,7 @@ task Impl {
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
 
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 > ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} | sort -k 1,1 -k 2,2n > ${SAMPLE_ID}_tags.tsv
@@ -215,9 +218,11 @@ task Impl {
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv | sort -k 1,1 -k 4,4 | paste - - | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$5,$10); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=BIN_POS_0,Number=1,Type=Float,Description="Coverage of the bin around the breakpoint at POS">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POS_1,Number=1,Type=Float,Description="Coverage of the bin around the breakpoint at ALT">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POS_0,INFO/BIN_POS_1'
+            echo '##INFO=<ID=BIN_POS_0,Number=1,Type=Float,Description="Coverage of the bin before the breakpoint at POS">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POS_1,Number=1,Type=Float,Description="Coverage of the bin after the breakpoint at POS">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POS_2,Number=1,Type=Float,Description="Coverage of the bin before the breakpoint at ALT">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POS_3,Number=1,Type=Float,Description="Coverage of the bin after the breakpoint at ALT">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POS_0,INFO/BIN_POS_1,INFO/BIN_POS_2,INFO/BIN_POS_3'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -255,7 +260,7 @@ END
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             rm -f *_mapq.txt *_secondary.txt
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_mapq_secondary.sh ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_bins.wsv
@@ -264,21 +269,29 @@ END
             while read -u 6 ID; do
                 local MAPQ_POINT_0=$(cat ${ID}_0_mapq.txt)
                 local MAPQ_POINT_1=$(cat ${ID}_1_mapq.txt)
+                local MAPQ_POINT_2=$(cat ${ID}_2_mapq.txt)
+                local MAPQ_POINT_3=$(cat ${ID}_3_mapq.txt)
                 local SECONDARY_POINT_0=$(cat ${ID}_0_secondary.txt)
                 local SECONDARY_POINT_1=$(cat ${ID}_1_secondary.txt)
-                echo -e "${ID}\t${MAPQ_POINT_0}\t${SECONDARY_POINT_0}\t${MAPQ_POINT_1}\t${SECONDARY_POINT_1}" >> ${SAMPLE_ID}_counts.tsv
+                local SECONDARY_POINT_2=$(cat ${ID}_2_secondary.txt)
+                local SECONDARY_POINT_3=$(cat ${ID}_3_secondary.txt)
+                echo -e "${ID}\t${MAPQ_POINT_0}\t${SECONDARY_POINT_0}\t${MAPQ_POINT_1}\t${SECONDARY_POINT_1}\t${MAPQ_POINT_2}\t${SECONDARY_POINT_2}\t${MAPQ_POINT_3}\t${SECONDARY_POINT_3}" >> ${SAMPLE_ID}_counts.tsv
                 rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
             done 6< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$5,$6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_POINT_MAPQ_0,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_1,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_MAPQ_2,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_MAPQ_3,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_SECONDARY_0,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_SECONDARY_1,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POINT_MAPQ_0,INFO/BIN_POINT_SECONDARY_0,INFO/BIN_POINT_MAPQ_1,INFO/BIN_POINT_SECONDARY_1'
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_2,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_3,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POINT_MAPQ_0,INFO/BIN_POINT_SECONDARY_0,INFO/BIN_POINT_MAPQ_1,INFO/BIN_POINT_SECONDARY_1,INFO/BIN_POINT_MAPQ_2,INFO/BIN_POINT_SECONDARY_2,INFO/BIN_POINT_MAPQ_3,INFO/BIN_POINT_SECONDARY_3'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -315,15 +328,17 @@ CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
 RECORD_ID=$3
 
-LL=$(wc -l < ${RECORD_ID}_0_leftmaximal_sorted.txt)
-LR=$(wc -l < ${RECORD_ID}_0_rightmaximal_sorted.txt)
-RL=$(wc -l < ${RECORD_ID}_1_leftmaximal_sorted.txt)
-RR=$(wc -l < ${RECORD_ID}_1_rightmaximal_sorted.txt)
-LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_leftmaximal_sorted.txt ${LL} 1 ${RECORD_ID}_1_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_leftmaximal_sorted.txt ${LL} 1 ${RECORD_ID}_1_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${LR} 0 ${RECORD_ID}_1_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${LR} 0 ${RECORD_ID}_1_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-echo -e "${RECORD_ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" > ${RECORD_ID}_counts.txt
+_0_R=$(wc -l < ${RECORD_ID}_0_rightmaximal_sorted.txt)
+_1_L=$(wc -l < ${RECORD_ID}_1_leftmaximal_sorted.txt)
+_2_R=$(wc -l < ${RECORD_ID}_2_rightmaximal_sorted.txt)
+_3_L=$(wc -l < ${RECORD_ID}_3_leftmaximal_sorted.txt)
+
+_0_R_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+_0_R_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+_1_L_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+_1_L_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+
+echo -e "${RECORD_ID}\t${_0_R}\t${_1_L}\t${_2_R}\t${_3_L}\t${_0_R_2_R}\t${_0_R_3_L}\t${_1_L_2_R}\t${_1_L_3_L}" > ${RECORD_ID}_counts.txt
 rm -f ${RECORD_ID}_*maximal_sorted.txt
 END
         chmod +x annotate_clipped_alignments_2.sh
@@ -339,8 +354,9 @@ END
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
+            local CLIP_SLACK_BP=$7
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} ${CLIP_SLACK_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
@@ -353,27 +369,33 @@ END
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=LL,Number=1,Type=Integer,Description="Left breakpoint: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR,Number=1,Type=Integer,Description="Left breakpoint: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RL,Number=1,Type=Integer,Description="Right breakpoint: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RR,Number=1,Type=Integer,Description="Right breakpoint: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a left-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left breakpoint and a right-clipped alignment in the right breakpoint.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4'
+
+            echo '##INFO=<ID=0R,Number=1,Type=Integer,Description="First breakpoint, left bin: number of right-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L,Number=1,Type=Integer,Description="First breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=2R,Number=1,Type=Integer,Description="Second breakpoint, left bin: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=3L,Number=1,Type=Integer,Description="Second breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            
+            echo '##INFO=<ID=0R_2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+
+            echo '##INFO=<ID=0R_3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=0R_3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+
+            echo '##INFO=<ID=1L_2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+
+            echo '##INFO=<ID=1L_3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=1L_3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            
+            local COLUMNS='CHROM,POS,~ID,INFO/0R,INFO/1L,INFO/2R,INFO/3L,INFO/0R_2R_1,INFO/0R_2R_2,INFO/0R_2R_3,INFO/0R_2R_4,INFO/0R_3L_1,INFO/0R_3L_2,INFO/0R_3L_3,INFO/0R_3L_4,INFO/1L_2R_1,INFO/1L_2R_2,INFO/1L_2R_3,INFO/1L_2R_4,INFO/1L_3L_1,INFO/1L_3L_2,INFO/1L_3L_3,INFO/1L_3L_4'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -389,7 +411,7 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length}
+            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_breakpoint_window_slack_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -634,9 +656,9 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
 
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} 0 | sort -k1,1 -k2,2n > ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} 0 0 | sort -k1,1 -k2,2n > ${SAMPLE_ID}_bins.bed
             grep -P '\t0$' ${SAMPLE_ID}_bins.bed > ${SAMPLE_ID}_start.bed
-            grep -P '\t1$' ${SAMPLE_ID}_bins.bed > ${SAMPLE_ID}_end.bed
+            grep -P '\t2$' ${SAMPLE_ID}_bins.bed > ${SAMPLE_ID}_end.bed
             rm -f ${SAMPLE_ID}_bins.bed
         }
 
@@ -652,7 +674,9 @@ END
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_${POINT_ID}_track.tsv
             ${TIME_COMMAND} bedtools intersect -wa -v -a ${POINT_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_${POINT_ID}_track.tsv
             sort -k 1,1 -k 2,2n ${SAMPLE_ID}_${POINT_ID}_track.tsv | bgzip > ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
-            tabix -@ ${N_THREADS} -0 -f -s1 -b2 -e2 ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
+            # Remark: we don't do `tabix -0` here, since the point-coordinates
+            # are one-based even though ${POINT_BED} should be zero-based.
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
             echo '##INFO=<ID='${POINT_ID}'_'${TRACK_ID}',Number=1,Type=Integer,Description="'${POINT_ID}' breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
             COLUMNS='CHROM,POS,~ID,INFO/'${POINT_ID}'_'${TRACK_ID}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
@@ -676,7 +700,7 @@ END
             # Skipping the sample if it has already been processed
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
-            if [ ${TEST} != "0" ]; then
+            if [ "${TEST}" != "0" ]; then
                 continue
             fi
 
@@ -685,6 +709,7 @@ END
             df -h 1>&2
             N_RECORDS=$(bcftools view --no-header ${SAMPLE_ID}.vcf.gz | wc -l)
             if [ ${N_RECORDS} -eq 0 ]; then
+                DelocalizeSample ${SAMPLE_ID}
                 continue
             fi
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
