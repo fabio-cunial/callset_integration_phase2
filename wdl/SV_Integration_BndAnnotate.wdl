@@ -673,10 +673,14 @@ END
 
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_start_track.tsv
             ${TIME_COMMAND} bedtools intersect -wa -v -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_start_track.tsv
+            sort -k 3,3 ${SAMPLE_ID}_start_track.tsv > ${SAMPLE_ID}_start_track_sorted.tsv ; rm -f ${SAMPLE_ID}_start_track.tsv
+
             ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_end_track.tsv
             ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_end_track.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 3 ${SAMPLE_ID}_start_track.tsv ${SAMPLE_ID}_end_track.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
-            rm -f ${SAMPLE_ID}_start_track.tsv ${SAMPLE_ID}_end_track.tsv
+            sort -k 3,3 ${SAMPLE_ID}_end_track.tsv > ${SAMPLE_ID}_end_track_sorted.tsv ; rm -f ${SAMPLE_ID}_end_track.tsv
+            
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 3 ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
+            rm -f ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv
             # Remark: we don't do `tabix -0` here, since the point-coordinates
             # are one-based even though `START_BED, END_BED` should be zero-
             # based.
