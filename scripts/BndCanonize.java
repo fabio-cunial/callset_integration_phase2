@@ -52,7 +52,14 @@ public class BndCanonize {
      * Not using `_` since it can appear in contig names.
      */
     private static final char CANONICAL_SEPARATOR = '@';
+
+    /**
+     * The INFO field to sum when two mate BND records are collapsed into one.
+     * NULL=do not perform the sum.
+     */
+    private static final String FIELD_TO_SUM = null;
     
+
     /**
      * @param args
      */
@@ -91,8 +98,18 @@ public class BndCanonize {
                 if (value==null) canonized.put(key,String.join("\t",tokens));
                 else {
                     nPaired+=2;
-                    if (isCanonical(tokens,key)) System.out.println(String.join("\t",tokens));
-                    else System.out.println(value);
+                    if (isCanonical(tokens,key)) {
+                        if (FIELD_TO_SUM!=null) sumInfoField(tokens,value);
+                        System.out.println(String.join("\t",tokens));
+                    }
+                    else {
+                        if (FIELD_TO_SUM!=null) {
+                            tokens=value.split("\t");
+                            sumInfoField(tokens,str);
+                            System.out.println(String.join("\t",tokens));
+                        }
+                        else System.out.println(value);
+                    }
                     nRecordsOutput++;
                     canonized.remove(key);
                 }
@@ -262,5 +279,46 @@ public class BndCanonize {
         else tokens[4]=separator+refChrom+":"+refPos+separator+"N";
         tokens[7]=tokens[7].equals(".")?"SYMMETRIZED":tokens[7]+";SYMMETRIZED";
     }
+
+
+    private static final void sumInfoField(String[] tokens1, String str2) {
+        String af1, af2;
+
+        af1=getInfoField(tokens1[7],FIELD_TO_SUM);
+        if (af1==null) return;
+        af2=getInfoField(str2,FIELD_TO_SUM);
+        if (af2==null) return;
+        tokens1[7]=addOrReplaceInfoField(tokens1[7],FIELD_TO_SUM,(Integer.parseInt(af1)+Integer.parseInt(af2))+"");
+    }
+
+
+    /**
+	 * @return NULL if $field$ does not occur in $info$.
+	 */
+	private static final String getInfoField(String info, String field) {
+		final int FIELD_LENGTH = field.length()+1;
+        int p, q;
+        
+        p=-FIELD_LENGTH;
+        do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
+        while (p>0 && info.charAt(p-1)!=';');
+		if (p<0) return null;
+		q=info.indexOf(";",p+FIELD_LENGTH);
+		return info.substring(p+FIELD_LENGTH,q<0?info.length():q);
+	}
+
+
+    private static final String addOrReplaceInfoField(String info, String field, String newValue) {
+		final int FIELD_LENGTH = field.length()+1;
+        int p, q;
+        
+        if (info.equals(".")) return field+"="+newValue;
+        p=-FIELD_LENGTH;
+        do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
+        while (p>0 && info.charAt(p-1)!=';');
+		if (p<0) return info+";"+field+"="+newValue;
+		q=info.indexOf(";",p+FIELD_LENGTH);
+        return info.substring(0,p+FIELD_LENGTH)+newValue+(q>=0?info.substring(q):"");
+	}
 
 }
