@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Warning: this script is AI-generated.
 
 import argparse
 import gzip
@@ -51,7 +52,7 @@ def parse_mate_from_alt(alt):
     return m.group(1), int(m.group(2))
 
 
-def read_vcf(path, nsamples_tag, min_nsamples):
+def read_vcf(path, nsamples_tag, min_nsamples, max_nsamples):
     contig_lengths = {}
     records = []
 
@@ -103,6 +104,8 @@ def read_vcf(path, nsamples_tag, min_nsamples):
                 n_samples = 1.0
 
             if min_nsamples is not None and n_samples < min_nsamples:
+                continue
+            if max_nsamples is not None and n_samples > max_nsamples:
                 continue
 
             records.append((chrom, pos, chrom2, pos2, n_samples))
@@ -299,17 +302,37 @@ def main():
             "(or >= selected --nsamples-tag value)"
         ),
     )
+    parser.add_argument(
+        "--max-n-discovery-samples",
+        type=float,
+        default=None,
+        help=(
+            "Only plot records with INFO/N_DISCOVERY_SAMPLES <= this value "
+            "(or <= selected --nsamples-tag value)"
+        ),
+    )
     args = parser.parse_args()
 
     contig_lengths, records = read_vcf(
         args.vcf,
         args.nsamples_tag,
         args.min_n_discovery_samples,
+        args.max_n_discovery_samples,
     )
     if not records:
         raise RuntimeError("No plottable BND records found in input VCF")
 
-    draw_plot(contig_lengths, records, args.output, args.nsamples_tag, args.title)
+    title_filters = []
+    if args.min_n_discovery_samples is not None:
+        title_filters.append(f"min {args.nsamples_tag}>={args.min_n_discovery_samples:g}")
+    if args.max_n_discovery_samples is not None:
+        title_filters.append(f"max {args.nsamples_tag}<={args.max_n_discovery_samples:g}")
+
+    plot_title = args.title
+    if title_filters:
+        plot_title = f"{args.title} ({'; '.join(title_filters)})"
+
+    draw_plot(contig_lengths, records, args.output, args.nsamples_tag, plot_title)
 
 
 if __name__ == "__main__":
