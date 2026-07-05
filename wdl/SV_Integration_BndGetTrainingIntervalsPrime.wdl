@@ -91,7 +91,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_MB=$(( (${ram_size_gb} - 1) * 1024 ))
+        EFFECTIVE_RAM_MB=$(( ~{ram_size_gb} * 1024 - 500 ))
 
 
 
