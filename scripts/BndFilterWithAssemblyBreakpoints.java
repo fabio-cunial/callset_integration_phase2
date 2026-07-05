@@ -32,6 +32,7 @@ public class BndFilterWithAssemblyBreakpoints {
         final int MODE = Integer.parseInt(args[4]);
     
         int p, q, r;
+        int nRecordsIn, nRecordsOut;
         String str, chrom;
         BufferedReader br;
         String[] tokens;
@@ -72,18 +73,23 @@ public class BndFilterWithAssemblyBreakpoints {
         // Filtering the VCF
         tmp = new Breakpoint("",0);
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        str=br.readLine();
+        str=br.readLine(); nRecordsIn=0; nRecordsOut=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 System.out.println(str);
                 str=br.readLine();
                 continue;
             }
+            nRecordsIn++;
             tokens=str.split("\t");
-            if (keepVcfRecord(tokens,breakpoints,gaps,MAX_DISTANCE,MODE,tmp)) System.out.println(str);
+            if (keepVcfRecord(tokens,breakpoints,gaps,MAX_DISTANCE,MODE,tmp)) {
+                System.out.println(str);
+                nRecordsOut++;
+            }
             str=br.readLine();
         }
         br.close();
+        System.err.println("Kept "+nRecordsOut+" records out of "+nRecordsIn);
     }
 
 
