@@ -670,3 +670,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_BndScore.wdl
   testParameterFiles:
+- name: SV_Integration_BndGetTrainingIntervalsPrime
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_BndGetTrainingIntervalsPrime.wdl
+  testParameterFiles:

@@ -1,4 +1,4 @@
-import java.util.Vector;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.zip.GZIPInputStream;
 import java.io.*;
@@ -6,9 +6,10 @@ import java.io.*;
 
 /**
  * Keeps the records of a BND-only VCF that are close enough to a given set of
- * breakpoints.
+ * breakpoints, without being a reference gap.
  * 
- * Remarks: 
+ * Remarks:
+ * - the orientation of the BNDs is not taken into account;
  * - for simplicity, BNDs are assumed to follow the simple form without 
  *   inserted sequence;
  * - the implementation could be made much faster.
@@ -17,21 +18,29 @@ public class BndFilterWithAssemblyBreakpoints {
 
     /**
      * @param args
+     * 0: not necessarily sorted;
+     * 1: not necessarily sorted;
+     * 3: reference gaps file (AGP); not necessarily sorted;
+     * 4: 2=both sides of the BND must be close to a breakpoint; 1=at least one
+     *    side of the BND must be close to a breakpoint.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
         final String BREAKPOINTS_CSV = args[1];
         final int MAX_DISTANCE = Integer.parseInt(args[2]);
+        final String REFERENCE_AGP = args[3];
+        final int MODE = Integer.parseInt(args[4]);
     
-        int p;
-        String str;
+        int p, q, r;
+        String str, chrom;
         BufferedReader br;
         String[] tokens;
         Breakpoint tmp;
-        Vector<Breakpoint> breakpoints;
+        ArrayList<Breakpoint> gaps;
+        ArrayList<Breakpoint> breakpoints;
 
         // Loading all breakpoints
-        breakpoints = new Vector<Breakpoint>();
+        breakpoints = new ArrayList<Breakpoint>();
         br = new BufferedReader(new FileReader(BREAKPOINTS_CSV));
         str=br.readLine();
         while (str!=null) {
@@ -41,6 +50,24 @@ public class BndFilterWithAssemblyBreakpoints {
         }
         br.close();
         breakpoints.sort(null);
+
+        // Loading all gaps
+        gaps = new ArrayList<Breakpoint>();
+        br = new BufferedReader(new FileReader(REFERENCE_AGP));
+        str=br.readLine();
+        while (str!=null) {
+            if (str.charAt(0)=='#') { str=br.readLine(); continue; }
+            p=str.indexOf('\t');
+            q=str.indexOf('\t',p+1);
+            r=str.indexOf('\t',q+1);
+            if (r<0) r=str.length();
+            chrom=str.substring(0,p);
+            gaps.add(new Breakpoint(chrom,Integer.parseInt(str.substring(p+1,q))));
+            gaps.add(new Breakpoint(chrom,Integer.parseInt(str.substring(q+1,r))));
+            str=br.readLine();
+        }
+        br.close();
+        gaps.sort(null);
 
         // Filtering the VCF
         tmp = new Breakpoint("",0);
@@ -53,7 +80,7 @@ public class BndFilterWithAssemblyBreakpoints {
                 continue;
             }
             tokens=str.split("\t");
-            if (keepVcfRecord(tokens,breakpoints,MAX_DISTANCE,tmp)) System.out.println(str);
+            if (keepVcfRecord(tokens,breakpoints,gaps,MAX_DISTANCE,MODE,tmp)) System.out.println(str);
             str=br.readLine();
         }
         br.close();
@@ -63,16 +90,22 @@ public class BndFilterWithAssemblyBreakpoints {
     /**
      * Keeps a VCF record iff its REF or ALT is close enough to a breakpoint.
      * 
+     * @param mode 2=both sides of the BND must be close to a breakpoint; 
+     * 1=at least one side of the BND must be close to a breakpoint;
      * @param tmp temporary space.
      */
-    private static final boolean keepVcfRecord(String[] tokens, Vector<Breakpoint> breakpoints, int maxDistance, Breakpoint tmp) {
+    private static final boolean keepVcfRecord(String[] tokens, ArrayList<Breakpoint> breakpoints, ArrayList<Breakpoint> gaps, int maxDistance, int mode, Breakpoint tmp) {
+        boolean refFound;
         char separator;
         int p, q;
-        int first;
-        String alt, altChrom, altPos;
+        int first, pos, altPos;
+        String alt, altChrom;
 
         // REF
-        if (isBreakpoint(tokens[0],Integer.parseInt(tokens[1]),breakpoints,maxDistance,tmp)) return true;
+        pos=Integer.parseInt(tokens[1]);
+        refFound = !find(tokens[0],pos,gaps,maxDistance,tmp) && find(tokens[0],pos,breakpoints,maxDistance,tmp);
+        if (mode==1 && refFound) return true;
+        else if (mode==2 && !refFound) return false;
 
         // ALT
         alt=tokens[4];
@@ -86,8 +119,8 @@ public class BndFilterWithAssemblyBreakpoints {
         p=alt.indexOf(':',first+1);
         altChrom=alt.substring(first+1,p);
         q=alt.indexOf(separator,p+1);
-        altPos=alt.substring(p+1,q);
-        return isBreakpoint(altChrom,Integer.parseInt(altPos),breakpoints,maxDistance,tmp);
+        altPos=Integer.parseInt(alt.substring(p+1,q));
+        return !find(altChrom,altPos,gaps,maxDistance,tmp) && find(altChrom,altPos,breakpoints,maxDistance,tmp);
     }
 
 
@@ -95,7 +128,7 @@ public class BndFilterWithAssemblyBreakpoints {
      * @param tmp temporary space;
      * @return TRUE iff the input is at <=maxDistance from a breakpoint.
      */
-    private static final boolean isBreakpoint(String chrom, int pos, Vector<Breakpoint> breakpoints, int maxDistance, Breakpoint tmp) {
+    private static final boolean find(String chrom, int pos, ArrayList<Breakpoint> breakpoints, int maxDistance, Breakpoint tmp) {
         final int N_BREAKPOINTS = breakpoints.size();
         int i, p;
         Breakpoint breakpoint;

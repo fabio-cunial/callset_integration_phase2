@@ -20,20 +20,17 @@ public class AssemblySam2Breakpoints {
         final String INPUT_SAM = args[0];
         final int MIN_ALIGNMENT_DISTANCE = Integer.parseInt(args[1]);
         final int MIN_CLIP_LENGTH = Integer.parseInt(args[2]);
-        final String OUTPUT_FILE = args[3];
         
         char c;
         int i, j, p, q;
         int refPos, refPosOriginal, readPos, cigarLength, leftClipLength, rightClipLength, readLength, length, nRecords;
         String str, readId, chrId, lastChrId, cigar, mapq;
         BufferedReader br;
-        BufferedWriter bw;
         String[] tokens;
         Vector<Alignment> alignments;
         
         alignments = new Vector<Alignment>();
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_SAM)));
-        bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(OUTPUT_FILE)));
         str=br.readLine(); nRecords=0; lastChrId="";
         while (str!=null) {
             if (str.charAt(0)=='@') { str=br.readLine(); continue; }
@@ -43,7 +40,7 @@ public class AssemblySam2Breakpoints {
             p=q; q=str.indexOf('\t',p+1);
             chrId=str.substring(p+1,q);
             if (lastChrId.length()>0 && !chrId.equals(lastChrId)) {
-                if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH,bw);
+                if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH);
                 alignments.clear();
             }
             lastChrId=chrId;
@@ -93,10 +90,9 @@ public class AssemblySam2Breakpoints {
         }
         br.close();
         if (lastChrId.length()>0) {
-            if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH,bw);
+            if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH);
             alignments.clear();
         }
-        bw.close();
     }
 
 
@@ -110,7 +106,7 @@ public class AssemblySam2Breakpoints {
      * @param alignments assumed to be all and only the alignments in a chr;
      * @param out format: CHR,POS.
      */
-    private static final void printBreakpoints(String chr, Vector<Alignment> alignments, int minDistance, int minClipLength, BufferedWriter out) throws IOException {
+    private static final void printBreakpoints(String chr, Vector<Alignment> alignments, int minDistance, int minClipLength) throws IOException {
         int i, j;
         int min, max;
         Alignment a, b;
@@ -125,7 +121,7 @@ public class AssemblySam2Breakpoints {
                     if (b.chrLast>max) max=b.chrLast;
                     if (max>=a.chrFirst) break;
                 }
-                if (max==-1 || a.chrFirst-max>=minDistance) { out.write(chr+","+a.chrFirst); out.newLine(); }
+                if (max==-1 || a.chrFirst-max>=minDistance) System.out.println(chr+","+a.chrFirst);
             }
             if (a.rightClipLength>=minClipLength) {
                 min=Integer.MAX_VALUE;
@@ -134,7 +130,7 @@ public class AssemblySam2Breakpoints {
                     if (b.chrFirst<min) min=b.chrFirst;
                     if (min<=a.chrLast || b.chrFirst>a.chrLast) break;
                 }
-                if (min==Integer.MAX_VALUE || min-a.chrLast>=minDistance) { out.write(chr+","+a.chrLast); out.newLine(); }
+                if (min==Integer.MAX_VALUE || min-a.chrLast>=minDistance) System.out.println(chr+","+a.chrLast);
             }
         }
     }
