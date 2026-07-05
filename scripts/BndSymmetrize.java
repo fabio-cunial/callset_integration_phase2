@@ -3,6 +3,9 @@ import java.util.zip.GZIPInputStream;
 
 
 /**
+ * Given a BND-only VCF, the program symmetrizes every record.
+ * This is typically run after `BndCanonize.java`.
+ * 
  * Remarks: 
  * 1. the output VCF is not necessarily sorted;
  * 2. for simplicity, a symmetrized record uses N in REF and ALT;

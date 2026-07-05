@@ -4,8 +4,8 @@ import java.io.*;
 
 /**
  * Given an RNAME-sorted assembly-to-ref SAM, the program prints a CHR,POS
- * breakpoint for every first/last position of an alignment that is far enough 
- * from the previous/next alignment.
+ * breakpoint for every clipped first/last position of an alignment that is far
+ * enough from the previous/next alignment.
  * 
  * Remark: only standard chromosomes are printed in output.
  */
@@ -18,8 +18,9 @@ public class AssemblySam2Breakpoints {
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_SAM = args[0];
-        final int DISTANCE_THRESHOLD = Integer.parseInt(args[1]);
-        final String OUTPUT_FILE = args[2];
+        final int MIN_ALIGNMENT_DISTANCE = Integer.parseInt(args[1]);
+        final int MIN_CLIP_LENGTH = Integer.parseInt(args[2]);
+        final String OUTPUT_FILE = args[3];
         
         char c;
         int i, j, p, q;
@@ -42,7 +43,7 @@ public class AssemblySam2Breakpoints {
             p=q; q=str.indexOf('\t',p+1);
             chrId=str.substring(p+1,q);
             if (lastChrId.length()>0 && !chrId.equals(lastChrId)) {
-                if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,DISTANCE_THRESHOLD,bw);
+                if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH,bw);
                 alignments.clear();
             }
             lastChrId=chrId;
@@ -85,14 +86,14 @@ public class AssemblySam2Breakpoints {
                 else if (c=='P') i=j+1;
             }
             readLength=readPos+1;
-            alignments.add(new Alignment(refPosOriginal,refPos));
+            alignments.add(new Alignment(refPosOriginal,refPos,leftClipLength,rightClipLength));
             nRecords++;
             if (nRecords%1000==0) System.err.println("Processed "+nRecords+" records...");
             str=br.readLine();
         }
         br.close();
         if (lastChrId.length()>0) {
-            if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,DISTANCE_THRESHOLD,bw);
+            if (isStandardChromosome(lastChrId)) printBreakpoints(lastChrId,alignments,MIN_ALIGNMENT_DISTANCE,MIN_CLIP_LENGTH,bw);
             alignments.clear();
         }
         bw.close();
@@ -100,32 +101,41 @@ public class AssemblySam2Breakpoints {
 
 
     /**
-     * Prints the first/last positions of every alignment that is far enough 
-     * from the previous/next alignment.
+     * For every alignment, prints its first (resp. last) position iff it is 
+     * clipped and it is far enough from the previous (resp. next) alignment.
+     * 
+     * Remark: this is a simple quadratic scan just for simplicity. Could be 
+     * made much faster.
      * 
      * @param alignments assumed to be all and only the alignments in a chr;
      * @param out format: CHR,POS.
      */
-    private static final void printBreakpoints(String chr, Vector<Alignment> alignments, int distanceThreshold, BufferedWriter out) throws IOException {
-        boolean coveredFirst, coveredLast;
+    private static final void printBreakpoints(String chr, Vector<Alignment> alignments, int minDistance, int minClipLength, BufferedWriter out) throws IOException {
         int i, j;
-        int leftmost, rightmost;
+        int min, max;
         Alignment a, b;
 
         alignments.sort(null);
         for (i=0; i<alignments.size(); i++) {
             a=alignments.get(i);
-            coveredFirst=false; coveredLast=false; leftmost=Integer.MAX_VALUE; rightmost=-1;
-            for (j=0; j<alignments.size(); j++) {
-                if (j==i) continue;
-                b=alignments.get(j);
-                if (a.chrFirst>=b.chrFirst && a.chrFirst<=b.chrLast) coveredFirst=true;
-                if (a.chrLast>=b.chrFirst && a.chrLast<=b.chrLast) coveredLast=true;
-                if (b.chrLast<=a.chrFirst && b.chrLast>rightmost) rightmost=b.chrLast;
-                if (b.chrFirst>=a.chrLast && b.chrFirst<leftmost) leftmost=b.chrFirst;
+            if (a.leftClipLength>=minClipLength) {
+                max=-1;
+                for (j=i-1; j>=0; j--) {
+                    b=alignments.get(j);
+                    if (b.chrLast>max) max=b.chrLast;
+                    if (max>=a.chrFirst) break;
+                }
+                if (max==-1 || a.chrFirst-max>=minDistance) { out.write(chr+","+a.chrFirst); out.newLine(); }
             }
-            if (!coveredFirst && (rightmost==-1 || a.chrFirst-rightmost>=distanceThreshold)) { out.write(chr+","+a.chrFirst); out.newLine(); }
-            if (!coveredLast && (leftmost==Integer.MAX_VALUE || leftmost-a.chrLast>=distanceThreshold)) { out.write(chr+","+a.chrLast); out.newLine(); }
+            if (a.rightClipLength>=minClipLength) {
+                min=Integer.MAX_VALUE;
+                for (j=i+1; j<alignments.size(); j++) {
+                    b=alignments.get(j);
+                    if (b.chrFirst<min) min=b.chrFirst;
+                    if (min<=a.chrLast || b.chrFirst>a.chrLast) break;
+                }
+                if (min==Integer.MAX_VALUE || min-a.chrLast>=minDistance) { out.write(chr+","+a.chrLast); out.newLine(); }
+            }
         }
     }
 
@@ -154,9 +164,11 @@ public class AssemblySam2Breakpoints {
 
     private static class Alignment implements Comparable {
         int chrFirst, chrLast;
+        int leftClipLength, rightClipLength;
 
-        public Alignment(int chrFirst, int chrLast) {
+        public Alignment(int chrFirst, int chrLast, int leftClipLength, int rightClipLength) {
             this.chrFirst=chrFirst; this.chrLast=chrLast;
+            this.leftClipLength=leftClipLength; this.rightClipLength=rightClipLength;
         }
 
         public int compareTo(Object o) {
