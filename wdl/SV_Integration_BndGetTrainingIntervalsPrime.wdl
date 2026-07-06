@@ -144,7 +144,7 @@ task Impl {
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
             java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
-            java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bgzip -c > ${SAMPLE_ID}_bnd_training.vcf.gz
+            java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -f ${SAMPLE_ID}_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
             
