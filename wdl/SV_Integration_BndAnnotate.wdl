@@ -7,7 +7,8 @@ version 1.0
 #
 # FEX_DEPTH_MAD, FEX_READ_LEN_MED, FEX_STRAND_BIAS
 #
-# These (along with SVLEN) should not be used for scoring.
+# These (along with SVLEN and SUPP_PAV) should not be used for scoring (PAV does
+# not emit BND records).
 #
 workflow SV_Integration_BndAnnotate {
     input {

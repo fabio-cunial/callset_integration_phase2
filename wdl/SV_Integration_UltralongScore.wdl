@@ -42,7 +42,7 @@ version 1.0
 #                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                                    ]
 #
-# For BND:
+# For BND: (old)
 #
 # annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
 #                        "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"
@@ -62,6 +62,19 @@ version 1.0
 #                                      "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
 #                                      "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
 #                                    ]
+#
+# For BND: (new annotations)
+#
+# annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
+#                        "BIN_POS_0", "BIN_POS_1", "BIN_POS_2", "BIN_POS_3", "BIN_POINT_MAPQ_0", "BIN_POINT_MAPQ_1", "BIN_POINT_MAPQ_2", "BIN_POINT_MAPQ_3", "BIN_POINT_SECONDARY_0", "BIN_POINT_SECONDARY_1", "BIN_POINT_SECONDARY_2", "BIN_POINT_SECONDARY_3", "C0R", "C1L", "C2R", "C3L", "C0R_C2R_1", "C0R_C2R_2", "C0R_C2R_3", "C0R_C2R_4", "C0R_C3L_1", "C0R_C3L_2", "C0R_C3L_3", "C0R_C3L_4", "C1L_C2R_1", "C1L_C2R_2", "C1L_C2R_4", "C1L_C3L_1", "C1L_C3L_2", "C1L_C3L_3", "C1L_C3L_4"
+#                      ]
+# annotations_fex =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
+#                        "FEX_DEPTH_RATIO", "FEX_AB", "FEX_CN_SLOP", "FEX_MQ_DROP", "FEX_CLIP_FRAC", "FEX_SPLIT_READS", "FEX_GC_FRAC", "FEX_HOMOPOLYMER_MAX", "FEX_LCR_MASK"
+#                      ]
+# annotations_all =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
+#                        "BIN_POS_0", "BIN_POS_1", "BIN_POS_2", "BIN_POS_3", "BIN_POINT_MAPQ_0", "BIN_POINT_MAPQ_1", "BIN_POINT_MAPQ_2", "BIN_POINT_MAPQ_3", "BIN_POINT_SECONDARY_0", "BIN_POINT_SECONDARY_1", "BIN_POINT_SECONDARY_2", "BIN_POINT_SECONDARY_3", "C0R", "C1L", "C2R", "C3L", "C0R_C2R_1", "C0R_C2R_2", "C0R_C2R_3", "C0R_C2R_4", "C0R_C3L_1", "C0R_C3L_2", "C0R_C3L_3", "C0R_C3L_4", "C1L_C2R_1", "C1L_C2R_2", "C1L_C2R_4", "C1L_C3L_1", "C1L_C3L_2", "C1L_C3L_3", "C1L_C3L_4",
+#                        "FEX_DEPTH_RATIO", "FEX_AB", "FEX_CN_SLOP", "FEX_MQ_DROP", "FEX_CLIP_FRAC", "FEX_SPLIT_READS", "FEX_GC_FRAC", "FEX_HOMOPOLYMER_MAX", "FEX_LCR_MASK"
+#                      ]
 #
 workflow SV_Integration_UltralongScore {
     input {

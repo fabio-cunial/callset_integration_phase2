@@ -56,8 +56,9 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
 # Performance on a 1-core, 4GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# AssemblySam2Breakpoints
-# BndFilterWithAssemblyBreakpoints
+# samtools view
+# AssemblySam2Breakpoints                    30%       600M           2m  
+# BndFilterWithAssemblyBreakpoints          100%        60M           1m
 #
 task Impl {
     input {
@@ -106,13 +107,13 @@ task Impl {
             rm -f ${SAMPLE_ID}_breakpoints.csv
 
             ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP1_BAM} ./hap1.bam
-            samtools view hap1.bam > hap1.sam
+            ${TIME_COMMAND} samtools view --threads ${N_THREADS} --output hap1.sam hap1.bam
             rm -f hap1.bam
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap1.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} > ${SAMPLE_ID}_breakpoints.csv
             rm -f hap1.sam
 
             ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP2_BAM} ./hap2.bam
-            samtools view hap2.bam > hap2.sam
+            ${TIME_COMMAND} samtools view --threads ${N_THREADS} --output hap2.sam hap2.bam
             rm -f hap2.bam
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap2.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} >> ${SAMPLE_ID}_breakpoints.csv
             rm -f hap2.sam

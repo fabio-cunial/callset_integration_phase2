@@ -7,6 +7,10 @@ import java.io.*;
  * breakpoint for every clipped first/last position of an alignment that is far
  * enough from the previous/next alignment.
  * 
+ * Remark: this excludes endpoints that are contained in other alignments, e.g.
+ * those in repetitive regions where multiple contigs, or multiple substrings of
+ * the same contig, align.
+ * 
  * Remark: only standard chromosomes are printed in output.
  */
 public class AssemblySam2Breakpoints {
