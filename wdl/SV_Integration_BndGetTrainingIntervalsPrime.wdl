@@ -108,13 +108,13 @@ task Impl {
             ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP1_BAM} ./hap1.bam
             samtools view hap1.bam > hap1.sam
             rm -f hap1.bam
-            java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap1.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} > ${SAMPLE_ID}_breakpoints.csv
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap1.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} > ${SAMPLE_ID}_breakpoints.csv
             rm -f hap1.sam
 
             ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP2_BAM} ./hap2.bam
             samtools view hap2.bam > hap2.sam
             rm -f hap2.bam
-            java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap2.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} >> ${SAMPLE_ID}_breakpoints.csv
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap2.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} >> ${SAMPLE_ID}_breakpoints.csv
             rm -f hap2.sam
         }
 
@@ -142,9 +142,9 @@ task Impl {
             # Filtering
             BuildAssemblyBreakpoints ${SAMPLE_ID} ${REMOTE_HAP1_BAM} ${REMOTE_HAP2_BAM} ${EFFECTIVE_RAM_MB}
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
-            java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
-            java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -f ${SAMPLE_ID}_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
             
