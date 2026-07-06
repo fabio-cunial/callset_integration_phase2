@@ -56,7 +56,7 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
 # Performance on a 1-core, 4GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# samtools view
+# samtools view                              30%         3G           2m
 # AssemblySam2Breakpoints                    30%       600M           2m  
 # BndFilterWithAssemblyBreakpoints          100%        60M           1m
 #
