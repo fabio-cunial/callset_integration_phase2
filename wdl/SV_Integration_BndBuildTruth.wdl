@@ -50,7 +50,7 @@ workflow SV_Integration_BndBuildTruth {
 # Performance on a 2-core, 8GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# samtools sort
+# samtools sort                             100%         6G           4m
 # AssemblySam2Breakpoints2
 #
 task Impl {
@@ -94,17 +94,17 @@ task Impl {
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap1.sam ~{hap1_bam}
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap2.sam ~{hap2_bam}
         if [ ~{output_mode} -eq 0 ]; then
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints1.csv &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints2.csv &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ~{sample_id}_breakpoints1.csv &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ~{sample_id}_breakpoints2.csv &
             wait
-            cat ${SAMPLE_ID}_breakpoints1.csv ${SAMPLE_ID}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ${SAMPLE_ID}_breakpoints.csv
-            gcloud storage mv ${SAMPLE_ID}_breakpoints.csv ~{remote_outdir}/
+            cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ~{sample_id}_breakpoints.csv
+            gcloud storage mv ~{sample_id}_breakpoints.csv ~{remote_outdir}/
         else
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints1.vcf &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints2.vcf &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ~{sample_id}_breakpoints1.vcf &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ~{sample_id}_breakpoints2.vcf &
             wait
-            cat ~{header_vcf} ${SAMPLE_ID}_breakpoints1.vcf ${SAMPLE_ID}_breakpoints2.vcf > ${SAMPLE_ID}_breakpoints.vcf
-            gcloud storage mv ${SAMPLE_ID}_breakpoints.vcf ~{remote_outdir}/
+            cat ~{header_vcf} ~{sample_id}_breakpoints1.vcf ~{sample_id}_breakpoints2.vcf > ~{sample_id}_breakpoints.vcf
+            gcloud storage mv ~{sample_id}_breakpoints.vcf ~{remote_outdir}/
         fi
     >>>
     
