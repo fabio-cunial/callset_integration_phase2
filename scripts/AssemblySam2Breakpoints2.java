@@ -7,9 +7,17 @@ import java.io.*;
  * Given a QNAME-sorted assembly-to-ref SAM, the program prints points in the
  * reference where colinearity is violated by the assembly.
  * 
- * Remark: only violations involving standard chromosomes are printed.
+ * Remark: only violations involving standard chromosomes are printed, since
+ * non-standard chrs are highly repetitive and BNDs between them and standard
+ * chrs might not represent new adjacencies (since they are unplaced).
  */
 public class AssemblySam2Breakpoints2 {
+    /**
+     * Temporary, reused space.
+     */
+    private static long[] minViolations, maxLength;
+    private static Alignment[] minAlignment;
+
     
     /**
      * @param args
@@ -119,18 +127,21 @@ public class AssemblySam2Breakpoints2 {
     /**
      * Remark: only violations involving standard chromosomes are printed.
      * 
-     * Remark: gaps in an assembled contig induce connected components in the 
-     * alignments DAG. One could mark the boundaries of such gaps as breakpoints
-     * in the reference, but they are not new adjacencies so we don't do it
-     * here.
+     * Remark: regions of an assembled contig with no alignments induce
+     * connected components in the alignments DAG. One could mark the boundaries
+     * of such regions as breakpoints in the reference (since they connect the
+     * ref with new sequence), but they are not new adjacencies between existing
+     * regions of the ref so we don't do it here.
      * 
-     * Remark: we compute a longest chain in every connected component to try to
-     * explain as much of the assembled contig as possible. Among all longest 
-     * chains we pick the one with smallest number of violations, to try to be
-     * as compatible as possible with the reference.
+     * Remark: we compute a longest chain in every connected component, to try
+     * to explain as much of the assembled contig as possible using the ref. 
+     * Among all longest chains, we pick one with smallest number of violations,
+     * to try to be as compatible as possible with the ref.
      * 
      * @param alignments assumed to be all and only the alignments in an 
-     * assembled contig.
+     * assembled contig;
+     * @param outputMode 0=a CSV of points, with format `CHR,POS,ID`, not 
+     * necessarily sorted; 1=a BND VCF, not necessarily sorted or canonized.
      */
     private static final void printBreakpoints(ArrayList<Alignment> alignments, int adjacencyThreshold, int violationThreshold, int outputMode) throws IOException {
         final int N_ALIGNMENTS = alignments.size();
@@ -139,9 +150,6 @@ public class AssemblySam2Breakpoints2 {
         int idGenerator, nComponents, nComponentsWithViolations;
         long aLength, bLength, nViolations;
         Alignment a, b;
-        long[] minViolations;
-        long[] maxLength;
-        Alignment[] minAlignment;
 
         // Computing a longest chain for every connected component
         nComponents=0;
@@ -160,7 +168,8 @@ public class AssemblySam2Breakpoints2 {
                 if (bLength>b.maxLength) { b.maxLength=bLength; b.parent=a; }
             }
         }
-        maxLength = new long[nComponents];
+        if (maxLength==null || maxLength.length<nComponents) maxLength = new long[nComponents];
+        Arrays.fill(maxLength,0,nComponents,0);
         for (i=0; i<N_ALIGNMENTS; i++) {
             a=alignments.get(i);
             aLength=a.maxLength+a.readLast-a.readFirst+1;
@@ -171,9 +180,10 @@ public class AssemblySam2Breakpoints2 {
 
         // Finding a longest chain with smallest number of violations, for every 
         // connected component.
-        minAlignment = new Alignment[nComponents];
-        minViolations = new long[nComponents]; 
-        Arrays.fill(minViolations,Long.MAX_VALUE);
+        if (minViolations==null || minViolations.length<nComponents) minViolations = new long[nComponents]; 
+        if (minAlignment==null || minAlignment.length<nComponents) minAlignment = new Alignment[nComponents];
+        Arrays.fill(minViolations,0,nComponents,Long.MAX_VALUE);
+        Arrays.fill(minAlignment,0,nComponents,null);
         for (i=0; i<N_ALIGNMENTS; i++) {
             a=alignments.get(i);
             aLength=a.maxLength+a.readLast-a.readFirst+1;
@@ -242,8 +252,8 @@ public class AssemblySam2Breakpoints2 {
 
 
     /**
-     * Prints the distance, along a contig, between every alignment and its 
-     * closest neighbor to its right that starts after its last position.
+     * Prints the distance, along an assembled contig, between every alignment
+     * and the closest neighbor to its right that starts after its last pos.
      */
     private static final void printNearestNeighborDistances(ArrayList<Alignment> alignments) {
         final int N_ALIGNMENTS = alignments.size();
@@ -260,7 +270,6 @@ public class AssemblySam2Breakpoints2 {
                 if (b.readFirst>a.readLast) { System.err.println((b.readFirst-a.readLast)+""); break; }
             }
         }
-        System.err.println("------------------");
     }
 
 
@@ -287,7 +296,13 @@ public class AssemblySam2Breakpoints2 {
 
 
     private static class Alignment implements Comparable {
-        public static int ORDER = 0;  // 0=chr, 1=read.
+        /**
+         * 0: position on the chromosome; every alignment is assumed to use the
+         *    same chromosome;
+         * 1: position on the read; every alignment is assumed to use the same
+         *    read.
+         */
+        public static int ORDER = 1;
 
         /**
          * Properties of the alignment
@@ -299,30 +314,33 @@ public class AssemblySam2Breakpoints2 {
 
         /**
          * Max length of a sequence of chainable alignments that leads up to
-         * the beginning of this alignment.
+         * the beginning of this alignment (and excludes this alignment).
          */
         public long maxLength;
-        public boolean hasChildren;
+        
         public Alignment parent;
+        public boolean hasChildren;
         public int connectedComponent;
 
 
         public Alignment(String chrId, int chrFirst, int chrLast, String readId, int readFirst, int readLast, boolean isRc, int readLength, int mapq) {
             this.chrId = chrId; this.chrFirst=chrFirst; this.chrLast=chrLast;
             this.readId = readId; this.readFirst=readFirst; this.readLast=readLast;
-            this.readLength=readLength; this.mapq=mapq;
-            this.isRc=isRc;
+            this.isRc=isRc; this.readLength=readLength; this.mapq=mapq;
+
             maxLength=0; parent=null; hasChildren=false; connectedComponent=-1;
         }
 
         public int compareTo(Object o) {
             Alignment a = (Alignment)o;
             if (ORDER==0) {
+                // chrId is not used since assumed equal
                 if (this.chrFirst<a.chrFirst) return -1;
                 else if (this.chrFirst>a.chrFirst) return 1;
                 if (this.chrLast<a.chrLast) return -1;
                 else if (this.chrLast>a.chrLast) return 1;
             } else {
+                // readId is not used since assumed equal
                 if (this.readFirst<a.readFirst) return -1;
                 else if (this.readFirst>a.readFirst) return 1;
                 if (this.readLast<a.readLast) return -1;

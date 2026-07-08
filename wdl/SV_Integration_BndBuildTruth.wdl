@@ -9,7 +9,7 @@ workflow SV_Integration_BndBuildTruth {
         File hap1_bam
         File hap2_bam
 
-        Int max_adjacency_distance = 500
+        Int max_adjacency_distance = 1000
         Int min_violation_distance = 50000
         Int output_mode = 0
         File? header_vcf
@@ -19,8 +19,8 @@ workflow SV_Integration_BndBuildTruth {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
-        max_adjacency_distance: "Max distance (on an assembled contig) between two alignments for them to be considered adjacent."
-        min_violation_distance: "Min distance (on the reference) between two alignments (that are adjacent on some contig) for them to be considered a colinearity violation."
+        max_adjacency_distance: "Max distance (on an assembled contig) between two alignments for them to be considered adjacent. 1kbp seems a good value based on a histogram of nearest-neighbor distances."
+        min_violation_distance: "Min distance (on the same reference chr) between two alignments (that are adjacent on some contig) for them to be considered a colinearity violation. Any setting will capture some ultralong DELs."
         output_mode: "0=a CSV of points; 1=a BND VCF"
         header_vcf: "Header to be given to the output VCF, if any."
         remote_outdir: "Without final slash"
