@@ -82,26 +82,26 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_MB=$(( ~{ram_size_gb} * 1024 - 500 ))
-        RAM_PER_PROCESS_MB=$(( ${EFFECTIVE_RAM_MB} / 2 ))
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_MB=$(( (~{ram_size_gb} - 1) * 1024 ))
+        RAM_PER_THREAD_MB=$(( ${EFFECTIVE_RAM_MB} / ${N_THREADS} ))
 
 
         samtools --version 1>&2
         df -h 1>&2
 
 
-        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_PROCESS_MB}M -n -O SAM -o hap1.sam ~{hap1_bam}
-        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_PROCESS_MB}M -n -O SAM -o hap2.sam ~{hap2_bam}
+        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_THREAD_MB}M -n -O SAM -o hap1.sam ~{hap1_bam}
+        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_THREAD_MB}M -n -O SAM -o hap2.sam ~{hap2_bam}
         if [ ~{output_mode} -eq 0 ]; then
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints1.csv &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints2.csv &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints1.csv &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints2.csv &
             wait
             cat ${SAMPLE_ID}_breakpoints1.csv ${SAMPLE_ID}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ${SAMPLE_ID}_breakpoints.csv
             gcloud storage mv ${SAMPLE_ID}_breakpoints.csv ~{remote_outdir}/
         else
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints1.vcf &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints2.vcf &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints1.vcf &
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ${SAMPLE_ID}_breakpoints2.vcf &
             wait
             cat ~{header_vcf} ${SAMPLE_ID}_breakpoints1.vcf ${SAMPLE_ID}_breakpoints2.vcf > ${SAMPLE_ID}_breakpoints.vcf
             gcloud storage mv ${SAMPLE_ID}_breakpoints.vcf ~{remote_outdir}/
