@@ -162,6 +162,7 @@ public class AssemblySam2Breakpoints2 {
             aLength=a.maxLength+a.readLast-a.readFirst+1;
             if (aLength>maxLength[a.connectedComponent]) maxLength[a.connectedComponent]=aLength;
         }
+        for (i=0; i<nComponents; i++) System.err.println("Connected component "+i+" has longest chain of length "+maxLength[i]+"bp");
 
         // Finding a longest chain with smallest number of violations, for every 
         // connected component.
@@ -179,6 +180,7 @@ public class AssemblySam2Breakpoints2 {
             }
             if (nViolations<minViolations[a.connectedComponent]) { minViolations[a.connectedComponent]=nViolations; minAlignment[a.connectedComponent]=a; }
         }
+        for (i=0; i<nComponents; i++) System.err.println("Connected component "+i+" has longest chain with "+minViolations[i]+" violations");
 
         // Printing breakpoints for every connected component
         idGenerator=0;
@@ -190,6 +192,7 @@ public class AssemblySam2Breakpoints2 {
                 a=a.parent;
             }
         }
+        System.err.println("Created "+idGenerator+" breakpoints");
     }
 
 

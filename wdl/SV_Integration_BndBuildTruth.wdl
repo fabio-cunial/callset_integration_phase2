@@ -9,9 +9,9 @@ workflow SV_Integration_BndBuildTruth {
         File hap1_bam
         File hap2_bam
 
-        Int max_adjacency_distance
-        Int min_violation_distance
-        Int output_mode
+        Int max_adjacency_distance = 500
+        Int min_violation_distance = 50000
+        Int output_mode = 0
         File? header_vcf
 
         String remote_outdir
@@ -47,11 +47,11 @@ workflow SV_Integration_BndBuildTruth {
 }
 
 
-# Performance on a 1-core, 4GB VM:
+# Performance on a 2-core, 8GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# samtools view                              30%         3G          10m
-# AssemblySam2Breakpoints                    30%         1G           7m  
+# samtools sort
+# AssemblySam2Breakpoints2
 #
 task Impl {
     input {
@@ -91,8 +91,8 @@ task Impl {
         df -h 1>&2
 
 
-        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${EFFECTIVE_RAM_MB}M -n -O SAM -o hap1.sam ~{hap1_bam}
-        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${EFFECTIVE_RAM_MB}M -n -O SAM -o hap2.sam ~{hap2_bam}
+        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_PROCESS_MB}M -n -O SAM -o hap1.sam ~{hap1_bam}
+        ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${RAM_PER_PROCESS_MB}M -n -O SAM -o hap2.sam ~{hap2_bam}
         if [ ~{output_mode} -eq 0 ]; then
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints1.csv &
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_PROCESS_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ${SAMPLE_ID}_breakpoints2.csv &
