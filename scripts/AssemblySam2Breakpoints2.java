@@ -29,6 +29,8 @@ public class AssemblySam2Breakpoints2 {
         final int MAX_ADJACENCY_DISTANCE = Integer.parseInt(args[1]);
         final int MIN_VIOLATION_DISTANCE = Integer.parseInt(args[2]);
         final int OUTPUT_MODE = Integer.parseInt(args[3]);
+
+        final boolean DEBUG = false;
         
         boolean isRc;
         char c;
@@ -47,6 +49,7 @@ public class AssemblySam2Breakpoints2 {
             p=str.indexOf('\t');
             readId=str.substring(0,p);
             if (lastReadId.length()!=0 && !readId.equals(lastReadId)) {
+                if (DEBUG) printNearestNeighborDistances(alignments);
                 printBreakpoints(alignments,MAX_ADJACENCY_DISTANCE,MIN_VIOLATION_DISTANCE,OUTPUT_MODE);
                 alignments.clear();
             }
@@ -106,6 +109,7 @@ public class AssemblySam2Breakpoints2 {
         }
         br.close();
         if (lastReadId.length()!=0) {
+            if (DEBUG) printNearestNeighborDistances(alignments);
             printBreakpoints(alignments,MAX_ADJACENCY_DISTANCE,MIN_VIOLATION_DISTANCE,OUTPUT_MODE);
             alignments.clear();
         }
@@ -132,7 +136,7 @@ public class AssemblySam2Breakpoints2 {
         final int N_ALIGNMENTS = alignments.size();
 
         int i, j;
-        int idGenerator, nComponents;
+        int idGenerator, nComponents, nComponentsWithViolations;
         long aLength, bLength, nViolations;
         Alignment a, b;
         long[] minViolations;
@@ -162,7 +166,8 @@ public class AssemblySam2Breakpoints2 {
             aLength=a.maxLength+a.readLast-a.readFirst+1;
             if (aLength>maxLength[a.connectedComponent]) maxLength[a.connectedComponent]=aLength;
         }
-        for (i=0; i<nComponents; i++) System.err.println("Connected component "+i+" has longest chain of length "+maxLength[i]+"bp");
+        System.err.println("Contig "+alignments.get(0).readId+" has "+nComponents+" connected components, whose longest chains have length (bp):");
+        for (i=0; i<nComponents; i++) System.err.println(maxLength[i]+"");
 
         // Finding a longest chain with smallest number of violations, for every 
         // connected component.
@@ -180,9 +185,16 @@ public class AssemblySam2Breakpoints2 {
             }
             if (nViolations<minViolations[a.connectedComponent]) { minViolations[a.connectedComponent]=nViolations; minAlignment[a.connectedComponent]=a; }
         }
-        for (i=0; i<nComponents; i++) System.err.println("Connected component "+i+" has longest chain with "+minViolations[i]+" violations");
+        nComponentsWithViolations=0;
+        for (i=0; i<nComponents; i++) {
+            if (minViolations[i]>0) {
+                nComponentsWithViolations++;
+                System.err.println("Contig "+alignments.get(0).readId+", component "+i+" has longest chain with "+minViolations[i]+" violations");
+            }
+        }
+        System.err.println("Contig "+alignments.get(0).readId+" has "+nComponentsWithViolations+" components with violations");
 
-        // Printing breakpoints for every connected component
+        // Printing breakpoints in all connected components
         idGenerator=0;
         for (i=0; i<nComponents; i++) {
             if (minViolations[i]==0) continue;
@@ -192,7 +204,7 @@ public class AssemblySam2Breakpoints2 {
                 a=a.parent;
             }
         }
-        System.err.println("Created "+idGenerator+" breakpoints");
+        System.err.println("Contig "+alignments.get(0).readId+" induced "+idGenerator+" breakpoints between standard chromosomes");
     }
 
 
@@ -226,6 +238,29 @@ public class AssemblySam2Breakpoints2 {
             alt=parent.isRc?alt+"N":"N"+alt;
             System.out.println(refChrom+"\t"+refPos+"\t"+id+"\tN\t"+alt+"\t"+Math.min(alignment.mapq,parent.mapq)+"\tPASS\tSVTYPE=BND\tGT\t0/1");
         }
+    }
+
+
+    /**
+     * Prints the distance, along a contig, between every alignment and its 
+     * closest neighbor to its right that starts after its last position.
+     */
+    private static final void printNearestNeighborDistances(ArrayList<Alignment> alignments) {
+        final int N_ALIGNMENTS = alignments.size();
+
+        int i, j;
+        Alignment a, b;
+
+        Alignment.ORDER=1; alignments.sort(null);  // Read order
+        System.err.println("Contig "+alignments.get(0).readId+", right nearest neighbor distances:");
+        for (i=0; i<N_ALIGNMENTS; i++) {
+            a=alignments.get(i);
+            for (j=i+1; j<N_ALIGNMENTS; j++) {
+                b=alignments.get(j);
+                if (b.readFirst>a.readLast) { System.err.println((b.readFirst-a.readLast)+""); break; }
+            }
+        }
+        System.err.println("------------------");
     }
 
 
