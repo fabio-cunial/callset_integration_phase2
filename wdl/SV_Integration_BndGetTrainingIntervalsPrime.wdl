@@ -8,26 +8,23 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
     input {
         File samples_tsv
 
-        Int sam_min_alignment_distance = 1000
-        Int sam_min_clip_length = 1000
-
         Int breakpoint_max_distance = 500
         Int breakpoint_filter_mode = 2
         File reference_agp
         
         String remote_indir_query
+        String remote_indir_truth
         String remote_outdir
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
         samples_tsv: "Format: ID, HAP1_BAM, HAP2_BAM"
-        sam_min_alignment_distance: "Min distance between an assembly-to-ref alignment and the closest one to call a breakpoint"
-        sam_min_clip_length: "Min clip length of an assembly-to-ref alignment to call a breakpoint"
         breakpoint_max_distance: "Max distance between a BND and an assembly breakpoint to mark TPs"
         breakpoint_filter_mode: "1=at least one side of the BND must be close to an assembly breakpoint; 2=both sides of the BND must be close to an assembly breakpoint."
         reference_agp: "Reference AGP file."
         remote_indir_query: "Without final slash"
+        remote_indir_truth: "Without final slash"
         remote_outdir: "Without final slash"
     }
     
@@ -35,14 +32,12 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
         input:
             samples_tsv = samples_tsv,
 
-            sam_min_alignment_distance = sam_min_alignment_distance,
-            sam_min_clip_length = sam_min_clip_length,
-
             breakpoint_max_distance = breakpoint_max_distance,
             breakpoint_filter_mode = breakpoint_filter_mode,
             reference_agp = reference_agp,
 
             remote_indir_query = remote_indir_query,
+            remote_indir_truth = remote_indir_truth,
             remote_outdir = remote_outdir,
 
             docker_image = docker_image
@@ -53,25 +48,22 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
 }
 
 
-# Performance on a 1-core, 4GB VM:
+# Performance on a 2-core, 8GB VM:
 #
 # TOOL                                      CPU%        RAM         TIME
-# samtools view                              30%         3G           2m
-# AssemblySam2Breakpoints                    30%       600M           2m  
+# samtools view                              30%         3G          10m
 # BndFilterWithAssemblyBreakpoints          100%        60M           1m
 #
 task Impl {
     input {
         File samples_tsv
 
-        Int sam_min_alignment_distance
-        Int sam_min_clip_length
-
         Int breakpoint_max_distance
         Int breakpoint_filter_mode
         File reference_agp
         
         String remote_indir_query
+        String remote_indir_truth
         String remote_outdir
         
         String docker_image
@@ -91,38 +83,8 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_MB=$(( ~{ram_size_gb} * 1024 - 500 ))
-
-
-
-        # ----------------------- Steps of the pipeline ------------------------
-
-        function BuildAssemblyBreakpoints() {
-            SAMPLE_ID=$1
-            REMOTE_HAP1_BAM=$2
-            REMOTE_HAP2_BAM=$3
-            RAM_SIZE_MB=$4
-
-            rm -f ${SAMPLE_ID}_breakpoints.csv
-
-            ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP1_BAM} ./hap1.bam
-            ${TIME_COMMAND} samtools view --threads ${N_THREADS} --output hap1.sam hap1.bam
-            rm -f hap1.bam
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap1.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} > ${SAMPLE_ID}_breakpoints.csv
-            rm -f hap1.sam
-
-            ${TIME_COMMAND} gcloud storage cp ${REMOTE_HAP2_BAM} ./hap2.bam
-            ${TIME_COMMAND} samtools view --threads ${N_THREADS} --output hap2.sam hap2.bam
-            rm -f hap2.bam
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_SIZE_MB}M AssemblySam2Breakpoints hap2.sam ~{sam_min_alignment_distance} ~{sam_min_clip_length} >> ${SAMPLE_ID}_breakpoints.csv
-            rm -f hap2.sam
-        }
-
-
-
-
-        # --------------------------- Main program -----------------------------
 
         samtools --version 1>&2
         bcftools --version 1>&2
@@ -131,8 +93,6 @@ task Impl {
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            REMOTE_HAP1_BAM=$(echo ${LINE} | cut -d , -f 2)
-            REMOTE_HAP2_BAM=$(echo ${LINE} | cut -d , -f 3)
             
             # Skipping the sample if it has already been processed
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "1" )
@@ -141,10 +101,10 @@ task Impl {
             fi
 
             # Filtering
-            BuildAssemblyBreakpoints ${SAMPLE_ID} ${REMOTE_HAP1_BAM} ${REMOTE_HAP2_BAM} ${EFFECTIVE_RAM_MB}
             gcloud storage cp ~{remote_indir_query}/${SAMPLE_ID}_bnd.vcf.'gz*' .
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
+            gcloud storage cp ~{remote_indir_truth}/${SAMPLE_ID}_breakpoints.csv .
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -f ${SAMPLE_ID}_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz

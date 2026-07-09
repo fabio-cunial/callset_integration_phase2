@@ -51,7 +51,7 @@ workflow SV_Integration_BndBuildTruth {
 #
 # TOOL                                      CPU%        RAM         TIME
 # samtools sort                             100%         6G           4m
-# AssemblySam2Breakpoints2
+# AssemblySam2Breakpoints2                   30%         1G           7m
 #
 task Impl {
     input {
