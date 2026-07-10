@@ -6,37 +6,87 @@ import java.io.*;
 /**
  * Given a QNAME-sorted assembly-to-ref SAM, the program prints points in the
  * reference where colinearity is violated by the assembly.
- * 
- * Remark: only violations involving standard chromosomes are printed, since
- * non-standard chrs are highly repetitive and BNDs between them and standard
- * chrs might not represent new adjacencies (since they are unplaced).
  */
 public class AssemblySam2Breakpoints2 {
+    /**
+     * Max distance (on an assembled contig) between two alignments for them to
+     * be considered adjacent.
+     */
+    private static int MAX_ADJACENCY_DISTANCE;
+
+    /**
+     * Min distance (on the reference) between two alignments (that are adjacent
+     * on some contig) for them to be considered a colinearity violation.
+     */
+    private static int MIN_VIOLATION_DISTANCE;
+
+    /**
+     * 0=no constraint; 
+     * 1=print only BND sides on standard chromosomes, but the two sides of a 
+     *   BND can occur on any chromosome;
+     * 2=print only BNDs where both sides belong to a standard chromosome.
+     * 
+     * One may want to print only violations involving standard chromosomes, 
+     * since non-standard chrs are highly repetitive and BNDs between them and 
+     * standard chrs might not represent new adjacencies (since such chrs are
+     * unplaced).
+     */
+    private static int CHROMOSOME_MODE;
+
+    /**
+     * Consider as breakpoints also the projections onto ref. of the first/last
+     * positions on the contig of the longest chain in a connected component.
+     */
+    private static boolean PRINT_CHAIN_START_END;
+
+    /**
+     * Slack for deciding whether a component is contained in another one in an
+     * assembled contig.
+     */
+    private static int CONTAINMENT_SLACK_BP;
+
+    /**
+     * Min length of a CIGAR INS/DEL for it to create breakpoints
+     */
+    private static int MIN_INTERNAL_SV_LENGTH;
+
     /**
      * Temporary, reused space.
      */
     private static long[] minViolations, maxLength;
     private static Alignment[] minAlignment;
+    private static ArrayList<Interval> componentIntervals = new ArrayList<Interval>();
+    private static int[] nBreakpoints = new int[5];  // total, violation1, violation2, violation3, first/last
 
     
     /**
+     * Remark: the program prints a CSV of breakpoints, where every row 
+     * represents a single side of an adjacency, with format:
+     * 
+     * CHR,POS, MATE_CHR,MATE_POS
+     * 
+     * Rows with MATE_CHR=-1, MATE_POS=-1 represent breakpoints in the reference
+     * that connect to new sequence in the assembly that is not covered by any
+     * alignment with the reference. Every row with a mate has a symmetrical
+     * row. The direction of the adjacencies is not reported.
+     * 
+     * Remark: the file is not necessarily sorted and it may contain multiple 
+     * rows with identical or similar CHR,POS values. This is fine, since users
+     * downstream will match such true points to a VCF.
+     * 
      * @param args
      * 0: all alignments with the same QNAME (i.e. assembly contig ID) are 
-     *    assumed to form a contiguous block (e.g. `samtools sort -@ 8 -m 3G -n 
-     *    -O SAM hap1.bam`);
-     * 1: max distance (on an assembled contig) between two alignments for them
-     *    to be considered adjacent;
-     * 2: min distance (on the reference) between two alignments (that are 
-     *    adjacent on some contig) for them to be considered a colinearity 
-     *    violation;
-     * 3: 0=a CSV of points, with format `CHR,POS,ID`, not necessarily sorted;
-     *    1=a BND VCF, not necessarily sorted or canonized.
+     *    assumed to form a contiguous block (e.g. `samtools sort -@ 4 -n -O SAM
+     *    hap1.bam`).
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_SAM = args[0];
-        final int MAX_ADJACENCY_DISTANCE = Integer.parseInt(args[1]);
-        final int MIN_VIOLATION_DISTANCE = Integer.parseInt(args[2]);
-        final int OUTPUT_MODE = Integer.parseInt(args[3]);
+        MAX_ADJACENCY_DISTANCE=Integer.parseInt(args[1]);
+        MIN_VIOLATION_DISTANCE=Integer.parseInt(args[2]);
+        CHROMOSOME_MODE=Integer.parseInt(args[3]);
+        PRINT_CHAIN_START_END=Integer.parseInt(args[4])==1;
+        CONTAINMENT_SLACK_BP=Integer.parseInt(args[5]);
+        MIN_INTERNAL_SV_LENGTH=Integer.parseInt(args[6]);
 
         final boolean DEBUG = false;
         
@@ -48,8 +98,10 @@ public class AssemblySam2Breakpoints2 {
         BufferedReader br;
         String[] tokens;
         ArrayList<Alignment> alignments;
+        ArrayList<Integer> internalBreakpoints;
         
         alignments = new ArrayList<Alignment>();
+        internalBreakpoints = new ArrayList<Integer>();
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_SAM)));
         str=br.readLine(); nRecords=0; lastReadId="";
         while (str!=null) {
@@ -58,7 +110,7 @@ public class AssemblySam2Breakpoints2 {
             readId=str.substring(0,p);
             if (lastReadId.length()!=0 && !readId.equals(lastReadId)) {
                 if (DEBUG) printNearestNeighborDistances(alignments);
-                printBreakpoints(alignments,MAX_ADJACENCY_DISTANCE,MIN_VIOLATION_DISTANCE,OUTPUT_MODE);
+                printBreakpoints(alignments);
                 alignments.clear();
             }
             lastReadId=readId;
@@ -76,7 +128,12 @@ public class AssemblySam2Breakpoints2 {
             p=q; q=str.indexOf('\t',p+1);
             cigar=str.substring(p+1,q); cigarLength=cigar.length();
             readPos=-1;  // 0-based
-            i=0; leftClipLength=0; rightClipLength=0; readPosLast=-1;
+
+
+----------------> readPos should be decremented if it is reverse-complement!!!!!!!!!!!!!!!!!            
+
+
+            i=0; leftClipLength=0; rightClipLength=0; readPosLast=-1; internalBreakpoints.clear();
             for (j=1; j<cigarLength; j++) {
                 c=cigar.charAt(j);
                 if (c=='M' || c=='=' || c=='X') {
@@ -85,11 +142,21 @@ public class AssemblySam2Breakpoints2 {
                     i=j+1;
                 }
                 else if (c=='I') {
-                    readPos+=Integer.parseInt(cigar.substring(i,j));
+                    length=Integer.parseInt(cigar.substring(i,j));
+                    if (length>=MIN_INTERNAL_SV_LENGTH) {
+                        internalBreakpoints.add(refPos);
+                        internalBreakpoints.add(0);
+                    }
+                    readPos+=length;
                     i=j+1;
                 }
                 else if (c=='D') {
-                    refPos+=Integer.parseInt(cigar.substring(i,j));
+                    length=Integer.parseInt(cigar.substring(i,j));
+                    if (length>=MIN_INTERNAL_SV_LENGTH) {
+                        internalBreakpoints.add(refPos);
+                        internalBreakpoints.add(length);
+                    }
+                    refPos+=length;
                     i=j+1;
                 }
                 else if (c=='N') {
@@ -110,7 +177,7 @@ public class AssemblySam2Breakpoints2 {
             }
             if (readPosLast==-1) readPosLast=readPos;
             readLength=readPos+1;
-            alignments.add(new Alignment(chrId,refPosOriginal,refPos,readId,leftClipLength,readPosLast,isRc,readLength,mapq));
+            alignments.add(new Alignment(chrId,refPosOriginal,refPos,readId,leftClipLength,readPosLast,isRc,readLength,mapq,internalBreakpoints));
             nRecords++;
             if (nRecords%1000==0) System.err.println("Processed "+nRecords+" records...");
             str=br.readLine();
@@ -118,20 +185,25 @@ public class AssemblySam2Breakpoints2 {
         br.close();
         if (lastReadId.length()!=0) {
             if (DEBUG) printNearestNeighborDistances(alignments);
-            printBreakpoints(alignments,MAX_ADJACENCY_DISTANCE,MIN_VIOLATION_DISTANCE,OUTPUT_MODE);
+            printBreakpoints(alignments);
             alignments.clear();
         }
+        System.err.println("Total breakpoints created: "+nBreakpoints[0]);
+        System.err.println("Colinearity violation 1 (chr): "+nBreakpoints[1]);
+        System.err.println("Colinearity violation 2 (orientation): "+nBreakpoints[2]);
+        System.err.println("Colinearity violation 3 (distance): "+nBreakpoints[3]);
+        System.err.println("First/last of chain: "+nBreakpoints[4]);
     }
 
 
     /**
-     * Remark: only violations involving standard chromosomes are printed.
+     * Prints all the breakpoints of an assembled contig.
      * 
      * Remark: regions of an assembled contig with no alignments induce
      * connected components in the alignments DAG. One could mark the boundaries
      * of such regions as breakpoints in the reference (since they connect the
-     * ref with new sequence), but they are not new adjacencies between existing
-     * regions of the ref so we don't do it here.
+     * ref with new sequence), but of course they are not new adjacencies 
+     * between existing regions of the ref.
      * 
      * Remark: we compute a longest chain in every connected component, to try
      * to explain as much of the assembled contig as possible using the ref. 
@@ -139,19 +211,21 @@ public class AssemblySam2Breakpoints2 {
      * to try to be as compatible as possible with the ref.
      * 
      * @param alignments assumed to be all and only the alignments in an 
-     * assembled contig;
-     * @param outputMode 0=a CSV of points, with format `CHR,POS,ID`, not 
-     * necessarily sorted; 1=a BND VCF, not necessarily sorted or canonized.
+     * assembled contig.
      */
-    private static final void printBreakpoints(ArrayList<Alignment> alignments, int adjacencyThreshold, int violationThreshold, int outputMode) throws IOException {
+    private static final void printBreakpoints(ArrayList<Alignment> alignments) throws IOException {
         final int N_ALIGNMENTS = alignments.size();
 
+        boolean isStandardChr, isStandardChrParent;
         int i, j;
-        int idGenerator, nComponents, nComponentsWithViolations;
+        int nComponents, nComponentsWithViolations, nContainedComponents, violationType, nBreakpointsBefore;
         long aLength, bLength, nViolations;
         Alignment a, b;
+        Interval tmpInterval;
 
-        // Computing a longest chain for every connected component
+        nBreakpointsBefore=nBreakpoints[0];
+
+        // Computing connected components and their longest chains
         nComponents=0;
         Alignment.ORDER=1; alignments.sort(null);  // Read order
         for (i=0; i<N_ALIGNMENTS; i++) {
@@ -160,8 +234,8 @@ public class AssemblySam2Breakpoints2 {
             aLength=a.readLast-a.readFirst+1;
             for (j=i+1; j<N_ALIGNMENTS; j++) {
                 b=alignments.get(j);
-                if (b.readFirst>a.readLast+adjacencyThreshold) break;
-                if (b.readFirst<a.readLast-adjacencyThreshold) continue;
+                if (b.readFirst>a.readLast+MAX_ADJACENCY_DISTANCE) break;
+                if (b.readFirst<a.readLast-MAX_ADJACENCY_DISTANCE) continue;
                 b.connectedComponent=a.connectedComponent;
                 a.hasChildren=true;
                 bLength=a.maxLength+aLength;
@@ -190,7 +264,7 @@ public class AssemblySam2Breakpoints2 {
             if (aLength!=maxLength[a.connectedComponent]) continue;
             b=a; nViolations=0;
             while (b.parent!=null) {
-                if (isViolation(b,b.parent,violationThreshold)) nViolations++;
+                if (getViolationType(b,b.parent)>0) nViolations++;
                 b=b.parent;
             }
             if (nViolations<minViolations[a.connectedComponent]) { minViolations[a.connectedComponent]=nViolations; minAlignment[a.connectedComponent]=a; }
@@ -204,26 +278,67 @@ public class AssemblySam2Breakpoints2 {
         }
         System.err.println("Contig "+alignments.get(0).readId+" has "+nComponentsWithViolations+" components with violations");
 
-        // Printing breakpoints in all connected components
-        idGenerator=0;
+        // Detecting chains that are contained in other chains on the contig
+        componentIntervals.clear();
         for (i=0; i<nComponents; i++) {
-            if (minViolations[i]==0) continue;
             a=minAlignment[i];
-            while (a.parent!=null) {
-                if (isStandardChromosome(a.chrId) && isStandardChromosome(a.parent.chrId) && isViolation(a,a.parent,violationThreshold)) printViolation(a,a.parent,idGenerator++,outputMode);
-                a=a.parent;
+            tmpInterval = new Interval(-1,a.readLast,i);
+            while (a.parent!=null) a=a.parent;
+            tmpInterval.first=a.readFirst;
+            tmpInterval.isContained=false;
+            componentIntervals.add(tmpInterval);
+        }
+        Interval.ORDER=0; componentIntervals.sort(null);
+        for (i=0; i<nComponents; i++) {
+            if (componentIntervals.get(i).isContained) continue;
+            for (j=i+1; j<nComponents; j++) {
+                if (componentIntervals.get(j).last>componentIntervals.get(i).last+CONTAINMENT_SLACK_BP) break;
+                componentIntervals.get(j).isContained=true;
+            }
+            for (j=i-1; j>=0; j--) {
+                if (componentIntervals.get(j).first<componentIntervals.get(i).first-CONTAINMENT_SLACK_BP) break;
+                if (componentIntervals.get(j).last<=componentIntervals.get(i).last+CONTAINMENT_SLACK_BP) componentIntervals.get(j).isContained=true;
             }
         }
-        System.err.println("Contig "+alignments.get(0).readId+" induced "+idGenerator+" breakpoints between standard chromosomes");
+        Interval.ORDER=1; componentIntervals.sort(null);
+        nContainedComponents=0;
+        for (i=0; i<nComponents; i++) { if (componentIntervals.get(i).isContained) nContainedComponents++; }
+        System.err.println("Contig "+alignments.get(0).readId+" has "+nContainedComponents+" components contained in other components");
+
+        // Printing breakpoints using only connected components that are not 
+        // contained in other connected components on the contig
+        for (i=0; i<nComponents; i++) {
+            if (componentIntervals.get(i).isContained) continue;
+            a=minAlignment[i];
+            if (PRINT_CHAIN_START_END) printFirstLast(a,true);
+            -------->
+            while (a.parent!=null) {
+                isStandardChr=isStandardChromosome(a.chrId);
+                isStandardChrParent=isStandardChromosome(a.parent.chrId);
+                violationType=getViolationType(a,a.parent);
+                if ( violationType>0 &&
+                     ( CHROMOSOME_MODE==0 || 
+                       (CHROMOSOME_MODE==1 && (isStandardChr || isStandardChrParent)) || 
+                       (CHROMOSOME_MODE==2 && isStandardChr && isStandardChrParent)
+                     )
+                   ) printViolation(a,a.parent,violationType,isStandardChr,isStandardChrParent);
+                a=a.parent;
+            }
+            if (PRINT_CHAIN_START_END) printFirstLast(a,false);
+        }
+        System.err.println("Contig "+alignments.get(0).readId+" induced "+(nBreakpoints[0]-nBreakpointsBefore)+" breakpoints");
     }
 
 
     /**
-     * @return TRUE iff the adjacency `parent->alignment` violates colinearity
-     * WRT the reference.
+     * @return 0 iff the adjacency `parent->alignment` does not violate 
+     * colinearity WRT the reference; >0 otherwise.
      */
-    private static final boolean isViolation(Alignment alignment, Alignment parent, int distanceThreshold) {
-        return !parent.chrId.equals(alignment.chrId) || parent.isRc!=alignment.isRc || (!alignment.isRc && alignment.chrFirst>parent.chrLast+distanceThreshold) || (alignment.isRc && parent.chrFirst>alignment.chrLast+distanceThreshold);
+    private static final int getViolationType(Alignment alignment, Alignment parent) {
+        if (!parent.chrId.equals(alignment.chrId)) return 1;
+        if (parent.isRc!=alignment.isRc) return 2;
+        if ((!alignment.isRc && alignment.chrFirst>parent.chrLast+MIN_VIOLATION_DISTANCE) || (alignment.isRc && parent.chrFirst>alignment.chrLast+MIN_VIOLATION_DISTANCE)) return 3;
+        return 0;
     }
 
 
@@ -232,12 +347,22 @@ public class AssemblySam2Breakpoints2 {
      * 0: a CSV of points, with format `CHR,POS,ID`; not necessarily sorted;
      * 1: a BND VCF; not necessarily sorted or canonized.
      */
-    private static final void printViolation(Alignment alignment, Alignment parent, int id, int printMode) {
-        if (printMode==0) {
-            System.out.println(parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast)+","+id);
-            System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+","+id);
+    private static final void printViolation(Alignment alignment, Alignment parent, int violationType, boolean isStandardChr, boolean isStandardChrParent) {
+        final boolean printAlignment = CHROMOSOME_MODE==0 || isStandardChr;
+        final boolean printParent = CHROMOSOME_MODE==0 || isStandardChrParent;
+
+        if (printParent) {
+            nBreakpoints[0]++; nBreakpoints[violationType]++;
+            System.out.println(parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast)+","+alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst));
         }
-        else if (printMode==1) {
+        if (printAlignment) {
+            nBreakpoints[0]++; nBreakpoints[violationType]++;
+            System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+","+parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast));
+        }
+
+        /* Old code for printing in VCF format:
+        else if (OUTPUT_MODE==1 && printParent && printAlignment) {
+            nBreakpoints[0]++; nBreakpoints[violationType]++;
             final String refChrom = parent.chrId;
             final int refPos = (parent.isRc?parent.chrFirst:parent.chrLast)+1;
             final String altChrom = alignment.chrId;
@@ -246,7 +371,21 @@ public class AssemblySam2Breakpoints2 {
             if (!alignment.isRc) alt="["+altChrom+":"+altPos+"[";
             else alt="]"+altChrom+":"+altPos+"]";
             alt=parent.isRc?alt+"N":"N"+alt;
-            System.out.println(refChrom+"\t"+refPos+"\t"+id+"\tN\t"+alt+"\t"+Math.min(alignment.mapq,parent.mapq)+"\tPASS\tSVTYPE=BND\tGT\t0/1");
+            System.out.println(refChrom+"\t"+refPos+"\t"+nBreakpoints[0]+"\tN\t"+alt+"\t"+Math.min(alignment.mapq,parent.mapq)+"\tPASS\tSVTYPE=BND\tGT\t0/1");
+        }
+        */
+    }
+
+
+    /**
+     * @param last prints the projection on the ref. of the last (TRUE) of first
+     * (FALSE) position of `alignment` in contig order.
+     */
+    private static void printFirstLast(Alignment alignment, boolean last) {
+        if (CHROMOSOME_MODE==0 || (CHROMOSOME_MODE==1 && isStandardChromosome(alignment.chrId))) {
+            nBreakpoints[0]++; nBreakpoints[4]++;
+            if (last) System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrFirst:alignment.chrLast)+",-1,-1");
+            else System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+",-1,-1");
         }
     }
 
@@ -322,13 +461,28 @@ public class AssemblySam2Breakpoints2 {
         public boolean hasChildren;
         public int connectedComponent;
 
+        /**
+         * Format: `refPos,length,...`
+         */
+        public ArrayList<Integer> internalBreakpoints;
 
-        public Alignment(String chrId, int chrFirst, int chrLast, String readId, int readFirst, int readLast, boolean isRc, int readLength, int mapq) {
+
+        public Alignment(String chrId, int chrFirst, int chrLast, String readId, int readFirst, int readLast, boolean isRc, int readLength, int mapq, ArrayList<Integer> ib) {
             this.chrId = chrId; this.chrFirst=chrFirst; this.chrLast=chrLast;
             this.readId = readId; this.readFirst=readFirst; this.readLast=readLast;
             this.isRc=isRc; this.readLength=readLength; this.mapq=mapq;
 
             maxLength=0; parent=null; hasChildren=false; connectedComponent=-1;
+            internalBreakpoints = new ArrayList<Integer>(ib);
+        }
+
+
+        public void printInternalBreakpoints() {
+            final int length = internalBreakpoints.size();
+            for (int i=0; i<length; i+=2) {
+                System.out.println------->(internalBreakpoints.get(i));
+            }
+            System.err.println("");
         }
 
         public int compareTo(Object o) {
@@ -345,6 +499,33 @@ public class AssemblySam2Breakpoints2 {
                 else if (this.readFirst>a.readFirst) return 1;
                 if (this.readLast<a.readLast) return -1;
                 else if (this.readLast>a.readLast) return 1;
+            }
+            return 0;
+        }
+    }
+
+
+    private static class Interval implements Comparable {
+        private static int ORDER = 0;  // 0=first, 1=id
+
+        public boolean isContained;
+        public int first, last, id;
+
+        public Interval(int first, int last, int id) { 
+            this.first=first; this.last=last; this.id=id;
+            isContained=false;
+        }
+
+        public int compareTo(Object o) {
+            Interval other = (Interval)o;
+            if (ORDER==0) {
+                if (this.first<other.first) return -1;
+                else if (this.first>other.first) return 1;
+                if (this.last<other.last) return -1;
+                else if (this.last>other.last) return 1;
+            } else {
+                if (this.id<other.id) return -1;
+                else if (this.id>other.id) return 1;
             }
             return 0;
         }
