@@ -46,7 +46,9 @@ public class BndFilterWithAssemblyBreakpoints {
         str=br.readLine();
         while (str!=null) {
             p=str.indexOf(',');
-            breakpoints.add(new Breakpoint(str.substring(0,p),Integer.parseInt(str.substring(p+1))));
+            q=str.indexOf(',',p+1);
+            if (q<0) q=str.length();
+            breakpoints.add(new Breakpoint(str.substring(0,p),Integer.parseInt(str.substring(p+1,q))));
             str=br.readLine();
         }
         br.close();

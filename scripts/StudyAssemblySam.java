@@ -217,7 +217,10 @@ public class StudyAssemblySam {
         String mapq;
 
         public Alignment(String readId, int readLength, int readFirst, int readLast, String chrId, int chrFirst, int chrLast, boolean isRc, String mapq) {
-            this.readId=readId; this.readLength=readLength; this.readFirst=readFirst; this.readLast=readLast; this.chrId=chrId; this.chrFirst=chrFirst; this.chrLast=chrLast; this.isRc=isRc; this.mapq=mapq;
+            this.readId=readId; this.readLength=readLength;
+            this.readFirst=isRc?readLength-readLast-1:readFirst;
+            this.readLast=isRc?readLength-readFirst-1:readLast;
+            this.chrId=chrId; this.chrFirst=chrFirst; this.chrLast=chrLast; this.isRc=isRc; this.mapq=mapq;
         }
 
         public int compareTo(Object o) {
