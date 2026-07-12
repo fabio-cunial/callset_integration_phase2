@@ -247,15 +247,6 @@ public class AssemblySam2Breakpoints2 {
         System.err.println("Contig "+alignments.get(0).readId+" has "+nComponents+" connected components, whose longest chains have length (bp):");
         for (i=0; i<nComponents; i++) System.err.println(maxLength[i]+"");
 
-
-        if (alignments.get(0).readId.equals("HG00097#2#CM094075.1")) {
-            for (i=0; i<N_ALIGNMENTS; i++) {
-                a=alignments.get(i);
-                System.err.println("Alignment "+i+": component="+a.connectedComponent+", "+a.chrId+", isRc="+a.isRc+", chrFirst="+a.chrFirst+" chrLast="+a.chrLast+", read "+a.readId+", readFirst="+a.readFirst+" readLast="+a.readLast);
-            }
-        }
-
-
         // Finding a longest chain with smallest number of violations, for every 
         // connected component.
         if (minViolations==null || minViolations.length<nComponents) minViolations = new long[nComponents]; 
