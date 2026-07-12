@@ -339,11 +339,11 @@ public class AssemblySam2Breakpoints2 {
 
         if (printParent) {
             nBreakpoints[0]++; nBreakpoints[violationType]++;
-            System.out.println(parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast)+","+alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst));
+            System.out.println(parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast)+","+alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+","+violationType);
         }
         if (printAlignment) {
             nBreakpoints[0]++; nBreakpoints[violationType]++;
-            System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+","+parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast));
+            System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+","+parent.chrId+","+(parent.isRc?parent.chrFirst:parent.chrLast)+","+violationType);
         }
 
         /* Old code for printing a VCF:
@@ -370,8 +370,8 @@ public class AssemblySam2Breakpoints2 {
     private static void printFirstLast(Alignment alignment, boolean last) {
         if (CHROMOSOME_MODE==0 || (CHROMOSOME_MODE==1 && isStandardChromosome(alignment.chrId))) {
             nBreakpoints[0]++; nBreakpoints[4]++;
-            if (last) System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrFirst:alignment.chrLast)+",-1,-1");
-            else System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+",-1,-1");
+            if (last) System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrFirst:alignment.chrLast)+",-1,-1,4");
+            else System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrLast:alignment.chrFirst)+",-1,-1,4");
         }
     }
 
@@ -488,12 +488,12 @@ public class AssemblySam2Breakpoints2 {
                 from=internalBreakpoints.get(i);
                 to=internalBreakpoints.get(i+1);
                 if (to==from) {
-                    System.out.println(chrId+","+from+",-1,-1");
+                    System.out.println(chrId+","+from+",-1,-1,5");
                     nBreakpoints[0]++; nBreakpoints[5]++;
                 }
                 else {
-                    System.out.println(chrId+","+from+","+chrId+","+to);
-                    System.out.println(chrId+","+to+","+chrId+","+from);
+                    System.out.println(chrId+","+from+","+chrId+","+to+",5");
+                    System.out.println(chrId+","+to+","+chrId+","+from+",5");
                     nBreakpoints[0]+=2; nBreakpoints[5]+=2;
                 }
             }
