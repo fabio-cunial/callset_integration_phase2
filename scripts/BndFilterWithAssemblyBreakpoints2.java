@@ -13,7 +13,8 @@ import java.io.*;
  *   to implement;
  * - for simplicity, BNDs are assumed to follow the simple form without
  *   inserted sequence;
- * - the implementation could be made much faster.
+ * - the implementation could be made much faster;
+ * - all the internal matching logic works on coordinates in 0-based form.
  */
 public class BndFilterWithAssemblyBreakpoints2 {
 
@@ -32,9 +33,9 @@ public class BndFilterWithAssemblyBreakpoints2 {
         final int MAX_DISTANCE = Integer.parseInt(args[2]);
         final String REFERENCE_AGP = args[3];
     
-        int i, p, q, r;
+        int i, p;
         int nRecordsIn, nRecordsOut;
-        String str, chrom;
+        String str;
         BufferedReader br;
         Breakpoint query, queryPrime;
         String[] tokens;
@@ -49,23 +50,25 @@ public class BndFilterWithAssemblyBreakpoints2 {
         str=br.readLine();
         while (str!=null) {
             tokens=str.split(",");
-            breakpoints.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[1]),tokens[2],Integer.parseInt(tokens[3]),Integer.parseInt(tokens[4])));
+            breakpoints.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[1]),tokens[2],Integer.parseInt(tokens[3]),Integer.parseInt(tokens[4])));  // Already zero-based
             str=br.readLine();
         }
         br.close();
         breakpoints.sort(null);
 
-        // Loading all gaps.
-        // Remark: we mark gaps with otherChr=-2, otherPos=-2, type=-1.
+        // Loading all gaps
+        // Remarks: 
+        // - AGP files are 1-based inclusive;
+        // - we mark gaps with otherChr=-2, otherPos=-2, type=-1.
         gaps = new ArrayList<Breakpoint>();
         br = new BufferedReader(new FileReader(REFERENCE_AGP));
         str=br.readLine();
         while (str!=null) {
             if (str.charAt(0)=='#') { str=br.readLine(); continue; }
             tokens=str.split("\t");
-            if (tokens[4].equals("N")) {
-                gaps.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[1]),"-2",-2,-1));
-                gaps.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[2]),"-2",-2,-1));
+            if (tokens[4].equals("N") || tokens[4].equals("U")) {
+                gaps.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[1])-1,"-2",-2,-1));
+                gaps.add(new Breakpoint(tokens[0],Integer.parseInt(tokens[2])-1,"-2",-2,-1));
             }
             str=br.readLine();
         }
@@ -174,7 +177,7 @@ public class BndFilterWithAssemblyBreakpoints2 {
             String alt;
 
             this.chr=tokens[0];
-            this.pos=Integer.parseInt(tokens[1]);
+            this.pos=Integer.parseInt(tokens[1])-1;
             alt=tokens[4];
             p=alt.indexOf('['); q=alt.indexOf(']'); 
             if (p>=0) {
