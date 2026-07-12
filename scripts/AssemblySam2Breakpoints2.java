@@ -212,11 +212,13 @@ public class AssemblySam2Breakpoints2 {
     private static final void printBreakpoints(ArrayList<Alignment> alignments) throws IOException {
         final int N_ALIGNMENTS = alignments.size();
 
-        int i, j;
-        int nComponents, nComponentsWithViolations, nContainedComponents, violationType, nBreakpointsBefore;
+        int i, j, p;
+        int nComponents, nComponentsWithViolations, nContainedComponents, violationType, nBreakpointsBefore, aComponent, bComponent;
         long aLength, bLength, nViolations;
         Alignment a, b;
         Interval tmpInterval;
+        ArrayList<Integer> componentParent = new ArrayList<Integer>();
+        ArrayList<Integer> componentParentId = new ArrayList<Integer>();
 
         nBreakpointsBefore=nBreakpoints[0];
 
@@ -225,17 +227,34 @@ public class AssemblySam2Breakpoints2 {
         Alignment.ORDER=1; alignments.sort(null);  // Forward read order
         for (i=0; i<N_ALIGNMENTS; i++) {
             a=alignments.get(i);
-            if (a.connectedComponent==-1) a.connectedComponent=nComponents++;
+            if (a.connectedComponent==-1) {
+                a.connectedComponent=nComponents++;
+                componentParent.add(-1);
+            }
             aLength=a.readLast-a.readFirst+1;
             for (j=i+1; j<N_ALIGNMENTS; j++) {
                 b=alignments.get(j);
                 if (b.readFirst>a.readLast+MAX_ADJACENCY_DISTANCE) break;
                 if (b.readFirst<a.readLast-MAX_ADJACENCY_DISTANCE) continue;
-                b.connectedComponent=a.connectedComponent;
+                if (b.connectedComponent==-1) b.connectedComponent=a.connectedComponent;
+                else if (b.connectedComponent!=a.connectedComponent) {
+                    aComponent=a.connectedComponent;
+                    while (componentParent.get(aComponent)!=-1) aComponent=componentParent.get(aComponent);
+                    bComponent=b.connectedComponent;
+                    while (componentParent.get(bComponent)!=-1) bComponent=componentParent.get(bComponent);
+                    if (aComponent!=bComponent) componentParent.set(Math.max(aComponent,bComponent),Math.min(aComponent,bComponent));
+                }
                 a.hasChildren=true;
                 bLength=a.maxLength+aLength;
                 if (bLength>b.maxLength) { b.maxLength=bLength; b.parent=a; }
             }
+        }
+        nComponents=0;
+        for (i=0; i<componentParent.size(); i++) componentParentId.add(componentParent.get(i)==-1?nComponents++:-1);
+        for (i=0; i<N_ALIGNMENTS; i++) {
+            a=alignments.get(i);
+            while (componentParent.get(a.connectedComponent)!=-1) a.connectedComponent=componentParent.get(a.connectedComponent);
+            a.connectedComponent=componentParentId.get(a.connectedComponent);
         }
         if (maxLength==null || maxLength.length<nComponents) maxLength = new long[nComponents];
         Arrays.fill(maxLength,0,nComponents,0);
@@ -287,8 +306,8 @@ public class AssemblySam2Breakpoints2 {
         for (i=0; i<nComponents; i++) {
             if (componentIntervals.get(i).isContained) continue;
             for (j=i+1; j<nComponents; j++) {
-                if (componentIntervals.get(j).last>componentIntervals.get(i).last+CONTAINMENT_SLACK_BP) break;
-                componentIntervals.get(j).isContained=true;
+                if (componentIntervals.get(j).first>=componentIntervals.get(i).last) break;
+                if (componentIntervals.get(j).last<=componentIntervals.get(i).last+CONTAINMENT_SLACK_BP) componentIntervals.get(j).isContained=true;
             }
             for (j=i-1; j>=0; j--) {
                 if (componentIntervals.get(j).first<componentIntervals.get(i).first-CONTAINMENT_SLACK_BP) break;
@@ -326,7 +345,9 @@ public class AssemblySam2Breakpoints2 {
     private static final int getViolationType(Alignment alignment, Alignment parent) {
         if (!parent.chrId.equals(alignment.chrId)) return 1;
         if (parent.isRc!=alignment.isRc) return 2;
-        if ((!alignment.isRc && alignment.chrFirst>parent.chrLast+MIN_VIOLATION_DISTANCE) || (alignment.isRc && parent.chrFirst>alignment.chrLast+MIN_VIOLATION_DISTANCE)) return 3;
+        if ( (!alignment.isRc && (alignment.chrFirst>parent.chrLast+MIN_VIOLATION_DISTANCE || alignment.chrLast<=parent.chrLast)) || 
+             ( alignment.isRc && (parent.chrFirst>alignment.chrLast+MIN_VIOLATION_DISTANCE || parent.chrLast<=alignment.chrLast))
+           ) return 3;
         return 0;
     }
 

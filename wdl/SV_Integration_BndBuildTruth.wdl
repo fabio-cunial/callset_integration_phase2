@@ -10,9 +10,11 @@ workflow SV_Integration_BndBuildTruth {
         File hap2_bam
 
         Int max_adjacency_distance = 1000
-        Int min_violation_distance = 50000
-        Int output_mode = 0
-        File? header_vcf
+        Int min_violation_distance = 100000
+        Int chromosome_mode = 0
+        Int print_chain_start_end = 1
+        Int containment_slack_bp = 1000
+        Int min_internal_sv_length = 100000
 
         String remote_outdir
         
@@ -21,8 +23,6 @@ workflow SV_Integration_BndBuildTruth {
     parameter_meta {
         max_adjacency_distance: "Max distance (on an assembled contig) between two alignments for them to be considered adjacent. 1kbp seems a good value based on a histogram of nearest-neighbor distances."
         min_violation_distance: "Min distance (on the same reference chr) between two alignments (that are adjacent on some contig) for them to be considered a colinearity violation. Any setting will capture some ultralong DELs."
-        output_mode: "0=a CSV of points; 1=a BND VCF"
-        header_vcf: "Header to be given to the output VCF, if any."
         remote_outdir: "Without final slash"
     }
     
@@ -34,8 +34,10 @@ workflow SV_Integration_BndBuildTruth {
 
             max_adjacency_distance = max_adjacency_distance,
             min_violation_distance = min_violation_distance,
-            output_mode = output_mode,
-            header_vcf = header_vcf,
+            chromosome_mode = chromosome_mode,
+            print_chain_start_end = print_chain_start_end,
+            containment_slack_bp = containment_slack_bp,
+            min_internal_sv_length = min_internal_sv_length,
 
             remote_outdir = remote_outdir,
 
@@ -61,8 +63,10 @@ task Impl {
 
         Int max_adjacency_distance
         Int min_violation_distance
-        Int output_mode
-        File? header_vcf
+        Int chromosome_mode
+        Int print_chain_start_end
+        Int containment_slack_bp
+        Int min_internal_sv_length
 
         String remote_outdir
         
@@ -90,22 +94,13 @@ task Impl {
         samtools --version 1>&2
         df -h 1>&2
 
-
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap1.sam ~{hap1_bam}
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap2.sam ~{hap2_bam}
-        if [ ~{output_mode} -eq 0 ]; then
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ~{sample_id}_breakpoints1.csv &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 0 > ~{sample_id}_breakpoints2.csv &
-            wait
-            cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ~{sample_id}_breakpoints.csv
-            gcloud storage mv ~{sample_id}_breakpoints.csv ~{remote_outdir}/
-        else
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ~{sample_id}_breakpoints1.vcf &
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} 1 > ~{sample_id}_breakpoints2.vcf &
-            wait
-            cat ~{header_vcf} ~{sample_id}_breakpoints1.vcf ~{sample_id}_breakpoints2.vcf > ~{sample_id}_breakpoints.vcf
-            gcloud storage mv ~{sample_id}_breakpoints.vcf ~{remote_outdir}/
-        fi
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints1.csv &
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints2.csv &
+        wait
+        cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ~{sample_id}_breakpoints.csv
+        gcloud storage mv ~{sample_id}_breakpoints.csv ~{remote_outdir}/
     >>>
     
     output {
