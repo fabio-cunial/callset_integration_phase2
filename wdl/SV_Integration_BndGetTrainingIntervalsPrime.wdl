@@ -105,7 +105,7 @@ task Impl {
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndCanonize ${SAMPLE_ID}_bnd.vcf.gz > ${SAMPLE_ID}_bnd_canonized.vcf
             rm -f ${SAMPLE_ID}_bnd.vcf.gz*
             gcloud storage cp ~{remote_indir_truth}/${SAMPLE_ID}_breakpoints.csv .
-            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} ~{breakpoint_filter_mode} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints2 ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -f ${SAMPLE_ID}_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
             
