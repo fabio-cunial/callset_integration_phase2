@@ -135,6 +135,18 @@ END
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
+        if [ ~{svtype} = "bnd" -o ~{svtype} = "BND" ]; then
+            # Collapsing highly similar BNDs
+            cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
+                /^#CHROM/ {print $0, "Artificial"; next} \
+                /^#/ {print; next} \
+                {print $0, "0/1"} \
+            ' | bgzip > out_prime.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t out_prime.vcf.gz
+            rm -f out.vcf
+            ${TIME_COMMAND} truvari collapse --intra --input out_prime.vcf.gz --bnddist ~{truvari_bnddist} | bcftools view --samples SAMPLE --output-type v --output out.vcf
+            rm -f out_prime.vcf.gz
+        fi
 
         # Removing SVLEN from symbolic ALTs
         if [ ~{svtype} != "ins" -a ~{svtype} != "INS" -a ~{svtype} != "bnd" -a ~{svtype} != "BND" ]; then
@@ -146,17 +158,6 @@ END
                 printf("\n"); \
             }' >> ~{svtype}~{suffix}_merged.vcf
             rm -f out.vcf
-        elif [ ~{svtype} = "bnd" -o ~{svtype} = "BND" ]; then
-            # Collapsing highly similar BNDs
-            cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
-                /^#CHROM/ {print $0, "Artificial"; next} \
-                /^#/ {print; next} \
-                {print $0, "0/1"} \
-            ' | bgzip > output_prime.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t output_prime.vcf.gz
-            rm -f out.vcf
-            ${TIME_COMMAND} truvari collapse --intra --input output_prime.vcf.gz --bnddist ~{truvari_bnddist} | bcftools view --samples SAMPLE --output-type v --output ~{svtype}~{suffix}_merged.vcf
-            rm -f output_prime.vcf.gz
         else
             mv out.vcf ~{svtype}~{suffix}_merged.vcf
         fi
