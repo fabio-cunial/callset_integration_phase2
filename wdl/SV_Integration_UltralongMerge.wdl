@@ -18,6 +18,7 @@ workflow SV_Integration_UltralongMerge {
         String suffix
 
         Int bnd_remove_orientations = 0
+        Int truvari_bnddist = 100
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
@@ -32,6 +33,7 @@ workflow SV_Integration_UltralongMerge {
             svtype = svtype,
             suffix = suffix,
             bnd_remove_orientations = bnd_remove_orientations,
+            truvari_bnddist = truvari_bnddist,
             docker_image = docker_image
     }
     
@@ -45,6 +47,7 @@ workflow SV_Integration_UltralongMerge {
 # TOOL                                                CPU     RAM     TIME
 # fix_sample.sh                                      300%     11M       4s
 # bcftools concat                                    300%    1.5G      20s
+# truvari collapse (BNDs only)                       
 #
 task Impl {
     input {
@@ -55,7 +58,8 @@ task Impl {
         String svtype
         String suffix
 
-        Int bnd_remove_orientations = 0
+        Int bnd_remove_orientations
+        Int truvari_bnddist
         
         String docker_image
         Int n_cpu = 4
@@ -142,6 +146,17 @@ END
                 printf("\n"); \
             }' >> ~{svtype}~{suffix}_merged.vcf
             rm -f out.vcf
+        elif [ ~{svtype} = "bnd" -o ~{svtype} = "BND" ]; then
+            # Collapsing highly similar BNDs
+            cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
+                /^#CHROM/ {print $0, "Artificial"; next} \
+                /^#/ {print; next} \
+                {print $0, "0/1"} \
+            ' | bgzip > output_prime.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t output_prime.vcf.gz
+            rm -f out.vcf
+            ${TIME_COMMAND} truvari collapse --intra --input output_prime.vcf.gz --bnddist ~{truvari_bnddist} | bcftools view --samples SAMPLE --output-type v --output ~{svtype}~{suffix}_merged.vcf
+            rm -f output_prime.vcf.gz
         else
             mv out.vcf ~{svtype}~{suffix}_merged.vcf
         fi

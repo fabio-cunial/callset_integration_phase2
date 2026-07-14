@@ -99,7 +99,7 @@ task Impl {
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints1.csv &
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints2.csv &
         wait
-        cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n > ~{sample_id}_breakpoints.csv
+        cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n | uniq > ~{sample_id}_breakpoints.csv
         gcloud storage mv ~{sample_id}_breakpoints.csv ~{remote_outdir}/
     >>>
     

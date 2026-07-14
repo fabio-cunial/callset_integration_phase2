@@ -108,9 +108,11 @@ task Impl {
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M BndFilterWithAssemblyBreakpoints2 ${SAMPLE_ID}_bnd_canonized.vcf ${SAMPLE_ID}_breakpoints.csv ~{breakpoint_max_distance} ~{reference_agp} | bcftools sort - --output-type z > ${SAMPLE_ID}_bnd_training.vcf.gz
             rm -f ${SAMPLE_ID}_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training.vcf.gz
+            bcftools filter --threads ${N_THREADS} --exclude 'INFO/TRUTH_BND_TYPE=4' --output-type z ${SAMPLE_ID}_bnd_training.vcf.gz --output ${SAMPLE_ID}_bnd_training_no_4.vcf.gz
+            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_bnd_training_no_4.vcf.gz
             
             # Uploading and deallocating the sample
-            gcloud storage mv ${SAMPLE_ID}_bnd_training.vcf.'gz*' ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_bnd_training'*.vcf.gz*' ~{remote_outdir}/
             touch ${SAMPLE_ID}.done
             gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
             rm -rf ${SAMPLE_ID}_*
