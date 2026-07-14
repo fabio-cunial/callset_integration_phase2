@@ -7,6 +7,9 @@ import java.io.*;
  */
 public class BndCount {
 
+    private static int[][] counts = new int[4][3];
+
+
     /**
      * @param args
      */
@@ -15,7 +18,6 @@ public class BndCount {
     
         String str;
         BufferedReader br;
-        int[][] counts = new int[4][3];
         String[] tokens;
 
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );

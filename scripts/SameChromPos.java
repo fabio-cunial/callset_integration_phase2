@@ -21,15 +21,21 @@ public class SameChromPos {
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
+        final String CLUSTER_SIZE_FILE = args[1];
+        final String MAX_DELTAS_FILE = args[2];
 
         int i;
-        int pos, currentPos, currentRecords, currentIns, currentDel;
+        int svlen, pos, currentPos, currentRecords, currentIns, currentDel;
+        double currentMin, currentMax;
         String str, svtype, currentChrom;
         BufferedReader br;
+        BufferedWriter bwSize, bwDelta;
         String[] tokens;
 
+        bwSize = new BufferedWriter(new FileWriter(CLUSTER_SIZE_FILE));
+        bwDelta = new BufferedWriter(new FileWriter(MAX_DELTAS_FILE));
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        currentChrom=""; currentPos=-1; currentRecords=0; currentIns=0; currentDel=0;
+        currentChrom=""; currentPos=-1; currentRecords=0; currentIns=0; currentDel=0; currentMin=Integer.MAX_VALUE; currentMax=Integer.MIN_VALUE;
         tokens=null; pos=-1;
         str=br.readLine();
         while (str!=null) {
@@ -49,15 +55,22 @@ public class SameChromPos {
                         if (currentIns>0 && currentDel>0) counts[3]++;
                         if (currentIns>1) counts[4]++;
                         if (currentDel>1) counts[5]++;
+                        bwSize.write(currentRecords+"\n");
+                        bwDelta.write((currentMax-currentMin)+","+((currentMax-currentMin)/currentMin)+"\n");
                     }
                 }
                 currentChrom=tokens[0]; currentPos=pos;
                 currentRecords=0; currentIns=0; currentDel=0;
+                currentMin=Integer.MAX_VALUE; currentMax=Integer.MIN_VALUE;
             }
             currentRecords++;
             svtype=getInfoField(tokens[7],"SVTYPE");
             if (svtype.equalsIgnoreCase("INS")) currentIns++;
             else if (svtype.equalsIgnoreCase("DEL")) currentDel++;
+            svlen=Integer.parseInt(getInfoField(tokens[7],"SVLEN"));
+            if (svlen<0) svlen=-svlen;
+            if (svlen<currentMin) currentMin=svlen;
+            if (svlen>currentMax) currentMax=svlen;
             str=br.readLine();
         }
         // End of last block
@@ -68,9 +81,11 @@ public class SameChromPos {
                 if (currentIns>0 && currentDel>0) counts[3]++;
                 if (currentIns>1) counts[4]++;
                 if (currentDel>1) counts[5]++;
+                bwSize.write(currentRecords+"\n");
+                bwDelta.write((currentMax-currentMin)+","+((currentMax-currentMin)/currentMin)+"\n");
             }
         }
-        br.close();
+        br.close(); bwSize.close(); bwDelta.close();
 
         // Outputting
         System.out.print(counts[0]+"");

@@ -5,6 +5,7 @@ version 1.0
 #
 workflow SameChromPos {
     input {
+        String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
         
@@ -15,6 +16,7 @@ workflow SameChromPos {
     
     call Impl {
         input:
+            chunk_id = chunk_id,
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
 
@@ -24,12 +26,17 @@ workflow SameChromPos {
     output {
         File stats_lt_50 = Impl.stats_lt_50
         File stats_ge_50 = Impl.stats_ge_50
+        File cluster_sizes_lt_50 = Impl.cluster_sizes_lt_50
+        File cluster_sizes_ge_50 = Impl.cluster_sizes_ge_50
+        File deltas_lt_50 = Impl.deltas_lt_50
+        File deltas_ge_50 = Impl.deltas_ge_50
     }
 }
 
 
 task Impl {
     input {
+        String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
         
@@ -52,24 +59,33 @@ task Impl {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        touch stats_lt_50.csv stats_ge_50.csv
+        touch ~{chunk_id}_stats_lt_50.csv 
+        touch ~{chunk_id}_stats_ge_50.csv
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_kanpig.vcf.'gz*' .
-            bcftools filter --include 'SVLEN<50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_lt_50.vcf
-            bcftools filter --include 'SVLEN>=50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_ge_50.vcf
-            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_lt_50.vcf >> stats_lt_50.csv
-            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_ge_50.vcf >> stats_ge_50.csv
+            bcftools filter --include 'ABS(SVLEN)<50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_lt_50.vcf
+            bcftools filter --include 'ABS(SVLEN)>=50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_ge_50.vcf
+            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_lt_50.vcf ${SAMPLE_ID}_cluster_sizes_lt_50.txt ${SAMPLE_ID}_deltas_lt_50.txt >> ~{chunk_id}_stats_lt_50.csv
+            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_ge_50.vcf ${SAMPLE_ID}_cluster_sizes_ge_50.txt ${SAMPLE_ID}_deltas_ge_50.txt >> ~{chunk_id}_stats_ge_50.csv
 
-            rm -f ${SAMPLE_ID}_*
+            rm -f ${SAMPLE_ID}_kanpig.vcf.gz*
         done 3< chunk.csv
+        cat *_cluster_sizes_lt_50.txt > cluster_sizes_lt_50.txt
+        cat *_cluster_sizes_ge_50.txt > cluster_sizes_ge_50.txt
+        cat *_deltas_lt_50.txt > deltas_lt_50.txt
+        cat *_deltas_ge_50.txt > deltas_ge_50.txt
     >>>
     
     output {
-        File stats_lt_50 = "stats_lt_50.csv"
-        File stats_ge_50 = "stats_ge_50.csv"
+        File stats_lt_50 = chunk_id + "_stats_lt_50.csv"
+        File stats_ge_50 = chunk_id + "_stats_ge_50.csv"
+        File cluster_sizes_lt_50 = "cluster_sizes_lt_50.txt"
+        File cluster_sizes_ge_50 = "cluster_sizes_ge_50.txt"
+        File deltas_lt_50 = "deltas_lt_50.txt"
+        File deltas_ge_50 = "deltas_ge_50.txt"
     }
     runtime {
         docker: docker_image
