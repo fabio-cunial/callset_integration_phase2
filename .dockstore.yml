@@ -680,3 +680,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_BndBuildTruth.wdl
   testParameterFiles:
+- name: SameChromPos
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SameChromPos.wdl
+  testParameterFiles:
