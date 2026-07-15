@@ -96,19 +96,19 @@ task Impl {
             
             rm -f ${SAMPLE_ID}_*.vcf*
         done 3< chunk.csv
-        cat *_cluster_sizes_lt_50.txt > cluster_sizes_lt_50.txt
-        cat *_cluster_sizes_ge_50.txt > cluster_sizes_ge_50.txt
-        cat *_deltas_lt_50.txt > deltas_lt_50.txt
-        cat *_deltas_ge_50.txt > deltas_ge_50.txt
+        cat *_cluster_sizes_lt_50.txt > ~{chunk_id}_cluster_sizes_lt_50.txt
+        cat *_cluster_sizes_ge_50.txt > ~{chunk_id}_cluster_sizes_ge_50.txt
+        cat *_deltas_lt_50.txt > ~{chunk_id}_deltas_lt_50.txt
+        cat *_deltas_ge_50.txt > ~{chunk_id}_deltas_ge_50.txt
     >>>
     
     output {
         File stats_lt_50 = chunk_id + "_stats_lt_50.csv"
         File stats_ge_50 = chunk_id + "_stats_ge_50.csv"
-        File cluster_sizes_lt_50 = "cluster_sizes_lt_50.txt"
-        File cluster_sizes_ge_50 = "cluster_sizes_ge_50.txt"
-        File deltas_lt_50 = "deltas_lt_50.txt"
-        File deltas_ge_50 = "deltas_ge_50.txt"
+        File cluster_sizes_lt_50 = chunk_id + "_cluster_sizes_lt_50.txt"
+        File cluster_sizes_ge_50 = chunk_id + "_cluster_sizes_ge_50.txt"
+        File deltas_lt_50 = chunk_id + "_deltas_lt_50.txt"
+        File deltas_ge_50 = chunk_id + "_deltas_ge_50.txt"
         File different_annotations_lt_50 = chunk_id + "_different_annotations_lt_50.csv"
         File different_annotations_ge_50 = chunk_id + "_different_annotations_ge_50.csv"
         File n_tr_clusters_lt_50 = chunk_id + "_n_tr_clusters_lt_50.csv"
