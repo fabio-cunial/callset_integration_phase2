@@ -83,6 +83,7 @@ task Impl {
         Int ram_size_gb = 3
         Int disk_size_gb = 20
         Int preemptible_number = 4
+        Int debug_mode = 0
     }
     parameter_meta {
     }
@@ -250,7 +251,11 @@ task Impl {
             JointVcfFiltering ${SAMPLE_ID} ${SAMPLE_ID}_kanpig.vcf.gz ${SAMPLE_ID}_training.vcf.gz
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
             PrintDebugInformation ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
-            FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
+            if [ ~{debug_mode} -eq 1 ]; then
+                gsutil mv ${SAMPLE_ID}_scored.'bcf*' ~{remote_outdir}/
+            else
+                FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
+            fi
             gsutil mv ${SAMPLE_ID}_xgboost.csv ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
