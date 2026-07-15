@@ -444,11 +444,7 @@ task Impl {
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            # Ensuring that every record has a unique ID, to enable joining by
-            # CHROM,POS,ID in downstream calls to `bcftools annotate`. Using
-            # CHROM,POS,REF,ALT can make `bcftools annotate` segfault, and the
-            # speed of joining by CHROM,POS,ID is independent of SVLEN.
-            #
+            # Ensuring that every record has a unique ID.
             # Remark: we preserve the original ID just for debugging reasons.
             (bcftools view --header-only ${SAMPLE_ID}_in.vcf ; bcftools view --no-header ${SAMPLE_ID}_in.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; i=0; } { printf("%s\t%s\t%d-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,++i,$3,$4,$5,$6,$7,$8,$9,$10); }') | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
@@ -572,17 +568,17 @@ task Impl {
             local OUTPUT_FORMAT=$3
             local OUTPUT_VCF_GZ=$4
             
-            bcftools query --format '%CHROM\t%POS\t%ID\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t[%SUPP]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 printf("%s",$1); \
                 for (i=2; i<=NF-1; i++) printf("\t%s",$i); \
-                if ($4=="0") printf("\t0\t0\t0");
-                else if ($4=="1") printf("\t0\t0\t1");
-                else if ($4=="2") printf("\t0\t1\t0");
-                else if ($4=="3") printf("\t0\t1\t1");
-                else if ($4=="4") printf("\t1\t0\t0");
-                else if ($4=="5") printf("\t1\t0\t1");
-                else if ($4=="6") printf("\t1\t1\t0");
-                else if ($4=="7") printf("\t1\t1\t1");
+                if ($5=="0") printf("\t0\t0\t0");
+                else if ($5=="1") printf("\t0\t0\t1");
+                else if ($5=="2") printf("\t0\t1\t0");
+                else if ($5=="3") printf("\t0\t1\t1");
+                else if ($5=="4") printf("\t1\t0\t0");
+                else if ($5=="5") printf("\t1\t0\t1");
+                else if ($5=="6") printf("\t1\t1\t0");
+                else if ($5=="7") printf("\t1\t1\t1");
                 printf("\n"); \
             }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
@@ -591,7 +587,7 @@ task Impl {
             echo '##INFO=<ID=SUPP_PBSV,Number=1,Type=Integer,Description="Supported by pbsv">' >> ${SAMPLE_ID}_header.txt
             # Remark: the order of the callers is now the reverse of the one in
             # which they were bcftools-merged.
-            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} --output ${OUTPUT_VCF_GZ}
+            ${TIME_COMMAND} bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,REF,ALT,INFO/SUPP_SNIFFLES,INFO/SUPP_PBSV,INFO/SUPP_PAV --output-type ${OUTPUT_FORMAT} ${INPUT_VCF_GZ} --output ${OUTPUT_VCF_GZ}
             if [ ${OUTPUT_FORMAT} = z ]; then
                 bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
             elif [ ${OUTPUT_FORMAT} = b ]; then
@@ -673,45 +669,45 @@ task Impl {
             # Copying fields from FORMAT to INFO. Every record is assumed to
             # have a distinct ID, which is enforced by the steps of the
             # pipeline upstream.
-            bcftools query -f '%CHROM\t%POS\t%ID\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 KS_1=-1; KS_2=-1; \
                 p=0; \
-                for (i=1; i<=length($4); i++) { \
-                    if (substr($4,i,1)==",") { p=i; break; } \
+                for (i=1; i<=length($5); i++) { \
+                    if (substr($5,i,1)==",") { p=i; break; } \
                 } \
-                if (p==0) { KS_1=$4; KS_2=$4; } \
-                else { KS_1=substr($4,1,p-1); KS_2=substr($4,p+1); } \
+                if (p==0) { KS_1=$5; KS_2=$5; } \
+                else { KS_1=substr($5,1,p-1); KS_2=substr($5,p+1); } \
                 if (KS_1==".") KS_1=-1; \
                 if (KS_2==".") KS_2=-1; \
                 \
-                SQ=$5; \
+                SQ=$6; \
                 if (SQ==".") SQ=-1; \
                 \
-                GQ=$6; \
+                GQ=$7; \
                 if (GQ==".") GQ=-1; \
                 \
-                DP=$7; \
+                DP=$8; \
                 if (DP==".") DP=-1; \
                 \
                 AD_NON_ALT=-1; AD_ALL=-1; \
                 p=0; \
-                for (i=1; i<=length($8); i++) { \
-                    if (substr($8,i,1)==",") { p=i; break; } \
+                for (i=1; i<=length($9); i++) { \
+                    if (substr($9,i,1)==",") { p=i; break; } \
                 } \
-                if (p==0) { AD_NON_ALT=$8; AD_ALL=$8; } \
-                else { AD_NON_ALT=substr($8,1,p-1); AD_ALL=substr($8,p+1); } \
+                if (p==0) { AD_NON_ALT=$9; AD_ALL=$9; } \
+                else { AD_NON_ALT=substr($9,1,p-1); AD_ALL=substr($9,p+1); } \
                 if (AD_NON_ALT==".") AD_NON_ALT=-1; \
                 if (AD_ALL==".") AD_ALL=-1; \
                 \
                 GT_COUNT=-1; \
-                if ($9=="0/0" || $9=="0|0" || $9=="./."  || $9==".|." || $9=="./0" || $9==".|0" || $9=="0/." || $9=="0|." || $9=="0" || $9==".") GT_COUNT=0; \
-                else if ($9=="0/1" || $9=="0|1" || $9=="1/0" || $9=="1|0" || $9=="./1" || $9==".|1" || $9=="1/." || $9=="1|." || $9=="1") GT_COUNT=1; \
-                else if ($9=="1/1" || $9=="1|1") GT_COUNT=2; \
+                if ($10=="0/0" || $10=="0|0" || $10=="./."  || $10==".|." || $10=="./0" || $10==".|0" || $10=="0/." || $10=="0|." || $10=="0" || $10==".") GT_COUNT=0; \
+                else if ($10=="0/1" || $10=="0|1" || $10=="1/0" || $10=="1|0" || $10=="./1" || $10==".|1" || $10=="1/." || $10=="1|." || $10=="1") GT_COUNT=1; \
+                else if ($10=="1/1" || $10=="1|1") GT_COUNT=2; \
                 \
-                printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,$10,$11,$12); \
+                printf("%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,$4,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,$11,$12,$13); \
             }' | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_format.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns CHROM,POS,REF,ALT,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf.gz
             mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             (bcftools view --no-header ${SAMPLE_ID}_in.vcf.gz | head -n 1 || echo "0") 1>&2
             

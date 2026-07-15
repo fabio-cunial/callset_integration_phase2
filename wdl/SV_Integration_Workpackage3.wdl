@@ -171,9 +171,9 @@ task Impl {
             echo '##FORMAT=<ID=SUPP_PAV,Number=1,Type=Integer,Description="Supported by pav">' >> ${SAMPLE_ID}_header.txt
             echo '##FORMAT=<ID=SCORE,Number=1,Type=Float,Description="Score according to the XGBoost model">' >> ${SAMPLE_ID}_header.txt
             echo '##FORMAT=<ID=CALIBRATION_SENSITIVITY,Number=1,Type=Float,Description="Calibration sensitivity according to the model applied by ScoreVariantAnnotations">' >> ${SAMPLE_ID}_header.txt
-            bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
+            bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%SCORE\t%CALIBRATION_SENSITIVITY\n' ${INPUT_VCF_GZ} | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,~ID,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_scored.bcf
+            bcftools annotate --threads ${N_THREADS} --header-lines ${SAMPLE_ID}_header.txt --annotations ${SAMPLE_ID}_format.tsv.gz --columns CHROM,POS,REF,ALT,FORMAT/SUPP_PBSV,FORMAT/SUPP_SNIFFLES,FORMAT/SUPP_PAV,FORMAT/SCORE,FORMAT/CALIBRATION_SENSITIVITY --output-type b ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_scored.bcf
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_scored.bcf
             (bcftools view --no-header ${SAMPLE_ID}_scored.bcf | head -n 1 || echo "0") 1>&2
             
@@ -191,12 +191,12 @@ task Impl {
             rm -rf ${SAMPLE_ID}_xgboost.csv
             local N_RECORDS_BEFORE_FILTERING=$(bcftools index --nrecords ${INPUT_BCF})
             for THRESHOLD in 0.7 0.8 0.9 0.95 ; do
-                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID\n' --include "FORMAT/CALIBRATION_SENSITIVITY<=${THRESHOLD}" ${INPUT_BCF} | wc -l )
                 local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records with CALIBRATION_SENSITIVITY<=${THRESHOLD}" >> ${SAMPLE_ID}_xgboost.csv
             done
             if [ "~{filter_string}" != "none" ]; then
-                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID'--include "~{filter_string}" ${INPUT_BCF} | wc -l )
+                local N_RECORDS_AFTER_FILTERING=$( bcftools query --format '%ID\n' --include "~{filter_string}" ${INPUT_BCF} | wc -l )
                 local PERCENT=$( echo "scale=2; 100 * ${N_RECORDS_AFTER_FILTERING} / ${N_RECORDS_BEFORE_FILTERING}" | bc )
                 echo "${N_RECORDS_AFTER_FILTERING},${N_RECORDS_BEFORE_FILTERING},${PERCENT},Number of records that pass the specified filter" >> ${SAMPLE_ID}_xgboost.csv
             fi
@@ -241,7 +241,7 @@ task Impl {
             
             # Skipping the sample if it has already been processed
             TEST=$( gsutil ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
-            if [ ${TEST} != "0" ]; then
+            if [ "${TEST}" != "0" ]; then
                 continue
             fi
             
@@ -251,6 +251,7 @@ task Impl {
             CopyInfoToFormat ${SAMPLE_ID} ${SAMPLE_ID}_score.vcf.gz
             PrintDebugInformation ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
             FilterChunkUpload ${SAMPLE_ID} ${SAMPLE_ID}_scored.bcf
+            gsutil mv ${SAMPLE_ID}_xgboost.csv ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
             ls -laht
         done 3< chunk.csv
