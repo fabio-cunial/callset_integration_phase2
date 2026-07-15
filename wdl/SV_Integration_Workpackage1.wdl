@@ -543,7 +543,7 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
@@ -693,7 +693,7 @@ task Impl {
                 DP=$7; \
                 if (DP==".") DP=-1; \
                 \
-                AD_NON_ALT=-1; AD_ALL=1; \
+                AD_NON_ALT=-1; AD_ALL=-1; \
                 p=0; \
                 for (i=1; i<=length($8); i++) { \
                     if (substr($8,i,1)==",") { p=i; break; } \
@@ -732,7 +732,7 @@ TRAINING_RESOURCE_VCF_GZ=$3
 INFINITY=$4
 CHUNK_ID=$5
 INCLUDE_BED=$6
-${TIME_COMMAND} truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
+truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
         
@@ -786,7 +786,7 @@ END
         truvari --help 1>&2
         ~{docker_dir}/kanpig --version 1>&2
         
-        GetReferenceGaps ~{reference_agp} not_gaps.bed
+        GetReferenceGaps 
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
