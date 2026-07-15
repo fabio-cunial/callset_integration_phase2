@@ -8,6 +8,8 @@ workflow SameChromPos {
         String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
+
+        File tr_bed
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
@@ -20,6 +22,8 @@ workflow SameChromPos {
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
 
+            tr_bed = tr_bed,
+
             docker_image = docker_image
     }
     
@@ -30,6 +34,10 @@ workflow SameChromPos {
         File cluster_sizes_ge_50 = Impl.cluster_sizes_ge_50
         File deltas_lt_50 = Impl.deltas_lt_50
         File deltas_ge_50 = Impl.deltas_ge_50
+        File different_annotations_lt_50 = Impl.different_annotations_lt_50
+        File different_annotations_ge_50 = Impl.different_annotations_ge_50
+        File n_tr_clusters_lt_50 = Impl.n_tr_clusters_lt_50
+        File n_tr_clusters_ge_50 = Impl.n_tr_clusters_ge_50
     }
 }
 
@@ -39,6 +47,8 @@ task Impl {
         String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
+
+        File tr_bed
         
         String docker_image
         Int n_cpu = 1
@@ -61,17 +71,30 @@ task Impl {
         
         touch ~{chunk_id}_stats_lt_50.csv 
         touch ~{chunk_id}_stats_ge_50.csv
+        touch ~{chunk_id}_different_annotations_lt_50.csv
+        touch ~{chunk_id}_different_annotations_ge_50.csv
+        touch ~{chunk_id}_n_tr_clusters_lt_50.csv
+        touch ~{chunk_id}_n_tr_clusters_ge_50.csv
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            
             gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_kanpig.vcf.'gz*' .
-            bcftools filter --include 'ABS(SVLEN)<50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_lt_50.vcf
-            bcftools filter --include 'ABS(SVLEN)>=50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_ge_50.vcf
-            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_lt_50.vcf ${SAMPLE_ID}_cluster_sizes_lt_50.txt ${SAMPLE_ID}_deltas_lt_50.txt >> ~{chunk_id}_stats_lt_50.csv
-            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_ge_50.vcf ${SAMPLE_ID}_cluster_sizes_ge_50.txt ${SAMPLE_ID}_deltas_ge_50.txt >> ~{chunk_id}_stats_ge_50.csv
 
-            rm -f ${SAMPLE_ID}_kanpig.vcf.gz*
+            bcftools filter --include 'ABS(SVLEN)<50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_lt_50.vcf
+            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_lt_50.vcf ${SAMPLE_ID}_cluster_sizes_lt_50.txt ${SAMPLE_ID}_deltas_lt_50.txt ${SAMPLE_ID}_clusters.vcf 1>> ~{chunk_id}_stats_lt_50.csv 2>> ~{chunk_id}_different_annotations_lt_50.csv
+            bgzip ${SAMPLE_ID}_clusters.vcf ; tabix -f ${SAMPLE_ID}_clusters.vcf.gz
+            N_TR_CLUSTERS_LT_50=$(bcftools view --no-header --regions-file ~{tr_bed} --regions-overlap pos ${SAMPLE_ID}_clusters.vcf.gz | wc -l)
+            echo ${N_TR_CLUSTERS_LT_50} >> ~{chunk_id}_n_tr_clusters_lt_50.csv
+            rm -f ${SAMPLE_ID}_clusters.vcf.gz
+
+            bcftools filter --include 'ABS(SVLEN)>=50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_ge_50.vcf
+            java -cp ~{docker_dir} SameChromPos ${SAMPLE_ID}_ge_50.vcf ${SAMPLE_ID}_cluster_sizes_ge_50.txt ${SAMPLE_ID}_deltas_ge_50.txt ${SAMPLE_ID}_clusters.vcf 1>> ~{chunk_id}_stats_ge_50.csv 2>> ~{chunk_id}_different_annotations_ge_50.csv
+            bgzip ${SAMPLE_ID}_clusters.vcf ; tabix -f ${SAMPLE_ID}_clusters.vcf.gz
+            N_TR_CLUSTERS_GE_50=$(bcftools view --no-header --regions-file ~{tr_bed} --regions-overlap pos ${SAMPLE_ID}_clusters.vcf.gz | wc -l)
+            echo ${N_TR_CLUSTERS_GE_50} >> ~{chunk_id}_n_tr_clusters_ge_50.csv
+            rm -f ${SAMPLE_ID}_clusters.vcf.gz
+            
+            rm -f ${SAMPLE_ID}_*.vcf*
         done 3< chunk.csv
         cat *_cluster_sizes_lt_50.txt > cluster_sizes_lt_50.txt
         cat *_cluster_sizes_ge_50.txt > cluster_sizes_ge_50.txt
@@ -86,6 +109,10 @@ task Impl {
         File cluster_sizes_ge_50 = "cluster_sizes_ge_50.txt"
         File deltas_lt_50 = "deltas_lt_50.txt"
         File deltas_ge_50 = "deltas_ge_50.txt"
+        File different_annotations_lt_50 = chunk_id + "_different_annotations_lt_50.csv"
+        File different_annotations_ge_50 = chunk_id + "_different_annotations_ge_50.csv"
+        File n_tr_clusters_lt_50 = chunk_id + "_n_tr_clusters_lt_50.csv"
+        File n_tr_clusters_ge_50 = chunk_id + "_n_tr_clusters_ge_50.csv"
     }
     runtime {
         docker: docker_image
