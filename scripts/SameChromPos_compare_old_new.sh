@@ -87,5 +87,5 @@ for SAMPLE_ID in ${SAMPLE_IDS}; do
     CompareOldNew ${SAMPLE_ID} lt_50 ${SAMPLE_ID}_old_lt_50.txt ${SAMPLE_ID}_new_lt_50.txt results_lt_50.csv
     CompareOldNew ${SAMPLE_ID} ge_50 ${SAMPLE_ID}_old_ge_50.txt ${SAMPLE_ID}_new_ge_50.txt results_ge_50.csv
 done
-cat *_lt_50_svtype_svlen.csv > lt_50_svtype_svlen.csv
-cat *_ge_50_svtype_svlen.csv > ge_50_svtype_svlen.csv
+cat *_lt_50_new_only_svtype_svlen.csv > lt_50_new_only_svtype_svlen.csv
+cat *_ge_50_new_only_svtype_svlen.csv > ge_50_new_only_svtype_svlen.csv
