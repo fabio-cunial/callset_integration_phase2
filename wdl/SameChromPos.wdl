@@ -8,12 +8,14 @@ workflow SameChromPos {
         String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
+        Int main_or_ultralong
 
         File tr_bed
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
+        main_or_ultralong: "0=main, 1=ultralong"
     }
     
     call Impl {
@@ -21,6 +23,7 @@ workflow SameChromPos {
             chunk_id = chunk_id,
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
+            main_or_ultralong = main_or_ultralong,
 
             tr_bed = tr_bed,
 
@@ -47,6 +50,7 @@ task Impl {
         String chunk_id
         File sv_integration_chunk_tsv
         String remote_indir
+        Int main_or_ultralong
 
         File tr_bed
         
@@ -111,19 +115,31 @@ task Impl {
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         while read -u 3 LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
-            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_kanpig.vcf.'gz*' .
+            if [ ~{main_or_ultralong} -eq 0 ]; then
+                SUFFIX="_kanpig.vcf.gz"
+            else
+                SUFFIX="_ultralong.bcf"
+            fi
+            gcloud storage cp ~{remote_indir}/${SAMPLE_ID}${SUFFIX}'*' .
 
-            bcftools filter --include 'ABS(SVLEN)<50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_lt_50.vcf
-            ProcessVcf ${SAMPLE_ID} ${SAMPLE_ID}_lt_50.vcf ${SAMPLE_ID}_cluster_sizes_lt_50.txt ${SAMPLE_ID}_deltas_lt_50.txt ~{chunk_id}_stats_lt_50.csv ~{chunk_id}_different_annotations_lt_50.csv ~{chunk_id}_trs_lt_50.csv
+            if [ ~{main_or_ultralong} -eq 0 ]; then
+                bcftools filter --include 'ABS(SVLEN)<50' --output-type v ${SAMPLE_ID}${SUFFIX} --output ${SAMPLE_ID}_lt_50.vcf
+                ProcessVcf ${SAMPLE_ID} ${SAMPLE_ID}_lt_50.vcf ${SAMPLE_ID}_cluster_sizes_lt_50.txt ${SAMPLE_ID}_deltas_lt_50.txt ~{chunk_id}_stats_lt_50.csv ~{chunk_id}_different_annotations_lt_50.csv ~{chunk_id}_trs_lt_50.csv
+            fi
 
-            bcftools filter --include 'ABS(SVLEN)>=50' --output-type v ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_ge_50.vcf
+            bcftools filter --include 'ABS(SVLEN)>=50' --output-type v ${SAMPLE_ID}${SUFFIX} --output ${SAMPLE_ID}_ge_50.vcf
             ProcessVcf ${SAMPLE_ID} ${SAMPLE_ID}_ge_50.vcf ${SAMPLE_ID}_cluster_sizes_ge_50.txt ${SAMPLE_ID}_deltas_ge_50.txt ~{chunk_id}_stats_ge_50.csv ~{chunk_id}_different_annotations_ge_50.csv ~{chunk_id}_trs_ge_50.csv
 
-            rm -f ${SAMPLE_ID}_*.vcf*
+            rm -f ${SAMPLE_ID}_*.vcf* ${SAMPLE_ID}_*.bcf*
         done 3< chunk.csv
-        cat *_cluster_sizes_lt_50.txt > ~{chunk_id}_cluster_sizes_lt_50.txt
+        if [ ~{main_or_ultralong} -eq 0 ]; then
+            cat *_cluster_sizes_lt_50.txt > ~{chunk_id}_cluster_sizes_lt_50.txt
+            cat *_deltas_lt_50.txt > ~{chunk_id}_deltas_lt_50.txt
+        else
+            touch ~{chunk_id}_cluster_sizes_lt_50.txt
+            touch ~{chunk_id}_deltas_lt_50.txt
+        fi
         cat *_cluster_sizes_ge_50.txt > ~{chunk_id}_cluster_sizes_ge_50.txt
-        cat *_deltas_lt_50.txt > ~{chunk_id}_deltas_lt_50.txt
         cat *_deltas_ge_50.txt > ~{chunk_id}_deltas_ge_50.txt
     >>>
     

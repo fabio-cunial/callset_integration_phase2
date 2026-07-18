@@ -3,7 +3,8 @@ import java.util.zip.GZIPInputStream;
 import java.io.*;
 
 /**
- * 
+ * Computes basic properties of distinct (CHROM,POS) pairs in a VCF file.
+ * Used to investigate the `bcftools annotate -c CHROM,POS,~ID` bug.
  */
 public class SameChromPos {
     /**
@@ -33,7 +34,9 @@ public class SameChromPos {
     public static int[] blocksWithDifferentAnnotations = new int[ANNOTATIONS.length];
 
     /**
-     * @param args 0: assumed to be sorted by CHROM,POS.
+     * @param args 
+     * 0: assumed to be sorted by CHROM,POS;
+     * 3: a minimal output VCF with one record per distinct (CHROM,POS) pair.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_VCF_GZ = args[0];
@@ -44,7 +47,7 @@ public class SameChromPos {
         int i;
         int svlen, pos, currentPos, currentRecords, currentIns, currentDel;
         double currentMin, currentMax, annotation;
-        String str, svtype, currentChrom;
+        String str, svtype, currentChrom, value;
         BufferedReader br;
         BufferedWriter bwSize, bwDelta, bwVcf;
         String[] tokens;
@@ -101,9 +104,12 @@ public class SameChromPos {
             if (svlen<currentMin) currentMin=svlen;
             if (svlen>currentMax) currentMax=svlen;
             for (i=0; i<ANNOTATIONS.length; i++) {
-                annotation=Double.parseDouble(getInfoField(tokens[7],ANNOTATIONS[i]));
-                if (currentAnnotations[i]==Integer.MAX_VALUE) currentAnnotations[i]=annotation;
-                else if (currentAnnotations[i]!=annotation) currentAnnotationsDiffer[i]=true;
+                value=getInfoField(tokens[7],ANNOTATIONS[i]);
+                if (value!=null) {
+                    annotation=Double.parseDouble(value);
+                    if (currentAnnotations[i]==Integer.MAX_VALUE) currentAnnotations[i]=annotation;
+                    else if (currentAnnotations[i]!=annotation) currentAnnotationsDiffer[i]=true;
+                }
             }
             str=br.readLine();
         }
