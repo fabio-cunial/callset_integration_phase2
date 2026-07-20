@@ -31,7 +31,7 @@ public class UltralongInsExtractDups {
         final int OUTPUT_DUP_MODE = Integer.parseInt(args[5]);
         
         int i, p;
-        int pos, qual, newPos, newEnd, newLength, nRecords, nDups;
+        int pos, qual, newPos, newEnd, newLength, nRecords, nDups, oldLength;
         String str, strPrime, id, info, alt;
         BufferedReader br, brPrime;
         BufferedWriter bwIns, bwDup;
@@ -71,14 +71,14 @@ public class UltralongInsExtractDups {
                     p=strPrime.indexOf("\t");
                     newPos=Integer.parseInt(strPrime.substring(0,p));
                     newEnd=Integer.parseInt(strPrime.substring(p+1));
-                    newLength=newEnd-newPos;
+                    oldLength=Integer.parseInt(getInfoField(info,"SVLEN")); newLength=newEnd-newPos;
                     pos=Integer.parseInt(tokens[1]); tokens[1]=newPos+"";
                     alt=tokens[4]; tokens[4]="<DUP>";
                     qual=Integer.parseInt(tokens[5]); tokens[5]=INSDUP_QUAL+"";
                     info=addOrReplaceInfoField(info,"SVLEN",String.valueOf(newLength));
                     info=addOrReplaceInfoField(info,"SVTYPE","DUP");
                     info=addOrReplaceInfoField(info,"END",newEnd+"");
-                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_SVLEN="+alt.length()+";INS_QUAL="+qual;
+                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_SVLEN="+oldLength+";INS_QUAL="+qual;
                 }
                 info+=";INSDUP";
                 tokens[7]=info;
@@ -91,6 +91,22 @@ public class UltralongInsExtractDups {
         br.close(); bwIns.close(); bwDup.close();
         System.err.println("Created "+nDups+" DUPs out of "+nRecords+" INS records ("+String.format("%.2f",(100.0*nDups)/nRecords)+"%).");
     }
+
+
+    /**
+	 * @return NULL if $field$ does not occur in $info$.
+	 */
+	private static final String getInfoField(String info, String field) {
+		final int FIELD_LENGTH = field.length()+1;
+        int p, q;
+        
+        p=-FIELD_LENGTH;
+        do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
+        while (p>0 && info.charAt(p-1)!=';');
+		if (p<0) return null;
+		q=info.indexOf(";",p+FIELD_LENGTH);
+		return info.substring(p+FIELD_LENGTH,q<0?info.length():q);
+	}
 
 
     private static final String addOrReplaceInfoField(String info, String field, String newValue) {

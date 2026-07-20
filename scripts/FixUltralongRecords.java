@@ -58,14 +58,19 @@ public class FixUltralongRecords {
             info=tokens[7];
             svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
             if (alt.charAt(0)=='<') {
-                if (pos+svlen>chromLength) {
-                    nDiscarded_svlen++;
-                    System.err.println("Call ends after "+chrom+": "+(pos+svlen)+">"+chromLength+" (excess: "+(pos+svlen-chromLength)+")");
-                    str=br.readLine();
-                    continue;
+                if (alt.startsWith("<INS")) {
+                    end=pos;
+                }
+                else {
+                    if (pos+svlen>chromLength) {
+                        nDiscarded_svlen++;
+                        System.err.println("Call ends after "+chrom+": "+(pos+svlen)+">"+chromLength+" (excess: "+(pos+svlen-chromLength)+")");
+                        str=br.readLine();
+                        continue;
+                    }
+                    end=pos+svlen;
                 }
                 alt=alt.substring(0,4)+'>';
-                end=pos+svlen;
             }
             else end=pos;
             endStr=getInfoField(info,"END");
