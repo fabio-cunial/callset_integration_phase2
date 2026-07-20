@@ -599,6 +599,28 @@ END
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
         }
+
+
+        # Adds field `INFO/GT_COUNT` to the input VCF, which is overwritten.
+        #
+        function AnnotateGtCount() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+
+            bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t[%GT]\n' ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($6=="0/0" || $6=="0|0" || $6=="./."  || $6==".|." || $6=="./0" || $6==".|0" || $6=="0/." || $6=="0|." || $6=="0" || $6==".") GT_COUNT=0; \
+                else if ($6=="0/1" || $6=="0|1" || $6=="1/0" || $6=="1|0" || $6=="./1" || $6==".|1" || $6=="1/." || $6=="1|." || $6=="1") GT_COUNT=1; \
+                else if ($6=="1/1" || $6=="1|1") GT_COUNT=2; \
+                printf("%s\t%d\t%s\t%s\t%s\t%d\n",$1,$2,$3,$4,$5,  GT_COUNT); \
+            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT from the callers, converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/GT_COUNT'
+            bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF}
+            mv ${SAMPLE_ID}_annotated.vcf ${INPUT_VCF}
+        }
         
         
         
@@ -696,12 +718,12 @@ END
             echo '##INFO=<ID=FEX_CN_SLOP,Number=1,Type=Float,Description="cn_slop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_MQ_DROP,Number=1,Type=Float,Description="mq_drop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_CLIP_FRAC,Number=1,Type=Float,Description="clip_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Integer,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Float,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_READ_LEN_MED,Number=1,Type=Float,Description="read_len_med from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_STRAND_BIAS,Number=1,Type=Float,Description="strand_bias from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_GC_FRAC,Number=1,Type=Float,Description="gc_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Float,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Float,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -1155,7 +1177,10 @@ END
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins.vcf.gz --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_not_ins.vcf* ${SAMPLE_ID}_ins.vcf* ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
-            # 5. Adding annotations from cuteFC and Kalra et al.
+            # 5. Adding the original GT from the callers
+            AnnotateGtCount ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf
+
+            # 6. Adding annotations from cuteFC and Kalra et al.
             # Remark: we could run these two annotations in parallel, since they
             # are both slow and use threads inefficiently. In practice this does
             # not decrease total runtime.
