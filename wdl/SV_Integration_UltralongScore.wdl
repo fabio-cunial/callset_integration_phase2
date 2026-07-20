@@ -4,76 +4,68 @@ version 1.0
 # For DEL, INV, DUP, INSDUP:
 #
 # annotations_custom = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"
 #                      ]
 # annotations_fex =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                      ]
-# annotations_cutefc = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+# annotations_cutefc = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
 #                      ]
-# annotations_all =    [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+# annotations_all =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND" 
 #                      ]
 # annotations_all_except_genotyper = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                                      "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                                      "BIN_BEFORE_COVERAGE","BIN_LEFT_COVERAGE","BIN_1_COVERAGE","BIN_2_COVERAGE","BIN_3_COVERAGE","BIN_4_COVERAGE","BIN_5_COVERAGE","BIN_6_COVERAGE","BIN_7_COVERAGE","BIN_8_COVERAGE","BIN_9_COVERAGE","BIN_10_COVERAGE","BIN_RIGHT_COVERAGE","BIN_AFTER_COVERAGE","BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
 #                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
 #                                    ]
 # For INS:
 #
 # annotations_custom = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","START_SD","START_GC",
 #                        "BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4"
 #                      ]
 # annotations_fex =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","START_SD","START_GC",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                      ]
-# annotations_cutefc = [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+# annotations_cutefc = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","START_SD","START_GC",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
 #                      ]
-# annotations_all =    [ "SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+# annotations_all =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                        "START_TR","START_SD","START_GC",
 #                        "BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
 #                      ]
 # annotations_all_except_genotyper = [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+#                                      "START_TR","START_SD","START_GC",
 #                                      "BIN_POS","BIN_POINT_MAPQ","BIN_POINT_SECONDARY","PL","PR","PL_PL_1","PL_PL_2","PL_PL_3","PL_PL_4","PL_PR_1","PL_PR_2","PL_PR_3","PL_PR_4","PR_PR_1","PR_PR_2","PR_PR_3","PR_PR_4",
 #                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                                    ]
 #
-# For BND: (old)
+# For BND:
 #
-# annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
-#                        "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4"
+# annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
+#                        "BIN_POS_0","BIN_POS_1","BIN_POS_2","BIN_POS_3","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3","C0R","C1L","C2R","C3L","C0R_C2R_1","C0R_C2R_2","C0R_C2R_3","C0R_C2R_4","C0R_C3L_1","C0R_C3L_2","C0R_C3L_3","C0R_C3L_4","C1L_C2R_1","C1L_C2R_2","C1L_C2R_4","C1L_C3L_1","C1L_C3L_2","C1L_C3L_3","C1L_C3L_4"
 #                      ]
-# annotations_fex =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
+# annotations_fex =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                      ]
-# annotations_cutefc = [ "SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
-#                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND"
-#                      ]
-# annotations_all =    [ "SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
-#                        "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
-#                        "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
-#                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_RE","CUTEFC_STRAND" 
-#                      ]
-# annotations_all_except_genotyper = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
-#                                      "BIN_POS_0","BIN_POS_1","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","LL","LR","RL","RR","LL_RL_1","LL_RL_2","LL_RL_3","LL_RL_4","LL_RR_1","LL_RR_2","LL_RR_3","LL_RR_4","LR_RL_1","LR_RL_2","LR_RL_3","LR_RL_4","LR_RR_1","LR_RR_2","LR_RR_3","LR_RR_4",
-#                                      "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
-#                                    ]
-#
-# For BND: (new annotations)
-#
-# annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
-#                        "BIN_POS_0", "BIN_POS_1", "BIN_POS_2", "BIN_POS_3", "BIN_POINT_MAPQ_0", "BIN_POINT_MAPQ_1", "BIN_POINT_MAPQ_2", "BIN_POINT_MAPQ_3", "BIN_POINT_SECONDARY_0", "BIN_POINT_SECONDARY_1", "BIN_POINT_SECONDARY_2", "BIN_POINT_SECONDARY_3", "C0R", "C1L", "C2R", "C3L", "C0R_C2R_1", "C0R_C2R_2", "C0R_C2R_3", "C0R_C2R_4", "C0R_C3L_1", "C0R_C3L_2", "C0R_C3L_3", "C0R_C3L_4", "C1L_C2R_1", "C1L_C2R_2", "C1L_C2R_4", "C1L_C3L_1", "C1L_C3L_2", "C1L_C3L_3", "C1L_C3L_4"
-#                      ]
-# annotations_fex =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
-#                        "FEX_DEPTH_RATIO", "FEX_AB", "FEX_CN_SLOP", "FEX_MQ_DROP", "FEX_CLIP_FRAC", "FEX_SPLIT_READS", "FEX_GC_FRAC", "FEX_HOMOPOLYMER_MAX", "FEX_LCR_MASK"
-#                      ]
-# annotations_all =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR", "END_TR", "START_SD", "END_SD", "START_GC", "END_GC",
-#                        "BIN_POS_0", "BIN_POS_1", "BIN_POS_2", "BIN_POS_3", "BIN_POINT_MAPQ_0", "BIN_POINT_MAPQ_1", "BIN_POINT_MAPQ_2", "BIN_POINT_MAPQ_3", "BIN_POINT_SECONDARY_0", "BIN_POINT_SECONDARY_1", "BIN_POINT_SECONDARY_2", "BIN_POINT_SECONDARY_3", "C0R", "C1L", "C2R", "C3L", "C0R_C2R_1", "C0R_C2R_2", "C0R_C2R_3", "C0R_C2R_4", "C0R_C3L_1", "C0R_C3L_2", "C0R_C3L_3", "C0R_C3L_4", "C1L_C2R_1", "C1L_C2R_2", "C1L_C2R_4", "C1L_C3L_1", "C1L_C3L_2", "C1L_C3L_3", "C1L_C3L_4",
-#                        "FEX_DEPTH_RATIO", "FEX_AB", "FEX_CN_SLOP", "FEX_MQ_DROP", "FEX_CLIP_FRAC", "FEX_SPLIT_READS", "FEX_GC_FRAC", "FEX_HOMOPOLYMER_MAX", "FEX_LCR_MASK"
+# annotations_all =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
+#                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
+#                        "BIN_POS_0","BIN_POS_1","BIN_POS_2","BIN_POS_3","BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3","C0R","C1L","C2R","C3L","C0R_C2R_1","C0R_C2R_2","C0R_C2R_3","C0R_C2R_4","C0R_C3L_1","C0R_C3L_2","C0R_C3L_3","C0R_C3L_4","C1L_C2R_1","C1L_C2R_2","C1L_C2R_4","C1L_C3L_1","C1L_C3L_2","C1L_C3L_3","C1L_C3L_4",
+#                        "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                      ]
 #
 workflow SV_Integration_UltralongScore {
@@ -96,7 +88,6 @@ workflow SV_Integration_UltralongScore {
         Array[String]? annotations_cutefc
         Array[String] annotations_all
         Array[String]? annotations_all_except_genotyper
-        Int annotations_have_gt_count
 
         File training_python_script
         File scoring_python_script
@@ -117,7 +108,6 @@ workflow SV_Integration_UltralongScore {
                 svtype = svtype,
                 id = svtype + "_custom",
                 annotations = select_first([annotations_custom]),
-                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -139,7 +129,6 @@ workflow SV_Integration_UltralongScore {
                 svtype = svtype,
                 id = svtype + "_fex",
                 annotations = select_first([annotations_fex]),
-                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -161,7 +150,6 @@ workflow SV_Integration_UltralongScore {
                 svtype = svtype,
                 id = svtype + "_cutefc",
                 annotations = select_first([annotations_cutefc]),
-                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -182,7 +170,6 @@ workflow SV_Integration_UltralongScore {
             svtype = svtype,
             id = svtype + "_all",
             annotations = annotations_all,
-            annotations_have_gt_count = annotations_have_gt_count,
             input_vcf_gz = input_vcf_gz,
             input_vcf_gz_tbi = input_vcf_gz_tbi,
             resource_vcf_gz = resource_vcf_gz,
@@ -203,7 +190,6 @@ workflow SV_Integration_UltralongScore {
                 svtype = svtype,
                 id = svtype + "_all_except_genotyper",
                 annotations = select_first([annotations_all_except_genotyper]),
-                annotations_have_gt_count = annotations_have_gt_count,
                 input_vcf_gz = input_vcf_gz,
                 input_vcf_gz_tbi = input_vcf_gz_tbi,
                 resource_vcf_gz = resource_vcf_gz,
@@ -249,7 +235,6 @@ task Score {
         File reference_fai
 
         Array[String] annotations
-        Int annotations_have_gt_count
         File training_python_script
         File scoring_python_script
         File hyperparameters_json
@@ -269,37 +254,7 @@ task Score {
         
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
         export GATK_LOCAL_JAR="/root/gatk.jar"
-        
 
-
-
-        # ----------------------- Steps of the pipeline ------------------------
-
-        # Adds field `INFO/GT_COUNT` to the input VCF, which is overwritten.
-        #
-        function AddGtCount() {
-            local INPUT_VCF_GZ=$1
-
-            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                GT_COUNT=-1; \
-                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
-                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
-                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
-                printf("%s\t%d\t%s\t%d\n",$1,$2,$3,GT_COUNT); \
-            }' | bgzip -c > annotations.tsv.gz
-            tabix -f -s1 -b2 -e2 annotations.tsv.gz
-            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT converted to an integer in {0,1,2}.">' > header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/GT_COUNT'
-            bcftools annotate --annotations annotations.tsv.gz --header-lines header.txt --columns ${COLUMNS} --output-type z ${INPUT_VCF_GZ} --output annotated.vcf.gz
-            rm -f annotations.tsv.gz header.txt ${INPUT_VCF_GZ}
-            mv annotated.vcf.gz ${INPUT_VCF_GZ}
-            bcftools index -f -t ${INPUT_VCF_GZ}
-        }
-
-
-
-
-        # ---------------------------- Main program ----------------------------
 
         # 1. Ensuring that the input VCFs have the correct format
         if [ ~{svtype} != "bnd" ]; then
@@ -318,9 +273,6 @@ task Score {
             mv ~{resource_vcf_gz_tbi} resource_cleaned.vcf.gz.tbi
         fi
         N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
-        if [ ~{annotations_have_gt_count} -eq 1 ]; then
-            AddGtCount input_cleaned.vcf.gz
-        fi
         N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
         echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
 
@@ -374,6 +326,5 @@ task Score {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
