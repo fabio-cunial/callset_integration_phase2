@@ -4,6 +4,9 @@ version 1.0
 # Annotates ultralong VCFs with multiple BAM- and genotyper-derived features,
 # and splits them by SVTYPE.
 #
+# Remark: the entire ultralong pipeline supports symbolic <INS>, which are never
+# removed.
+#
 workflow SV_Integration_UltralongAnnotate {
     input {
         File chunk_tsv
@@ -904,7 +907,7 @@ END
             rm -f ${SAMPLE_ID}_${POINT_ID}_track_sorted.tsv ${SAMPLE_ID}_${POINT_ID}_chrom_pos_id_ref_alt.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz
             echo '##INFO=<ID='${POINT_ID}'_'${TRACK_ID}',Number=1,Type=Integer,Description="'${POINT_ID}' breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
-            COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/'${POINT_ID}'_'${TRACK_ID}
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/'${POINT_ID}'_'${TRACK_ID}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_${POINT_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_${POINT_ID}_track* ${SAMPLE_ID}_header.txt
         }
@@ -928,7 +931,7 @@ END
             rm -f ${SAMPLE_ID}_interval_track_sorted.tsv ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_interval_track.tsv.gz
             echo '##INFO=<ID=INTERVAL_'${TRACK_ID}',Number=1,Type=Integer,Description="Interval overlaps the '${TRACK_ID}' track by at least '${OVERLAP_FRACTION}'">' > ${SAMPLE_ID}_header.txt
-            COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/INTERVAL_'${TRACK_ID}
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/INTERVAL_'${TRACK_ID}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_interval_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_interval_track* ${SAMPLE_ID}_header.txt
         }
