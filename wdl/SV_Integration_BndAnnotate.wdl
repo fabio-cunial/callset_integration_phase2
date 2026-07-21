@@ -22,6 +22,7 @@ workflow SV_Integration_BndAnnotate {
         Int custom_breakpoint_window_bp = 500
         Int custom_breakpoint_window_slack_bp = 150
         Int custom_min_clip_length = 200
+        Int custom_min_indel_length = 5000
         Int custom_adjacency_slack_bp = 300
 
         File feature_extraction_py
@@ -53,6 +54,7 @@ workflow SV_Integration_BndAnnotate {
             custom_breakpoint_window_bp = custom_breakpoint_window_bp,
             custom_breakpoint_window_slack_bp = custom_breakpoint_window_slack_bp,
             custom_min_clip_length = custom_min_clip_length,
+            custom_min_indel_length = custom_min_indel_length,
             custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
             feature_extraction_py = feature_extraction_py,
@@ -99,6 +101,7 @@ task Impl {
         Int custom_breakpoint_window_bp
         Int custom_breakpoint_window_slack_bp
         Int custom_min_clip_length
+        Int custom_min_indel_length
         Int custom_adjacency_slack_bp
 
         File feature_extraction_py
@@ -305,14 +308,15 @@ set -euxo pipefail
 INPUT_BAM=$1
 CLASSPATH=$2
 MIN_CLIP_LENGTH=$3
-CHROM=$4
-START=$5
-END=$6
-RECORD_ID=$7
-BIN_ID=$8
+MIN_INDEL_LENGTH=$4
+CHROM=$5
+START=$6
+END=$7
+RECORD_ID=$8
+BIN_ID=$9
 
 samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${RECORD_ID}_${BIN_ID}.sam
-java -cp ${CLASSPATH} UltralongIntervalGetClips ${RECORD_ID}_${BIN_ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${RECORD_ID}_${BIN_ID}
+java -cp ${CLASSPATH} UltralongIntervalGetClips ${RECORD_ID}_${BIN_ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${RECORD_ID}_${BIN_ID}
 rm -f ${RECORD_ID}_${BIN_ID}.sam
 sort -k 1,1 ${RECORD_ID}_${BIN_ID}_leftmaximal.txt > ${RECORD_ID}_${BIN_ID}_leftmaximal_sorted.txt
 sort -k 1,1 ${RECORD_ID}_${BIN_ID}_rightmaximal.txt > ${RECORD_ID}_${BIN_ID}_rightmaximal_sorted.txt
@@ -339,7 +343,20 @@ _0_R_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_
 _1_L_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 _1_L_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 
-echo -e "${RECORD_ID}\t${_0_R}\t${_1_L}\t${_2_R}\t${_3_L}\t${_0_R_2_R}\t${_0_R_3_L}\t${_1_L_2_R}\t${_1_L_3_L}" > ${RECORD_ID}_counts.txt
+_0_INS=$(cut -f 1 ${RECORD_ID}_0_indel.txt)
+_0_DEL_START=$(cut -f 2 ${RECORD_ID}_0_indel.txt)
+_0_DEL_END=$(cut -f 3 ${RECORD_ID}_0_indel.txt)
+_1_INS=$(cut -f 1 ${RECORD_ID}_1_indel.txt)
+_1_DEL_START=$(cut -f 2 ${RECORD_ID}_1_indel.txt)
+_1_DEL_END=$(cut -f 3 ${RECORD_ID}_1_indel.txt)
+_2_INS=$(cut -f 1 ${RECORD_ID}_2_indel.txt)
+_2_DEL_START=$(cut -f 2 ${RECORD_ID}_2_indel.txt)
+_2_DEL_END=$(cut -f 3 ${RECORD_ID}_2_indel.txt)
+_3_INS=$(cut -f 1 ${RECORD_ID}_3_indel.txt)
+_3_DEL_START=$(cut -f 2 ${RECORD_ID}_3_indel.txt)
+_3_DEL_END=$(cut -f 3 ${RECORD_ID}_3_indel.txt)
+
+echo -e "${RECORD_ID}\t${_0_R}\t${_1_L}\t${_2_R}\t${_3_L}\t${_0_R_2_R}\t${_0_R_3_L}\t${_1_L_2_R}\t${_1_L_3_L}\t${_0_INS}\t${_0_DEL_START}\t${_0_DEL_END}\t${_1_INS}\t${_1_DEL_START}\t${_1_DEL_END}\t${_2_INS}\t${_2_DEL_START}\t${_2_DEL_END}\t${_3_INS}\t${_3_DEL_START}\t${_3_DEL_END}" > ${RECORD_ID}_counts.txt
 rm -f ${RECORD_ID}_*maximal_sorted.txt
 END
         chmod +x annotate_clipped_alignments_2.sh
@@ -355,10 +372,11 @@ END
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
-            local CLIP_SLACK_BP=$7
+            local MIN_INDEL_LENGTH=$7
+            local CLIP_SLACK_BP=$8
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} ${CLIP_SLACK_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
@@ -367,7 +385,7 @@ END
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
 
@@ -395,8 +413,21 @@ END
             echo '##INFO=<ID=C1L_C3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=C1L_C3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=C1L_C3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+
+            echo '##INFO=<ID=C0_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
             
-            local COLUMNS='CHROM,POS,~ID,INFO/C0R,INFO/C1L,INFO/C2R,INFO/C3L,INFO/C0R_C2R_1,INFO/C0R_C2R_2,INFO/C0R_C2R_3,INFO/C0R_C2R_4,INFO/C0R_C3L_1,INFO/C0R_C3L_2,INFO/C0R_C3L_3,INFO/C0R_C3L_4,INFO/C1L_C2R_1,INFO/C1L_C2R_2,INFO/C1L_C2R_3,INFO/C1L_C2R_4,INFO/C1L_C3L_1,INFO/C1L_C3L_2,INFO/C1L_C3L_3,INFO/C1L_C3L_4'
+            local COLUMNS='CHROM,POS,~ID,INFO/C0R,INFO/C1L,INFO/C2R,INFO/C3L,INFO/C0R_C2R_1,INFO/C0R_C2R_2,INFO/C0R_C2R_3,INFO/C0R_C2R_4,INFO/C0R_C3L_1,INFO/C0R_C3L_2,INFO/C0R_C3L_3,INFO/C0R_C3L_4,INFO/C1L_C2R_1,INFO/C1L_C2R_2,INFO/C1L_C2R_3,INFO/C1L_C2R_4,INFO/C1L_C3L_1,INFO/C1L_C3L_2,INFO/C1L_C3L_3,INFO/C1L_C3L_4,INFO/C0_INS,INFO/C0_DEL_START,INFO/C0_DEL_END,INFO/C1_INS,INFO/C1_DEL_START,INFO/C1_DEL_END,INFO/C2_INS,INFO/C2_DEL_START,INFO/C2_DEL_END,INFO/C3_INS,INFO/C3_DEL_START,INFO/C3_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -412,7 +443,7 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_breakpoint_window_slack_bp}
+            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ~{custom_breakpoint_window_slack_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
