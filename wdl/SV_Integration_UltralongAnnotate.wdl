@@ -22,6 +22,7 @@ workflow SV_Integration_UltralongAnnotate {
         
         Int custom_breakpoint_window_bp = 500
         Int custom_min_clip_length = 200
+        Int custom_min_indel_length = 5000
         Int custom_adjacency_slack_bp = 300
 
         File feature_extraction_py
@@ -58,6 +59,7 @@ workflow SV_Integration_UltralongAnnotate {
 
             custom_breakpoint_window_bp = custom_breakpoint_window_bp,
             custom_min_clip_length = custom_min_clip_length,
+            custom_min_indel_length = custom_min_indel_length,
             custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
             feature_extraction_py = feature_extraction_py,
@@ -121,6 +123,7 @@ task Impl {
         
         Int custom_breakpoint_window_bp
         Int custom_min_clip_length
+        Int custom_min_indel_length
         Int custom_adjacency_slack_bp
 
         File feature_extraction_py
@@ -418,13 +421,14 @@ set -euxo pipefail
 INPUT_BAM=$1
 CLASSPATH=$2
 MIN_CLIP_LENGTH=$3
-CHROM=$4
-START=$5
-END=$6
-ID=$7
+MIN_INDEL_LENGTH=$4
+CHROM=$5
+START=$6
+END=$7
+ID=$8
 
 samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
-java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${ID}
+java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${ID}
 rm -f ${ID}.sam
 sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt
 sort -k 1,1 ${ID}_rightmaximal.txt > ${ID}_rightmaximal_sorted.txt
@@ -449,8 +453,15 @@ LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmax
 LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
 LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}" > ${ID}_counts.txt
 rm -f ${ID}_*maximal_sorted.txt
+L_INS=$(cut -f 1 ${ID}_left_indel.txt)
+L_DEL_START=$(cut -f 2 ${ID}_left_indel.txt)
+L_DEL_END=$(cut -f 3 ${ID}_left_indel.txt)
+R_INS=$(cut -f 1 ${ID}_right_indel.txt)
+R_DEL_START=$(cut -f 2 ${ID}_right_indel.txt)
+R_DEL_END=$(cut -f 3 ${ID}_right_indel.txt)
+echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}" > ${ID}_counts.txt
+rm -f ${ID}_left_indel.txt ${ID}_right_indel.txt
 END
         chmod +x annotate_clipped_alignments_2_interval.sh
 
@@ -468,8 +479,12 @@ PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
 PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
 PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
 PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
-echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}" > ${ID}_counts.txt
 rm -f ${ID}_*maximal_sorted.txt
+P_INS=$(cut -f 1 ${ID}_point_indel.txt)
+P_DEL_START=$(cut -f 2 ${ID}_point_indel.txt)
+P_DEL_END=$(cut -f 3 ${ID}_point_indel.txt)
+echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}" > ${ID}_counts.txt
+rm -f ${ID}_point_indel.txt
 END
         chmod +x annotate_clipped_alignments_2_point.sh
 
@@ -484,9 +499,10 @@ END
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
+            local MIN_INDEL_LENGTH=$7
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
@@ -495,7 +511,7 @@ END
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=LL,Number=1,Type=Integer,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
@@ -518,7 +534,13 @@ END
             echo '##INFO=<ID=LR_RR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=LR_RR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=LR_RR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4'
+            echo '##INFO=<ID=L_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4,INFO/L_INS,INFO/L_DEL_START,INFO/L_DEL_END,INFO/R_INS,INFO/R_DEL_START,INFO/R_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -534,9 +556,10 @@ END
             local BREAKPOINT_WINDOW_BP=$4
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
+            local MIN_INDEL_LENGTH=$7
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
@@ -545,7 +568,7 @@ END
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=PL,Number=1,Type=Integer,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
@@ -562,7 +585,10 @@ END
             echo '##INFO=<ID=PR_PR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=PR_PR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=PR_PR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL,INFO/PR,INFO/PL_PL_1,INFO/PL_PL_2,INFO/PL_PL_3,INFO/PL_PL_4,INFO/PL_PR_1,INFO/PL_PR_2,INFO/PL_PR_3,INFO/PL_PR_4,INFO/PR_PR_1,INFO/PR_PR_2,INFO/PR_PR_3,INFO/PR_PR_4'
+            echo '##INFO=<ID=P_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL,INFO/PR,INFO/PL_PL_1,INFO/PL_PL_2,INFO/PL_PL_3,INFO/PL_PL_4,INFO/PL_PR_1,INFO/PL_PR_2,INFO/PL_PR_3,INFO/PL_PR_4,INFO/PR_PR_1,INFO/PR_PR_2,INFO/PR_PR_3,INFO/PR_PR_4,INFO/P_INS,INFO/P_DEL_START,INFO/P_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -580,7 +606,7 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length}
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -597,7 +623,7 @@ END
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length}
+            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
