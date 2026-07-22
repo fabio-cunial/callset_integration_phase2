@@ -16,6 +16,7 @@ public class UltralongIntervalCreateBedcovAnnotations {
     public static void main(String[] args) throws IOException {
         final String INPUT_BED = args[0];
         final int N_BINS = Integer.parseInt(args[1]);
+        final double MEAN_COVERAGE = Double.parseDouble(args[2]);
         
         int i;
         int svlen, currentBin, pos;
@@ -35,21 +36,21 @@ public class UltralongIntervalCreateBedcovAnnotations {
             if (!id.equals(currentID)) {
                 if (currentID.length()!=0) {
                     System.out.print(currentID);
-                    for (i=0; i<N_BINS; i++) System.out.printf("\t%.3f",bins[i]);
+                    for (i=0; i<N_BINS; i++) System.out.printf("\t%.4f",bins[i]);
                     System.out.println();
                 }
                 currentID=id; currentBin=-1;
                 Arrays.fill(bins,0.0);
             }
             svlen=Integer.parseInt(tokens[2])-Integer.parseInt(tokens[1]);
-            bins[++currentBin]=Double.parseDouble(tokens[4])/svlen;
+            bins[++currentBin]=(Double.parseDouble(tokens[4])/svlen)/MEAN_COVERAGE;
 
             // Next iteration
             str=br.readLine();
         }
         br.close();
         System.out.print(currentID);
-        for (i=0; i<N_BINS; i++) System.out.printf("\t%.3f",bins[i]);
+        for (i=0; i<N_BINS; i++) System.out.printf("\t%.4f",bins[i]);
         System.out.println();
     }
 

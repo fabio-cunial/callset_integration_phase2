@@ -25,7 +25,6 @@ workflow SV_Integration_UltralongAnnotate {
         Int custom_min_indel_length = 5000
         Int custom_adjacency_slack_bp = 300
 
-        File feature_extraction_py
         Int use_cutefc = 0
 
         File tr_bed
@@ -40,7 +39,7 @@ workflow SV_Integration_UltralongAnnotate {
         Int preemptible_number = 3
     }
     parameter_meta {
-        chunk_tsv: "Format: `ID,?,bai,bam,?,...,?` where `?` means a single string."
+        chunk_tsv: "Format: `ID,mean_coverage,bai,bam`."
         convert_ins_to_dup: "1=INS records that correspond to duplications are rewritten as DUP records"
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -66,7 +65,6 @@ workflow SV_Integration_UltralongAnnotate {
             custom_min_indel_length = custom_min_indel_length,
             custom_adjacency_slack_bp = custom_adjacency_slack_bp,
     
-            feature_extraction_py = feature_extraction_py,
             use_cutefc = use_cutefc,
 
             tr_bed = tr_bed,
@@ -133,7 +131,6 @@ task Impl {
         Int custom_min_indel_length
         Int custom_adjacency_slack_bp
 
-        File feature_extraction_py
         Int use_cutefc
 
         File tr_bed
@@ -263,6 +260,7 @@ END
             local N_BINS=$4
             local BREAKPOINT_WINDOW_BP=$5
             local BEDCOV_N_THREADS=$6
+            local MEAN_COVERAGE=$7
 
             # Running `samtools bedcov` in parallel, since it can be very slow
             # for large intervals.
@@ -277,10 +275,10 @@ END
             done 4< ${SAMPLE_ID}_list.txt
             rm -f ${SAMPLE_ID}_chunk_* ${SAMPLE_ID}_list.txt 
             
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed $(( ${N_BINS} + 4 )) ${MEAN_COVERAGE} | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_BEFORE_COVERAGE,Number=1,Type=Float,Description="Coverage of the bin before the call">' > ${SAMPLE_ID}_header.txt
@@ -299,7 +297,7 @@ END
         
         
         # Given an input VCF containing only point records, the procedure
-        # annotates each record with its the coverage of a window around POS 
+        # annotates each record with the coverage of a window around POS 
         # extracted from a BAM.
         #
         # Remark: `samtools bedcov` skips reads with any of the following flags
@@ -310,14 +308,15 @@ END
             local INPUT_VCF=$2
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
+            local MEAN_COVERAGE=$5
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} ${MEAN_COVERAGE} | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\n",$2,$3,$4,$5,$1,  $6); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\n",$2,$3,$4,$5,$1,  $6); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_POS,Number=1,Type=Float,Description="Coverage of the bin around the POS breakpoint">' > ${SAMPLE_ID}_header.txt
@@ -337,14 +336,22 @@ START=$3
 END=$4
 ID=$5
 
-samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { print (count>0?sum/count:0) }' > ${ID}_mapq.txt
-samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END} > ${ID}_secondary.txt
+samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { printf("%.4f\n", count>0?sum/count:0) }' > ${ID}_mapq.txt
+N_SECONDARY=$(samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END})
+N_TOTAL=$(samtools view --count ${INPUT_BAM} ${CHROM}:${START}-${END})
+if [ ${N_TOTAL} -eq 0 ]; then
+    RATIO="0"
+else
+    RATIO=$(printf "%.4f\n" $(echo "scale=4; ${N_SECONDARY} / ${N_TOTAL}" | bc))
+fi
+echo "${RATIO}" > ${ID}_secondary.txt
+
 END
         chmod +x annotate_mapq_secondary.sh
 
 
         # Given an input VCF containing only interval records, the procedure
-        # annotates each record with the average MAPQ and the number of
+        # annotates each record with the average MAPQ and the fraction of
         # secondary alignments (=repeat-induced multi-mappings) over its left
         # and right breakpoint, extracted from a BAM.
         #
@@ -373,13 +380,13 @@ END
             done 5< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%f\t%f\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_LEFT_MAPQ,Number=1,Type=Float,Description="Left breakpoint window: avg MAPQ.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_RIGHT_MAPQ,Number=1,Type=Float,Description="Right breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_LEFT_SECONDARY,Number=1,Type=Integer,Description="Left breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_RIGHT_SECONDARY,Number=1,Type=Integer,Description="Right breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_LEFT_SECONDARY,Number=1,Type=Float,Description="Left breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_RIGHT_SECONDARY,Number=1,Type=Float,Description="Right breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_LEFT_MAPQ,INFO/BIN_RIGHT_MAPQ,INFO/BIN_LEFT_SECONDARY,INFO/BIN_RIGHT_SECONDARY'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -387,7 +394,7 @@ END
 
         
         # Given an input VCF containing only point records, the procedure
-        # annotates each record with the average MAPQ and the number of
+        # annotates each record with the average MAPQ and the fraction of
         # secondary alignments (=repeat-induced multi-mappings) over its POS
         # breakpoint, extracted from a BAM.
         #
@@ -414,11 +421,11 @@ END
             done 6< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%f\t%d\n",$2,$3,$4,$5,$1,  $6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_POINT_MAPQ,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY,Number=1,Type=Float,Description="Breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POINT_MAPQ,INFO/BIN_POINT_SECONDARY'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -453,8 +460,10 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-ID=$3
+MEAN_COVERAGE=$3
+ID=$4
 
+# Counting
 LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
 RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
@@ -470,8 +479,26 @@ L_DEL_END=$(cut -f 3 ${ID}_left_indel.txt)
 R_INS=$(cut -f 1 ${ID}_right_indel.txt)
 R_DEL_START=$(cut -f 2 ${ID}_right_indel.txt)
 R_DEL_END=$(cut -f 3 ${ID}_right_indel.txt)
-echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}" > ${ID}_counts.txt
 rm -f ${ID}_left_indel.txt ${ID}_right_indel.txt
+
+# Normalizing
+LL=$(printf "%.4f\n" $(echo "scale=4; ${LL} / ${MEAN_COVERAGE}" | bc))
+LR=$(printf "%.4f\n" $(echo "scale=4; ${LR} / ${MEAN_COVERAGE}" | bc))
+RL=$(printf "%.4f\n" $(echo "scale=4; ${RL} / ${MEAN_COVERAGE}" | bc))
+RR=$(printf "%.4f\n" $(echo "scale=4; ${RR} / ${MEAN_COVERAGE}" | bc))
+LL_RL=$(printf "%.4f\n" $(echo "scale=4; ${LL_RL} / ${MEAN_COVERAGE}" | bc))
+LL_RR=$(printf "%.4f\n" $(echo "scale=4; ${LL_RR} / ${MEAN_COVERAGE}" | bc))
+LR_RL=$(printf "%.4f\n" $(echo "scale=4; ${LR_RL} / ${MEAN_COVERAGE}" | bc))
+LR_RR=$(printf "%.4f\n" $(echo "scale=4; ${LR_RR} / ${MEAN_COVERAGE}" | bc))
+L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${MEAN_COVERAGE}" | bc))
+L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${MEAN_COVERAGE}" | bc))
+L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${MEAN_COVERAGE}" | bc))
+R_INS=$(printf "%.4f\n" $(echo "scale=4; ${R_INS} / ${MEAN_COVERAGE}" | bc))
+R_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_START} / ${MEAN_COVERAGE}" | bc))
+R_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_END} / ${MEAN_COVERAGE}" | bc))
+
+# Outputting
+echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}" > ${ID}_counts.txt
 END
         chmod +x annotate_clipped_alignments_2_interval.sh
 
@@ -482,8 +509,10 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-ID=$3
+MEAN_COVERAGE=$3
+ID=$4
 
+# Counting
 PL=$(wc -l < ${ID}_point_leftmaximal_sorted.txt)
 PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
 PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
@@ -493,8 +522,20 @@ rm -f ${ID}_*maximal_sorted.txt
 P_INS=$(cut -f 1 ${ID}_point_indel.txt)
 P_DEL_START=$(cut -f 2 ${ID}_point_indel.txt)
 P_DEL_END=$(cut -f 3 ${ID}_point_indel.txt)
-echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}" > ${ID}_counts.txt
 rm -f ${ID}_point_indel.txt
+
+# Normalizing
+PL=$(printf "%.4f\n" $(echo "scale=4; ${PL} / ${MEAN_COVERAGE}" | bc))
+PR=$(printf "%.4f\n" $(echo "scale=4; ${PR} / ${MEAN_COVERAGE}" | bc))
+PL_PL=$(printf "%.4f\n" $(echo "scale=4; ${PL_PL} / ${MEAN_COVERAGE}" | bc))
+PL_PR=$(printf "%.4f\n" $(echo "scale=4; ${PL_PR} / ${MEAN_COVERAGE}" | bc))
+PR_PR=$(printf "%.4f\n" $(echo "scale=4; ${PR_PR} / ${MEAN_COVERAGE}" | bc))
+P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${MEAN_COVERAGE}" | bc))
+P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${MEAN_COVERAGE}" | bc))
+P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${MEAN_COVERAGE}" | bc))
+
+# Outputting
+echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}" > ${ID}_counts.txt
 END
         chmod +x annotate_clipped_alignments_2_point.sh
 
@@ -510,46 +551,47 @@ END
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
             local MIN_INDEL_LENGTH=$7
+            local MEAN_COVERAGE=$8
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=LL,Number=1,Type=Integer,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR,Number=1,Type=Integer,Description="Left window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RL,Number=1,Type=Integer,Description="Right window: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RR,Number=1,Type=Integer,Description="Right window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL,Number=1,Type=Float,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR,Number=1,Type=Float,Description="Left window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=RL,Number=1,Type=Float,Description="Right window: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=RR,Number=1,Type=Float,Description="Right window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4,INFO/L_INS,INFO/L_DEL_START,INFO/L_DEL_END,INFO/R_INS,INFO/R_DEL_START,INFO/R_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -567,37 +609,38 @@ END
             local ADJACENCY_SLACK_BP=$5
             local MIN_CLIP_LENGTH=$6
             local MIN_INDEL_LENGTH=$7
+            local MEAN_COVERAGE=$8
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=PL,Number=1,Type=Integer,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR,Number=1,Type=Integer,Description="Number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_1,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_2,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_3,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_4,Number=1,Type=Integer,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_1,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_2,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_3,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_4,Number=1,Type=Integer,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL,Number=1,Type=Float,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR,Number=1,Type=Float,Description="Number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL,INFO/PR,INFO/PL_PL_1,INFO/PL_PL_2,INFO/PL_PL_3,INFO/PL_PL_4,INFO/PL_PR_1,INFO/PL_PR_2,INFO/PL_PR_3,INFO/PL_PR_4,INFO/PR_PR_1,INFO/PR_PR_2,INFO/PR_PR_3,INFO/PR_PR_4,INFO/P_INS,INFO/P_DEL_START,INFO/P_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -607,16 +650,17 @@ END
         function AnnotateCustom_NotIns() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
+            local MEAN_COVERAGE=$3
 
             local N_COVERAGE_BINS="10"
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
 
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 ))
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length}
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -626,14 +670,15 @@ END
         function AnnotateCustom_Ins() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
+            local MEAN_COVERAGE=$3
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
             
-            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
+            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length}
+            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -666,6 +711,10 @@ END
         
         # ------------------- Annotations from Kalra et al. --------------------
         
+        # Output fields:
+        #
+        # chrom,pos,end,svlen,svtype,id,log_svlen,depth_ratio,depth_mad,ab,cn_slop,mq_drop,clip_frac,split_reads,read_len_med,strand_bias,gc_frac,homopolymer_max,lcr_mask,support_read,svtype_DEL,label,dataset
+        #
         cat << 'END' > feature_extraction_thread.sh
 #!/bin/bash
 set -euxo pipefail
@@ -673,7 +722,7 @@ set -euxo pipefail
 ALIGNMENTS_BAM=$1
 INPUT_VCF=$2
 
-python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${INPUT_VCF}_features.csv 1>&2
+python ~{docker_dir}/feature_extraction.py ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${INPUT_VCF}_features.csv 1>&2
 END
         chmod +x feature_extraction_thread.sh
 
@@ -705,7 +754,7 @@ END
                 # for FILE in ${SAMPLE_ID}_chunk_*; do
                 #     cat ${SAMPLE_ID}_header.txt ${FILE} > ${FILE}.vcf
                 #     rm -f ${FILE}
-                #     ${TIME_COMMAND} python ~{feature_extraction_py} ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
+                #     ${TIME_COMMAND} python ~{docker_dir}/feature_extraction.py ${FILE}.vcf ${ALIGNMENTS_BAM} ~{reference_fa} ${FILE}_features.csv 1>&2 &
                 # done
                 # wait
                 # rm -f ${SAMPLE_ID}_features.csv
@@ -732,19 +781,19 @@ END
                     rm -f ${FILE}
                 done
             else
-                ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_feature_extraction_features.csv 1>&2
+                ${TIME_COMMAND} python ~{docker_dir}/feature_extraction.py ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_feature_extraction_features.csv 1>&2
             fi
             head -n 10 ${SAMPLE_ID}_feature_extraction_features.csv 1>&2 || echo "0"
             tail -n +2 ${SAMPLE_ID}_feature_extraction_features.csv | tr ',' '\t' | cut -f 6,8-19 | sort -k 1,1 > ${SAMPLE_ID}_feature_extraction_features.tsv
             rm -f ${SAMPLE_ID}_feature_extraction_features.csv
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_feature_extraction_features.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_feature_extraction_features.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_feature_extraction_features.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
         }
 
 
-        # A separate function just to enable running `feature_extraction_py` in 
+        # A separate function just to enable running `feature_extraction.py` in 
         # parallel with other tools, if needed.
         #
         function FeatureExtraction_Annotate() {
@@ -866,7 +915,7 @@ END
                 else if ($14=="+-") STRAND=2; \
                 else if ($14=="++") STRAND=3; \
                 \
-                printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,$4,$5,  GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
+                printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%.4f\t%.4f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,$4,$5,  GT_COUNT,GQ,DR/RE,DV/RE,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,STRAND); \
             }' | bgzip -c > ${SAMPLE_ID}_cutefc_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_cutefc.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_cutefc_annotations.tsv.gz
@@ -885,8 +934,8 @@ END
         
             echo '##INFO=<ID=CUTEFC_GT_COUNT,Number=1,Type=Integer,Description="Cutefc GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_GQ,Number=1,Type=Integer,Description="Genotype quality according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Integer,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Integer,Description="High-quality variant reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Float,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Float,Description="High-quality variant reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_1,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_2,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_3,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
@@ -894,9 +943,8 @@ END
             echo '##INFO=<ID=CUTEFC_CIPOS_2,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_CILEN_1,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_CILEN_2,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_STRAND'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_cutefc_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_cutefc_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -1150,6 +1198,7 @@ END
             if [ ${TEST} != "0" ]; then
                 continue
             fi
+            MEAN_COVERAGE=$(echo ${LINE} | cut -d , -f 2)
 
             # 1. Canonizing the VCF and handling alternative representations
             LocalizeSample ${SAMPLE_ID} ${LINE}
@@ -1161,11 +1210,11 @@ END
             # 2. Adding custom annotations
             N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
-                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
+                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${MEAN_COVERAGE}
             fi
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
-                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
+                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${MEAN_COVERAGE}
             fi
 
             # 3. Adding repeat track annotations

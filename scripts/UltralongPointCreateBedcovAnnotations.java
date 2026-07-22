@@ -15,6 +15,7 @@ public class UltralongPointCreateBedcovAnnotations {
     public static void main(String[] args) throws IOException {
         final String INPUT_BED = args[0];
         final int BIN_LENGTH = Integer.parseInt(args[1]);
+        final double MEAN_COVERAGE = Double.parseDouble(args[2]);
         
         int i;
         String str, id;
@@ -26,7 +27,7 @@ public class UltralongPointCreateBedcovAnnotations {
         while (str!=null) {
             tokens=str.split("\t");
             id=tokens[3].substring(0,tokens[3].lastIndexOf("_"));
-            System.out.printf("%s\t%.3f\n",id,(Double.parseDouble(tokens[4])/BIN_LENGTH));
+            System.out.printf("%s\t%.4f\n",id,(Double.parseDouble(tokens[4])/BIN_LENGTH)/MEAN_COVERAGE);
             str=br.readLine();
         }
         br.close();

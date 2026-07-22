@@ -27,7 +27,7 @@ public class UltralongBndCreateBedcovAnnotations {
             tokens=str.split("\t");
             recordId=tokens[3];
             binId=tokens[4];
-            System.out.printf("%s\t%s\t%.3f\n",recordId,binId,(Double.parseDouble(tokens[5])/BIN_LENGTH));
+            System.out.printf("%s\t%s\t%.4f\n",recordId,binId,(Double.parseDouble(tokens[5])/BIN_LENGTH));
             str=br.readLine();
         }
         br.close();
