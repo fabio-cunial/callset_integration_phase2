@@ -7,6 +7,9 @@ import java.io.*;
  * Given the output of `samtools depth` over a region, the program computes a
  * simple estimate of the leftmost and rightmost positions that delimit an 
  * increase in coverage.
+ * 
+ * Remark: the program tries to avoid MEI intervals, since a frequent MEI in the
+ * genome could create a coverage increase.
  */
 public class UltralongDepthGetBreakpoints {
     
@@ -18,17 +21,49 @@ public class UltralongDepthGetBreakpoints {
         final int SAMTOOLS_DEPTH_N_POSITIONS = Integer.parseInt(args[1]);
         final int BIN_LENGTH = Integer.parseInt(args[2]);
         final double BIN_COVERAGE_RATIO = Double.parseDouble(args[3]);
+        final String MEI_BED_FILE = args[4];
+        final int MEI_BED_N_RECORDS = Integer.parseInt(args[5]);
+        final int MEI_BED_TOLERANCE = Integer.parseInt(args[6]);
 
         final int MAX_BREAKPOINTS = 30;  // Arbitrary
         
-        int i, j, p;
+        boolean isMei;
+        int i, j, k, p;
         int length, sum1, sum2, leftBreakpoint, rightBreakpoint, posStart, posEnd, validPairs, maxLength, bestLeft, bestRight;
         long firstPos;
         double lowDepth1, lowDepth2, ratio, maxRatio;
         String str;
         BufferedReader br;
         int[] depth;
+        int[][] meis = null;
         Vector<Breakpoint> leftBreakpoints, rightBreakpoints;
+
+
+        // Loading all MEI intervals in memory. We assume that CHROM is correct.
+        if (MEI_BED_N_RECORDS>=0) {
+            meis = new int[MEI_BED_N_RECORDS][2];
+            br = new BufferedReader(new FileReader(MEI_BED_FILE));
+            str=br.readLine(); i=0;
+            while (str!=null) {
+                length=str.length();
+                p=0;
+                while (p<length) {
+                    if (str.charAt(p)=='\t') break;
+                    else p++;
+                }
+                p++; posStart=p;
+                while (p<length) {
+                    if (str.charAt(p)=='\t') break;
+                    else p++;
+                }
+                posEnd=p;
+                meis[i][0] = Integer.parseInt(str.substring(posStart,posEnd));
+                meis[i][1] = Integer.parseInt(str.substring(posEnd+1));
+                str=br.readLine();
+                i++;
+            }
+            br.close();
+        }
 
         // Loading all depths in memory
         depth = new int[SAMTOOLS_DEPTH_N_POSITIONS]; firstPos=-1;
@@ -108,7 +143,7 @@ public class UltralongDepthGetBreakpoints {
             rightBreakpoints.setSize(MAX_BREAKPOINTS);
         }
         
-        // Finding a longest valid pair, if any.
+        // Finding a longest, coverage-consistent, non-MEI pair, if any.
         // Remark: medians are computed naively and should be made faster.
         validPairs=0; maxLength=0; bestLeft=-1; bestRight=-1; maxRatio=0;
         for (i=0; i<leftBreakpoints.size(); i++) {
@@ -117,6 +152,13 @@ public class UltralongDepthGetBreakpoints {
             for (j=0; j<rightBreakpoints.size(); j++) {
                 rightBreakpoint=rightBreakpoints.get(j).breakpoint;
                 if (rightBreakpoint<=leftBreakpoint) continue;
+                // 1. Discading the pair if it coincides with a MEI
+                isMei=false;
+                for (k=0; k<MEI_BED_N_RECORDS; k++) {
+                    if (Math.abs(meis[k][0]-firstPos-leftBreakpoint)<=MEI_BED_TOLERANCE && Math.abs(meis[k][1]-firstPos-rightBreakpoint)<=MEI_BED_TOLERANCE) { isMei=true; break; }
+                }
+                if (isMei) continue;
+                // 2. Computing median
                 lowDepth2=rightBreakpoints.get(j).lowDepth;
                 int[] newArray = Arrays.copyOfRange(depth,leftBreakpoint,rightBreakpoint+1);
                 Arrays.sort(newArray);

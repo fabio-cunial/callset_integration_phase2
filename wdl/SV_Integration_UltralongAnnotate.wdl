@@ -32,6 +32,9 @@ workflow SV_Integration_UltralongAnnotate {
         File segdup_bed
         File gc_content_bed
         Float repeat_overlap_fraction = 0.8
+        File mei_bed_gz
+        File mei_bed_tbi
+        Int mei_bed_tolerance = 150
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
         Int preemptible_number = 3
@@ -42,6 +45,7 @@ workflow SV_Integration_UltralongAnnotate {
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
+        mei_bed_gz: "A sorted, indexed, 3-column BED. Can be built with: gunzip -c repeatmasker.tsv.gz | awk 'BEGIN { FS = \"\t\"; OFS = \"\t\"; } $12==\"LINE\" || $12==\"SINE\" || $12==\"LTR\" || $12==\"DNA\" { print $6, $7, $8 }' | sort -k1,1 -k2,2n mei.bed | bzgip > mei.bed.gz ; tabix -p bed mei.bed.gz"
     }
     
     call Impl {
@@ -69,6 +73,9 @@ workflow SV_Integration_UltralongAnnotate {
             segdup_bed = segdup_bed,
             gc_content_bed = gc_content_bed,
             repeat_overlap_fraction = repeat_overlap_fraction,
+            mei_bed_gz = mei_bed_gz,
+            mei_bed_tbi = mei_bed_tbi,
+            mei_bed_tolerance = mei_bed_tolerance,
 
             docker_image = docker_image,
             preemptible_number = preemptible_number
@@ -133,6 +140,9 @@ task Impl {
         File segdup_bed
         File gc_content_bed
         Float repeat_overlap_fraction
+        File mei_bed_gz
+        File mei_bed_tbi
+        Int mei_bed_tolerance
         
         String docker_image
         Int n_cpu = 4
@@ -1024,12 +1034,15 @@ INPUT_BAM=$2
 BIN_LENGTH=$3
 BIN_COVERAGE_RATIO=$4
 RAM_MB=$5
-REGION=$6
-ID=$7
+MEI_BED_GZ=$6
+MEI_BED_TOLERANCE=$7
+REGION=$8
+ID=$9
 
 samtools depth -aa -r ${REGION} ${INPUT_BAM} -o ${ID}_depth.tsv
-java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} > ${ID}_breakpoints.tsv
-rm -f ${ID}_depth.tsv
+tabix ${MEI_BED_GZ} ${REGION} > ${ID}_mei.bed
+java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${ID}_mei.bed $(wc -l < ${ID}_mei.bed) ${MEI_BED_TOLERANCE} > ${ID}_breakpoints.tsv
+rm -f ${ID}_depth.tsv ${ID}_mei.bed
 END
         chmod +x interval_2_breakpoints.sh
 
@@ -1063,7 +1076,7 @@ END
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB} ~{mei_bed_gz} ~{mei_bed_tolerance}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ${INSDUP_QUAL} ${INSDUP_MODE}
             rm -f *_breakpoints.tsv
