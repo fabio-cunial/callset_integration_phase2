@@ -32,7 +32,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
         Int max_read_length = 25000
         
-        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
+        String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
         samples_tsv: "Format: ID, DIPCALL_BED"

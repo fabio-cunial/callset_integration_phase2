@@ -218,15 +218,15 @@ task Impl {
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} | sort -k 1,1 -k 2,2n > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\n' ${INPUT_VCF} | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv | sort -k 1,1 -k 4,4 | paste - - - - | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$5,$10,$15,$20); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
-            rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_tags.tsv
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | sort -k 1,1 -k 6,6 | paste - - - - | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $7,$14,$21,$28); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_POS_0,Number=1,Type=Float,Description="Coverage of the bin before the breakpoint at POS">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POS_1,Number=1,Type=Float,Description="Coverage of the bin after the breakpoint at POS">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POS_2,Number=1,Type=Float,Description="Coverage of the bin before the breakpoint at ALT">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POS_3,Number=1,Type=Float,Description="Coverage of the bin after the breakpoint at ALT">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POS_0,INFO/BIN_POS_1,INFO/BIN_POS_2,INFO/BIN_POS_3'
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POS_0,INFO/BIN_POS_1,INFO/BIN_POS_2,INFO/BIN_POS_3'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -283,19 +283,19 @@ END
                 rm -f ${ID}_*_mapq.txt ${ID}_*_secondary.txt
             done 6< ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_variantID_sorted.txt
-            ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
-            rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=BIN_POINT_MAPQ_0,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_1,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_2,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_3,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_0,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_1,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_2,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_3,Number=1,Type=Integer,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/BIN_POINT_MAPQ_0,INFO/BIN_POINT_SECONDARY_0,INFO/BIN_POINT_MAPQ_1,INFO/BIN_POINT_SECONDARY_1,INFO/BIN_POINT_MAPQ_2,INFO/BIN_POINT_SECONDARY_2,INFO/BIN_POINT_MAPQ_3,INFO/BIN_POINT_SECONDARY_3'
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_0,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_1,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_2,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_3,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POINT_MAPQ_0,INFO/BIN_POINT_SECONDARY_0,INFO/BIN_POINT_MAPQ_1,INFO/BIN_POINT_SECONDARY_1,INFO/BIN_POINT_MAPQ_2,INFO/BIN_POINT_SECONDARY_2,INFO/BIN_POINT_MAPQ_3,INFO/BIN_POINT_SECONDARY_3'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -384,50 +384,50 @@ END
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
-            ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-3 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
 
-            echo '##INFO=<ID=C0R,Number=1,Type=Integer,Description="First breakpoint, left bin: number of right-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L,Number=1,Type=Integer,Description="First breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C2R,Number=1,Type=Integer,Description="Second breakpoint, left bin: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C3L,Number=1,Type=Integer,Description="Second breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R,Number=1,Type=Float,Description="First breakpoint, left bin: number of right-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L,Number=1,Type=Float,Description="First breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2R,Number=1,Type=Float,Description="Second breakpoint, left bin: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3L,Number=1,Type=Float,Description="Second breakpoint, right bin: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
             
-            echo '##INFO=<ID=C0R_C2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_1,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_2,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_3,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C2R_4,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=C0R_C3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0R_C3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_1,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_2,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_3,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0R_C3L_4,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=C1L_C2R_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C2R_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C2R_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C2R_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_1,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_2,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_3,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C2R_4,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=C1L_C3L_1,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C3L_2,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C3L_3,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1L_C3L_4,Number=1,Type=Integer,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_1,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_2,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_3,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1L_C3L_4,Number=1,Type=Float,Description="Number of clipped reads across bins.">' >> ${SAMPLE_ID}_header.txt
 
-            echo '##INFO=<ID=C0_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C0_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C1_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C2_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C2_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C2_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C3_INS,Number=1,Type=Integer,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C3_DEL_START,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=C3_DEL_END,Number=1,Type=Integer,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C0_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C1_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C2_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right bin.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=C3_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right bin.">' >> ${SAMPLE_ID}_header.txt
             
-            local COLUMNS='CHROM,POS,~ID,INFO/C0R,INFO/C1L,INFO/C2R,INFO/C3L,INFO/C0R_C2R_1,INFO/C0R_C2R_2,INFO/C0R_C2R_3,INFO/C0R_C2R_4,INFO/C0R_C3L_1,INFO/C0R_C3L_2,INFO/C0R_C3L_3,INFO/C0R_C3L_4,INFO/C1L_C2R_1,INFO/C1L_C2R_2,INFO/C1L_C2R_3,INFO/C1L_C2R_4,INFO/C1L_C3L_1,INFO/C1L_C3L_2,INFO/C1L_C3L_3,INFO/C1L_C3L_4,INFO/C0_INS,INFO/C0_DEL_START,INFO/C0_DEL_END,INFO/C1_INS,INFO/C1_DEL_START,INFO/C1_DEL_END,INFO/C2_INS,INFO/C2_DEL_START,INFO/C2_DEL_END,INFO/C3_INS,INFO/C3_DEL_START,INFO/C3_DEL_END'
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/C0R,INFO/C1L,INFO/C2R,INFO/C3L,INFO/C0R_C2R_1,INFO/C0R_C2R_2,INFO/C0R_C2R_3,INFO/C0R_C2R_4,INFO/C0R_C3L_1,INFO/C0R_C3L_2,INFO/C0R_C3L_3,INFO/C0R_C3L_4,INFO/C1L_C2R_1,INFO/C1L_C2R_2,INFO/C1L_C2R_3,INFO/C1L_C2R_4,INFO/C1L_C3L_1,INFO/C1L_C3L_2,INFO/C1L_C3L_3,INFO/C1L_C3L_4,INFO/C0_INS,INFO/C0_DEL_START,INFO/C0_DEL_END,INFO/C1_INS,INFO/C1_DEL_START,INFO/C1_DEL_END,INFO/C2_INS,INFO/C2_DEL_START,INFO/C2_DEL_END,INFO/C3_INS,INFO/C3_DEL_START,INFO/C3_DEL_END'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
