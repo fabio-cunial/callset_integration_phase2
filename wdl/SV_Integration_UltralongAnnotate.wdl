@@ -33,7 +33,7 @@ workflow SV_Integration_UltralongAnnotate {
         Float repeat_overlap_fraction = 0.8
         File mei_bed_gz
         File mei_bed_tbi
-        Int mei_bed_tolerance = 150
+        Int mei_bed_tolerance = 300
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
         Int preemptible_number = 3
@@ -468,10 +468,10 @@ LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
 RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
 RR=$(wc -l < ${ID}_right_rightmaximal_sorted.txt)
-LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
 L_INS=$(cut -f 1 ${ID}_left_indel.txt)
 L_DEL_START=$(cut -f 2 ${ID}_left_indel.txt)
@@ -486,10 +486,6 @@ LL=$(printf "%.4f\n" $(echo "scale=4; ${LL} / ${MEAN_COVERAGE}" | bc))
 LR=$(printf "%.4f\n" $(echo "scale=4; ${LR} / ${MEAN_COVERAGE}" | bc))
 RL=$(printf "%.4f\n" $(echo "scale=4; ${RL} / ${MEAN_COVERAGE}" | bc))
 RR=$(printf "%.4f\n" $(echo "scale=4; ${RR} / ${MEAN_COVERAGE}" | bc))
-LL_RL=$(printf "%.4f\n" $(echo "scale=4; ${LL_RL} / ${MEAN_COVERAGE}" | bc))
-LL_RR=$(printf "%.4f\n" $(echo "scale=4; ${LL_RR} / ${MEAN_COVERAGE}" | bc))
-LR_RL=$(printf "%.4f\n" $(echo "scale=4; ${LR_RL} / ${MEAN_COVERAGE}" | bc))
-LR_RR=$(printf "%.4f\n" $(echo "scale=4; ${LR_RR} / ${MEAN_COVERAGE}" | bc))
 L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${MEAN_COVERAGE}" | bc))
 L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${MEAN_COVERAGE}" | bc))
 L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${MEAN_COVERAGE}" | bc))
@@ -515,9 +511,9 @@ ID=$4
 # Counting
 PL=$(wc -l < ${ID}_point_leftmaximal_sorted.txt)
 PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
-PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
-PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
-PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 | tr ',' '\t')
+PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
+PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
+PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
 P_INS=$(cut -f 1 ${ID}_point_indel.txt)
 P_DEL_START=$(cut -f 2 ${ID}_point_indel.txt)
@@ -527,9 +523,6 @@ rm -f ${ID}_point_indel.txt
 # Normalizing
 PL=$(printf "%.4f\n" $(echo "scale=4; ${PL} / ${MEAN_COVERAGE}" | bc))
 PR=$(printf "%.4f\n" $(echo "scale=4; ${PR} / ${MEAN_COVERAGE}" | bc))
-PL_PL=$(printf "%.4f\n" $(echo "scale=4; ${PL_PL} / ${MEAN_COVERAGE}" | bc))
-PL_PR=$(printf "%.4f\n" $(echo "scale=4; ${PL_PR} / ${MEAN_COVERAGE}" | bc))
-PR_PR=$(printf "%.4f\n" $(echo "scale=4; ${PR_PR} / ${MEAN_COVERAGE}" | bc))
 P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${MEAN_COVERAGE}" | bc))
 P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${MEAN_COVERAGE}" | bc))
 P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${MEAN_COVERAGE}" | bc))
