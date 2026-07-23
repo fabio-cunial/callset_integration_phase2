@@ -50,7 +50,7 @@ public class UltralongSvimasmInsExtractDupsPrime {
             tokens=str.split("\t");
             info=tokens[7];
             classification=getInfoField(info,"remap_classification");
-            if (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted")) {
+            if (classification!=null && (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted"))) {
                 nDups++;
                 if (OUTPUT_DUP_MODE==0) {
                     coords=getInfoField(info,"remap_coords");

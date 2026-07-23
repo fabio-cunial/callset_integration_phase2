@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongBuildTruth.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage3_Ultralong.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongAnnotate.wdl
@@ -20,7 +21,6 @@ java -jar ${WOMTOOL_PATH} validate -l TestKanpigLength.wdl
 java -jar ${WOMTOOL_PATH} validate -l SvimAsm.wdl
 java -jar ${WOMTOOL_PATH} validate -l SvQc.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongMerge.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongRecordsInTrack.wdl
 java -jar ${WOMTOOL_PATH} validate -l InsRemap.wdl

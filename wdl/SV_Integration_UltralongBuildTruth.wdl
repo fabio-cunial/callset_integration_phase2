@@ -23,8 +23,6 @@ workflow SV_Integration_UltralongBuildTruth {
         Int svimasm_ins_remap_max_length = 2000000
         Float svimasm_ins_remap_cov_threshold = 0.8
 
-        Int match_to_gaps = 0
-
         File reference_fa
         File reference_fai
         
@@ -54,8 +52,6 @@ workflow SV_Integration_UltralongBuildTruth {
             svimasm_ins_use_remap = svimasm_ins_use_remap,
             svimasm_ins_remap_max_length = svimasm_ins_remap_max_length,
             svimasm_ins_remap_cov_threshold = svimasm_ins_remap_cov_threshold,
-
-            match_to_gaps = match_to_gaps,
 
             reference_fa = reference_fa,
             reference_fai = reference_fai,
@@ -94,8 +90,6 @@ task Impl {
         Int svimasm_ins_use_remap
         Int svimasm_ins_remap_max_length
         Float svimasm_ins_remap_cov_threshold
-
-        Int match_to_gaps
 
         File reference_fa
         File reference_fai
@@ -163,7 +157,6 @@ task Impl {
 
         # ---------------------------- Main program ----------------------------
 
-        INFINITY="1000000000"
         samtools --version 1>&2
         bcftools --version 1>&2
         truvari --help 1>&2
@@ -187,7 +180,6 @@ task Impl {
             fi
             TEST=$( gcloud storage ls ~{remote_indir_svimasm}/${SAMPLE_ID}_canonized.vcf.gz || echo "1" )
             if [ ${TEST} = "1" ]; then
-                rm -rf ${SAMPLE_ID}_*
                 continue
             fi
 
@@ -202,7 +194,7 @@ task Impl {
             # since we assume that calls in reference gaps have already been 
             # removed from the query VCFs upstream.
             N_GAPS="0"
-            if [ ~{match_to_gaps} -eq 1 ]; then
+            if [ ~{svimasm_ins_use_gaps} -eq 1 ]; then
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
                 ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_dipcall_sorted.bed
                 ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
