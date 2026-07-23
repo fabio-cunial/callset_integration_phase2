@@ -43,7 +43,7 @@ public class UltralongIntervalIntersectClips {
         // Returning immediately if the input files are empty
         n10=0.0; n11=0.0; n20=0.0; n21=0.0;
         if (N_CLIPS1==0 || N_CLIPS2==0) {
-            System.out.println(n10+","+n11+","+n20+","+n21);
+            System.out.println(String.format(Locale.US,"%.4f,%.4f,%.4f,%.4f",n10,n11,n20,n21));
             System.exit(0);
         }
         
@@ -102,7 +102,7 @@ public class UltralongIntervalIntersectClips {
         for (i=0; i<N_CLIPS2; i++) {
             if (marked2[1][i]) n21+=1.0;
         }
-        System.out.println((n10/MEAN_COVERAGE)+","+(n11/MEAN_COVERAGE)+","+(n20/MEAN_COVERAGE)+","+(n21/MEAN_COVERAGE));
+        System.out.println(String.format(Locale.US,"%.4f,%.4f,%.4f,%.4f",n10/MEAN_COVERAGE,n11/MEAN_COVERAGE,n20/MEAN_COVERAGE,n21/MEAN_COVERAGE));
     }
     
     
