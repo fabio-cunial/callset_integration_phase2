@@ -685,3 +685,8 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SameChromPos.wdl
   testParameterFiles:
+- name: SV_Integration_UltralongBuildTruth
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_UltralongBuildTruth.wdl
+  testParameterFiles:
