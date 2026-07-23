@@ -118,10 +118,11 @@ task SingleChromosome {
             # Annotating every record with the number of samples it occurs in.
             # Note that this is not equal to the QUAL field in input to `truvari
             # collapse` upstream, so it has to be computed.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\tREF\tALT\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,~ID,N_DISCOVERY_SAMPLES --output-type b in.vcf.gz --output out.bcf
+            COLUMNS='CHROM,POS,REF,ALT,~ID,N_DISCOVERY_SAMPLES'
+            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns ${COLUMNS} --output-type b in.vcf.gz --output out.bcf
             df -h 1>&2
             rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
 
