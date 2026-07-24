@@ -7,7 +7,7 @@ import java.io.*;
  * RECORDID,BINID,BEDCOV), the program reformats it as RECORDID,BINID,BEDCOV.
  * Output values are normalized by BIN_LENGTH.
  */
-public class UltralongBndCreateBedcovAnnotations {
+public class BndCreateBedcovAnnotations {
     
     /**
      * @param args
@@ -15,6 +15,7 @@ public class UltralongBndCreateBedcovAnnotations {
     public static void main(String[] args) throws IOException {
         final String INPUT_BED = args[0];
         final int BIN_LENGTH = Integer.parseInt(args[1]);
+        final double MEAN_COVERAGE = Double.parseDouble(args[2]);
         
         int i, p;
         String str, id, recordId, binId;
@@ -27,7 +28,7 @@ public class UltralongBndCreateBedcovAnnotations {
             tokens=str.split("\t");
             recordId=tokens[3];
             binId=tokens[4];
-            System.out.printf("%s\t%s\t%.4f\n",recordId,binId,(Double.parseDouble(tokens[5])/BIN_LENGTH));
+            System.out.printf("%s\t%s\t%.4f\n",recordId,binId,(Double.parseDouble(tokens[5])/BIN_LENGTH)/MEAN_COVERAGE);
             str=br.readLine();
         }
         br.close();

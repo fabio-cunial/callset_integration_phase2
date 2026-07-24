@@ -8,7 +8,7 @@ import java.io.*;
  * (i.e. zero-based, left-inclusive, right-exclusive) with 4 bins per record,
  * one bin on each side of each endpoint of the BND.
  */
-public class UltralongBndGetBins {
+public class BndGetBins {
     
     private static HashMap<String,Integer> fai;
     

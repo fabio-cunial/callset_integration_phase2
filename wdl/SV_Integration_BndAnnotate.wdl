@@ -36,7 +36,7 @@ workflow SV_Integration_BndAnnotate {
         Int preemptible_number = 3
     }
     parameter_meta {
-        chunk_tsv: "Format: `ID,?,bai,bam,?,...,?` where `?` means a single string."
+        chunk_tsv: "Format: `ID,mean_coverage,bai,bam`."
         tr_bed: "From: https://github.com/PacificBiosciences/pbsv/tree/master/annotations"
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
@@ -81,8 +81,8 @@ workflow SV_Integration_BndAnnotate {
 # samtools bedcov (4 threads)                        350%    900M       5m
 # annotate_mapq_secondary.sh                         400%     15M      30s
 # bcftools annotate                                  100%     15M      50s
-# java UltralongBndGetBins                           200%     50M       1s
-# java UltralongBndCreateBedcovAnnotations           200%     50M       1s
+# java BndGetBins                                    200%     50M       1s
+# java BndCreateBedcovAnnotations                    200%     50M       1s
 # annotate_clipped_alignments_1.sh                   400%    600M       2m
 # annotate_clipped_alignments_2.sh                   400%     50M       2m
 #
@@ -212,11 +212,12 @@ task Impl {
             local INPUT_VCF=$2
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
+            local MEAN_COVERAGE=$5
 
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 > ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} java -cp ~{docker_dir} BndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 > ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} | sort -k 1,1 -k 2,2n > ${SAMPLE_ID}_tags.tsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} BndCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} ${MEAN_COVERAGE} | sort -k 1,1 -k 2,2n > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' ${INPUT_VCF} | sort -k 5,5 > ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv
             ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | sort -k 1,1 -k 6,6 | paste - - - - | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $7,$14,$21,$28); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
@@ -243,8 +244,15 @@ END=$4
 RECORD_ID=$5
 BIN_ID=$6
 
-samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { print (count>0?sum/count:0) }' > ${RECORD_ID}_${BIN_ID}_mapq.txt
-samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END} > ${RECORD_ID}_${BIN_ID}_secondary.txt
+samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} | awk '{ sum+=$5; count++ } END { printf("%.4f\n", count>0?sum/count:0) }' > ${RECORD_ID}_${BIN_ID}_mapq.txt
+N_SECONDARY=$(samtools view --count ${INPUT_BAM} --require-flags 256 ${CHROM}:${START}-${END})
+N_TOTAL=$(samtools view --count ${INPUT_BAM} ${CHROM}:${START}-${END})
+if [ ${N_TOTAL} -eq 0 ]; then
+    RATIO="0"
+else
+    RATIO=$(printf "%.4f\n" $(echo "scale=4; ${N_SECONDARY} / ${N_TOTAL}" | bc))
+fi
+echo "${RATIO}" > ${RECORD_ID}_${BIN_ID}_secondary.txt
 END
         chmod +x annotate_mapq_secondary.sh
         
@@ -264,7 +272,7 @@ END
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} BndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} 0 | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             rm -f *_mapq.txt *_secondary.txt
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_mapq_secondary.sh ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_bins.wsv
@@ -291,10 +299,10 @@ END
             echo '##INFO=<ID=BIN_POINT_MAPQ_1,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_2,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=BIN_POINT_MAPQ_3,Number=1,Type=Float,Description="Breakpoint window: avg MAPQ.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_0,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_1,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_2,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_POINT_SECONDARY_3,Number=1,Type=Float,Description="Breakpoint window: number of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_0,Number=1,Type=Float,Description="Breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_1,Number=1,Type=Float,Description="Breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_2,Number=1,Type=Float,Description="Breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_POINT_SECONDARY_3,Number=1,Type=Float,Description="Breakpoint window: fraction of secondary alignments.">' >> ${SAMPLE_ID}_header.txt
             local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POINT_MAPQ_0,INFO/BIN_POINT_SECONDARY_0,INFO/BIN_POINT_MAPQ_1,INFO/BIN_POINT_SECONDARY_1,INFO/BIN_POINT_MAPQ_2,INFO/BIN_POINT_SECONDARY_2,INFO/BIN_POINT_MAPQ_3,INFO/BIN_POINT_SECONDARY_3'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
@@ -331,17 +339,19 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-RECORD_ID=$3
+MEAN_COVERAGE=$3
+RECORD_ID=$4
 
+# Counting
 _0_R=$(wc -l < ${RECORD_ID}_0_rightmaximal_sorted.txt)
 _1_L=$(wc -l < ${RECORD_ID}_1_leftmaximal_sorted.txt)
 _2_R=$(wc -l < ${RECORD_ID}_2_rightmaximal_sorted.txt)
 _3_L=$(wc -l < ${RECORD_ID}_3_leftmaximal_sorted.txt)
 
-_0_R_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-_0_R_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-_1_L_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
-_1_L_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 | tr ',' '\t')
+_0_R_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+_0_R_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_0_rightmaximal_sorted.txt ${_0_R} 0 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+_1_L_2_R=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_2_rightmaximal_sorted.txt ${_2_R} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+_1_L_3_L=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${RECORD_ID}_1_leftmaximal_sorted.txt ${_1_L} 1 ${RECORD_ID}_3_leftmaximal_sorted.txt ${_3_L} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
 
 _0_INS=$(cut -f 1 ${RECORD_ID}_0_indel.txt)
 _0_DEL_START=$(cut -f 2 ${RECORD_ID}_0_indel.txt)
@@ -356,8 +366,28 @@ _3_INS=$(cut -f 1 ${RECORD_ID}_3_indel.txt)
 _3_DEL_START=$(cut -f 2 ${RECORD_ID}_3_indel.txt)
 _3_DEL_END=$(cut -f 3 ${RECORD_ID}_3_indel.txt)
 
+# Normalizing
+_0_R=$(printf "%.4f\n" $(echo "scale=4; ${_0_R} / ${MEAN_COVERAGE}" | bc))
+_1_L=$(printf "%.4f\n" $(echo "scale=4; ${_1_L} / ${MEAN_COVERAGE}" | bc))
+_2_R=$(printf "%.4f\n" $(echo "scale=4; ${_2_R} / ${MEAN_COVERAGE}" | bc))
+_3_L=$(printf "%.4f\n" $(echo "scale=4; ${_3_L} / ${MEAN_COVERAGE}" | bc))
+
+_0_INS=$(printf "%.4f\n" $(echo "scale=4; ${_0_INS} / ${MEAN_COVERAGE}" | bc))
+_0_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${_0_DEL_START} / ${MEAN_COVERAGE}" | bc))
+_0_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${_0_DEL_END} / ${MEAN_COVERAGE}" | bc))
+_1_INS=$(printf "%.4f\n" $(echo "scale=4; ${_1_INS} / ${MEAN_COVERAGE}" | bc))
+_1_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${_1_DEL_START} / ${MEAN_COVERAGE}" | bc))
+_1_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${_1_DEL_END} / ${MEAN_COVERAGE}" | bc))
+_2_INS=$(printf "%.4f\n" $(echo "scale=4; ${_2_INS} / ${MEAN_COVERAGE}" | bc))
+_2_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${_2_DEL_START} / ${MEAN_COVERAGE}" | bc))
+_2_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${_2_DEL_END} / ${MEAN_COVERAGE}" | bc))
+_3_INS=$(printf "%.4f\n" $(echo "scale=4; ${_3_INS} / ${MEAN_COVERAGE}" | bc))
+_3_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${_3_DEL_START} / ${MEAN_COVERAGE}" | bc))
+_3_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${_3_DEL_END} / ${MEAN_COVERAGE}" | bc))
+
+# Outputting
 echo -e "${RECORD_ID}\t${_0_R}\t${_1_L}\t${_2_R}\t${_3_L}\t${_0_R_2_R}\t${_0_R_3_L}\t${_1_L_2_R}\t${_1_L_3_L}\t${_0_INS}\t${_0_DEL_START}\t${_0_DEL_END}\t${_1_INS}\t${_1_DEL_START}\t${_1_DEL_END}\t${_2_INS}\t${_2_DEL_START}\t${_2_DEL_END}\t${_3_INS}\t${_3_DEL_START}\t${_3_DEL_END}" > ${RECORD_ID}_counts.txt
-rm -f ${RECORD_ID}_*maximal_sorted.txt
+rm -f ${RECORD_ID}_*maximal_sorted.txt ${RECORD_ID}_*indel.txt
 END
         chmod +x annotate_clipped_alignments_2.sh
 
@@ -374,13 +404,14 @@ END
             local MIN_CLIP_LENGTH=$6
             local MIN_INDEL_LENGTH=$7
             local CLIP_SLACK_BP=$8
+            local MEAN_COVERAGE=$9
     
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} ${CLIP_SLACK_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
+            ${TIME_COMMAND} java -cp ~{docker_dir} BndGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} ${CLIP_SLACK_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
@@ -436,17 +467,40 @@ END
         function AnnotateCustom() {
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
+            local MEAN_COVERAGE=$3
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
             
-            AnnotateCoverageBins ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
+            AnnotateCoverageBins ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ~{custom_breakpoint_window_slack_bp}
+            AnnotateClippedAlignments ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ~{custom_breakpoint_window_slack_bp} ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
+        }
+
+
+        # Adds field `INFO/GT_COUNT` to the input VCF, which is overwritten.
+        #
+        function AnnotateGtCount() {
+            local SAMPLE_ID=$1
+            local INPUT_VCF=$2
+
+            bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t[%GT]\n' ${INPUT_VCF} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                GT_COUNT=-1; \
+                if ($6=="0/0" || $6=="0|0" || $6=="./."  || $6==".|." || $6=="./0" || $6==".|0" || $6=="0/." || $6=="0|." || $6=="0" || $6==".") GT_COUNT=0; \
+                else if ($6=="0/1" || $6=="0|1" || $6=="1/0" || $6=="1|0" || $6=="./1" || $6==".|1" || $6=="1/." || $6=="1|." || $6=="1") GT_COUNT=1; \
+                else if ($6=="1/1" || $6=="1|1") GT_COUNT=2; \
+                printf("%s\t%d\t%s\t%s\t%s\t%d\n",$1,$2,$3,$4,$5,  GT_COUNT); \
+            }' | bgzip -c > ${SAMPLE_ID}_annotations.tsv.gz
+            tabix -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
+            echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="Original GT from the callers, converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/GT_COUNT'
+            bcftools annotate --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
+            rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt ${INPUT_VCF}
+            mv ${SAMPLE_ID}_annotated.vcf ${INPUT_VCF}
         }
         
 
@@ -523,9 +577,12 @@ END
                 ${TIME_COMMAND} python ~{feature_extraction_py} ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_feature_extraction_features.csv 1>&2
             fi
             head -n 10 ${SAMPLE_ID}_feature_extraction_features.csv 1>&2 || echo "0"
-            tail -n +2 ${SAMPLE_ID}_feature_extraction_features.csv | tr ',' '\t' | cut -f 1,2,6,8-19 | bgzip -c > ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
-            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
+            tail -n +2 ${SAMPLE_ID}_feature_extraction_features.csv | tr ',' '\t' | cut -f 6,8-19 | sort -k 1,1 > ${SAMPLE_ID}_feature_extraction_features.tsv
             rm -f ${SAMPLE_ID}_feature_extraction_features.csv
+            ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_feature_extraction_features.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
+            rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_feature_extraction_features.tsv
+            tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz
         }
 
 
@@ -542,13 +599,13 @@ END
             echo '##INFO=<ID=FEX_CN_SLOP,Number=1,Type=Float,Description="cn_slop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_MQ_DROP,Number=1,Type=Float,Description="mq_drop from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_CLIP_FRAC,Number=1,Type=Float,Description="clip_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Integer,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_SPLIT_READS,Number=1,Type=Float,Description="split_reads from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_READ_LEN_MED,Number=1,Type=Float,Description="read_len_med from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_STRAND_BIAS,Number=1,Type=Float,Description="strand_bias from feature_extraction">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=FEX_GC_FRAC,Number=1,Type=Float,Description="gc_frac from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Integer,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Integer,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
+            echo '##INFO=<ID=FEX_HOMOPOLYMER_MAX,Number=1,Type=Float,Description="homopolymer_max from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=FEX_LCR_MASK,Number=1,Type=Float,Description="lcr_mask from feature_extraction">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/FEX_DEPTH_RATIO,INFO/FEX_DEPTH_MAD,INFO/FEX_AB,INFO/FEX_CN_SLOP,INFO/FEX_MQ_DROP,INFO/FEX_CLIP_FRAC,INFO/FEX_SPLIT_READS,INFO/FEX_READ_LEN_MED,INFO/FEX_STRAND_BIAS,INFO/FEX_GC_FRAC,INFO/FEX_HOMOPOLYMER_MAX,INFO/FEX_LCR_MASK'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_feature_extraction_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -579,72 +636,72 @@ END
             mkdir ./cutefc_dir/
             ${TIME_COMMAND} cuteFC --threads ${CUTEFC_N_THREADS} --genotype --max_size -1 --max_cluster_bias_INS 1000 --diff_ratio_merging_INS 0.9 --max_cluster_bias_DEL 1000 --diff_ratio_merging_DEL 0.5 -Ivcf ${INPUT_VCF} ${ALIGNMENTS_BAM} ~{reference_fa} ${SAMPLE_ID}_cutefc.vcf ./cutefc_dir
             rm -rf ./cutefc_dir
-            bcftools query --format '%CHROM\t%POS\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\t[%PL]\t%INFO/CIPOS\t%INFO/CILEN\t%INFO/RE\t%INFO/STRAND\n' ${SAMPLE_ID}_cutefc.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+            bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t[%GT]\t[%GQ]\t[%DR]\t[%DV]\t[%PL]\t%INFO/CIPOS\t%INFO/CILEN\t%INFO/RE\t%INFO/STRAND\n' ${SAMPLE_ID}_cutefc.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 GT_COUNT=-1; \
-                if ($4=="0/0" || $4=="0|0" || $4=="./."  || $4==".|." || $4=="./0" || $4==".|0" || $4=="0/." || $4=="0|." || $4=="0" || $4==".") GT_COUNT=0; \
-                else if ($4=="0/1" || $4=="0|1" || $4=="1/0" || $4=="1|0" || $4=="./1" || $4==".|1" || $4=="1/." || $4=="1|." || $4=="1") GT_COUNT=1; \
-                else if ($4=="1/1" || $4=="1|1") GT_COUNT=2; \
+                if ($6=="0/0" || $6=="0|0" || $6=="./."  || $6==".|." || $6=="./0" || $6==".|0" || $6=="0/." || $6=="0|." || $6=="0" || $6==".") GT_COUNT=0; \
+                else if ($6=="0/1" || $6=="0|1" || $6=="1/0" || $6=="1|0" || $6=="./1" || $6==".|1" || $6=="1/." || $6=="1|." || $6=="1") GT_COUNT=1; \
+                else if ($6=="1/1" || $6=="1|1") GT_COUNT=2; \
                 \
-                if ($5==".") GQ=-1; \
-                else GQ=$5; \
+                if ($7==".") GQ=-1; \
+                else GQ=$7; \
                 \
-                if ($6==".") DR=-1; \
-                else DR=$6; \
+                if ($8==".") DR=-1; \
+                else DR=$8; \
                 \
-                if ($7==".") DV=-1; \
-                else DV=$7; \
+                if ($9==".") DV=-1; \
+                else DV=$9; \
                 \
                 PL_1=-1; PL_2=-1; PL_3=-1; \
-                p=0; \
-                for (i=1; i<=length($8); i++) { \
-                    if (substr($8,i,1)==",") { p=i; break; } \
-                } \
-                if (p>0) { \
-                    PL_1=substr($8,1,p-1); \
-                    q=0; \
-                    for (i=p+1; i<=length($8); i++) { \
-                        if (substr($8,i,1)==",") { q=i; break; } \
-                    } \
-                    if (q>0) { \
-                        PL_2=substr($8,p+1,q-1-p); \
-                        PL_3=substr($8,q+1); \
-                    } \
-                    else { PL_2=substr($8,p+1); } \
-                } \
-                else { PL_1=$8; }
-                \
-                CIPOS_1=-1; CIPOS_2=-1; \
-                p=0; \
-                for (i=1; i<=length($9); i++) { \
-                    if (substr($9,i,1)==",") { p=i; break; } \
-                } \
-                if (p>0) { \
-                    CIPOS_1=substr($9,1,p-1); \
-                    CIPOS_2=substr($9,p+1); \
-                } \
-                else { CIPOS_1=$9; } \
-                \
-                CILEN_1=-1; CILEN_2=-1; \
                 p=0; \
                 for (i=1; i<=length($10); i++) { \
                     if (substr($10,i,1)==",") { p=i; break; } \
                 } \
                 if (p>0) { \
-                    CILEN_1=substr($10,1,p-1); \
-                    CILEN_2=substr($10,p+1); \
+                    PL_1=substr($10,1,p-1); \
+                    q=0; \
+                    for (i=p+1; i<=length($10); i++) { \
+                        if (substr($10,i,1)==",") { q=i; break; } \
+                    } \
+                    if (q>0) { \
+                        PL_2=substr($10,p+1,q-1-p); \
+                        PL_3=substr($10,q+1); \
+                    } \
+                    else { PL_2=substr($10,p+1); } \
                 } \
-                else { CILEN_1=$10; } \
+                else { PL_1=$10; }
                 \
-                if ($11==".") RE=-1; \
-                else RE=$11; \
+                CIPOS_1=-1; CIPOS_2=-1; \
+                p=0; \
+                for (i=1; i<=length($11); i++) { \
+                    if (substr($11,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CIPOS_1=substr($11,1,p-1); \
+                    CIPOS_2=substr($11,p+1); \
+                } \
+                else { CIPOS_1=$11; } \
+                \
+                CILEN_1=-1; CILEN_2=-1; \
+                p=0; \
+                for (i=1; i<=length($12); i++) { \
+                    if (substr($12,i,1)==",") { p=i; break; } \
+                } \
+                if (p>0) { \
+                    CILEN_1=substr($12,1,p-1); \
+                    CILEN_2=substr($12,p+1); \
+                } \
+                else { CILEN_1=$12; } \
+                \
+                if ($13==".") RE=-1; \
+                else RE=$13; \
                 \
                 STRAND=-1; \
-                if ($12=="--") STRAND=0; \
-                else if ($12=="-+") STRAND=1; \
-                else if ($12=="+-") STRAND=2; \
-                else if ($12=="++") STRAND=3; \
+                if ($14=="--") STRAND=0; \
+                else if ($14=="-+") STRAND=1; \
+                else if ($14=="+-") STRAND=2; \
+                else if ($14=="++") STRAND=3; \
                 \
-                printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,GT_COUNT,GQ,DR,DV,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,RE,STRAND); \
+                printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\t%.4f\t%.4f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,$4,$5,  GT_COUNT,GQ,DR/RE,DV/RE,PL_1,PL_2,PL_3,CIPOS_1,CIPOS_2,CILEN_1,CILEN_2,STRAND); \
             }' | bgzip -c > ${SAMPLE_ID}_cutefc_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_cutefc.vcf
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_cutefc_annotations.tsv.gz
@@ -663,8 +720,8 @@ END
         
             echo '##INFO=<ID=CUTEFC_GT_COUNT,Number=1,Type=Integer,Description="Cutefc GT converted to an integer in {0,1,2}.">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_GQ,Number=1,Type=Integer,Description="Genotype quality according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Integer,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Integer,Description="High-quality variant reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DR,Number=1,Type=Float,Description="High-quality reference reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=CUTEFC_DV,Number=1,Type=Float,Description="High-quality variant reads according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_1,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_2,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_PL_3,Number=1,Type=Integer,Description="Phred-scaled genotype likelihoods rounded to the closest integer according to cutefc">' >> ${SAMPLE_ID}_header.txt
@@ -672,9 +729,8 @@ END
             echo '##INFO=<ID=CUTEFC_CIPOS_2,Number=1,Type=Integer,Description="Confidence interval around POS for imprecise variants according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_CILEN_1,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_CILEN_2,Number=1,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends according to cutefc">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=CUTEFC_RE,Number=1,Type=Integer,Description="Number of read support this record according to cutefc">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=CUTEFC_STRAND,Number=1,Type=Integer,Description="Cutefc strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--) converted to an integer in {0,1,2,3}.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_RE,INFO/CUTEFC_STRAND'
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/CUTEFC_GT_COUNT,INFO/CUTEFC_GQ,INFO/CUTEFC_DR,INFO/CUTEFC_DV,INFO/CUTEFC_PL_1,INFO/CUTEFC_PL_2,INFO/CUTEFC_PL_3,INFO/CUTEFC_CIPOS_1,INFO/CUTEFC_CIPOS_2,INFO/CUTEFC_CILEN_1,INFO/CUTEFC_CILEN_2,INFO/CUTEFC_STRAND'
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_cutefc_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_cutefc_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -688,7 +744,7 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
 
-            ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBndGetBins ${INPUT_VCF} ~{reference_fai} 0 0 | sort -k1,1 -k2,2n > ${SAMPLE_ID}_bins.bed
+            ${TIME_COMMAND} java -cp ~{docker_dir} BndGetBins ${INPUT_VCF} ~{reference_fai} 0 0 | sort -k1,1 -k2,2n > ${SAMPLE_ID}_bins.bed
             grep -P '\t0$' ${SAMPLE_ID}_bins.bed > ${SAMPLE_ID}_start.bed
             grep -P '\t2$' ${SAMPLE_ID}_bins.bed > ${SAMPLE_ID}_end.bed
             rm -f ${SAMPLE_ID}_bins.bed
@@ -703,33 +759,32 @@ END
             local TRACK_BED=$5
             local TRACK_ID=$6
 
-            ${TIME_COMMAND} bedtools intersect -wa -u -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_start_track.tsv
-            ${TIME_COMMAND} bedtools intersect -wa -v -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_start_track.tsv
-            sort -k 3,3 ${SAMPLE_ID}_start_track.tsv > ${SAMPLE_ID}_start_track_sorted.tsv ; rm -f ${SAMPLE_ID}_start_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -u -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t1\n",$4); }' > ${SAMPLE_ID}_start_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${START_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t0\n",$4); }' >> ${SAMPLE_ID}_start_track.tsv
+            sort -k 1,1 ${SAMPLE_ID}_start_track.tsv > ${SAMPLE_ID}_start_track_sorted.tsv ; rm -f ${SAMPLE_ID}_start_track.tsv
 
-            ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t1\n",$1,$2,$4); }' > ${SAMPLE_ID}_end_track.tsv
-            ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t0\n",$1,$2,$4); }' >> ${SAMPLE_ID}_end_track.tsv
-            sort -k 3,3 ${SAMPLE_ID}_end_track.tsv > ${SAMPLE_ID}_end_track_sorted.tsv ; rm -f ${SAMPLE_ID}_end_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -u -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t1\n",$4); }' > ${SAMPLE_ID}_end_track.tsv
+            ${TIME_COMMAND} bedtools intersect -wa -v -a ${END_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t0\n",$4); }' >> ${SAMPLE_ID}_end_track.tsv
+            sort -k 1,1 ${SAMPLE_ID}_end_track.tsv > ${SAMPLE_ID}_end_track_sorted.tsv ; rm -f ${SAMPLE_ID}_end_track.tsv
 
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 3 ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%s\t%s\t%s\t%s\n",$2,$3,$1,$4,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 1 -2 1 ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%d\n",$1,  $2,$3); }' | sort -k 1,1 > ${SAMPLE_ID}_track.tsv
             rm -f ${SAMPLE_ID}_start_track_sorted.tsv ${SAMPLE_ID}_end_track_sorted.tsv
-            # Remark: we don't do `tabix -0` here, since the point-coordinates
-            # are one-based even though `START_BED, END_BED` should be zero-
-            # based.
+            ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_track.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%d\t%d\n",$2,$3,$4,$5,$1,  $6,$7); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_track.tsv.gz
+            rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_track.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_track.tsv.gz
             echo '##INFO=<ID=START_'${TRACK_ID}',Number=1,Type=Integer,Description="START breakpoint is contained in a '${TRACK_ID}'">' > ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=END_'${TRACK_ID}',Number=1,Type=Integer,Description="END breakpoint is contained in a '${TRACK_ID}'">' >> ${SAMPLE_ID}_header.txt
-            COLUMNS='CHROM,POS,~ID,INFO/START_'${TRACK_ID}',INFO/END_'${TRACK_ID}
+            COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/START_'${TRACK_ID}',INFO/END_'${TRACK_ID}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_track.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_track* ${SAMPLE_ID}_header.txt
         }
 
         
         
-                
+
         # ---------------------------- Main program ----------------------------
         
-        INFINITY="1000000000"  # Arbitrary
         DEFAULT_QUAL="60"   # Arbitrary
         samtools --version 1>&2
         bcftools --version 1>&2
@@ -744,6 +799,7 @@ END
             if [ "${TEST}" != "0" ]; then
                 continue
             fi
+            MEAN_COVERAGE=$(echo ${LINE} | cut -d , -f 2)
 
             # 1. Canonizing the VCF
             LocalizeSample ${SAMPLE_ID} ${LINE}
@@ -756,7 +812,7 @@ END
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             
             # 2. Custom annotations
-            AnnotateCustom ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf
+            AnnotateCustom ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf ${MEAN_COVERAGE}
 
             # 3. Repeat tracks
             VcfToBed_StartEnd ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf
@@ -768,7 +824,10 @@ END
             rm -f ${SAMPLE_ID}_canonized.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_canonized.vcf
             rm -f ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed
 
-            # 4. Adding annotations from cuteFC and Kalra et al.
+            # 4. Original GT from the callers
+            AnnotateGtCount ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf
+
+            # 5. Adding annotations from cuteFC and Kalra et al.
             # Remark: we could run these two annotations in parallel, since they
             # are both slow and use threads inefficiently. In practice this does
             # not decrease total runtime.
@@ -800,6 +859,5 @@ END
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
