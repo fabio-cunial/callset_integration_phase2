@@ -18,6 +18,7 @@ workflow SV_Integration_UltralongMerge {
         String suffix
 
         Int bnd_remove_orientations = 0
+        Int do_truvari_collapse = 0
         String truvari_collapse_flags = "--bnddist 100"
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
@@ -33,6 +34,7 @@ workflow SV_Integration_UltralongMerge {
             svtype = svtype,
             suffix = suffix,
             bnd_remove_orientations = bnd_remove_orientations,
+            do_truvari_collapse = do_truvari_collapse,
             truvari_collapse_flags = truvari_collapse_flags,
             docker_image = docker_image
     }
@@ -59,7 +61,8 @@ task Impl {
         String suffix
 
         Int bnd_remove_orientations
-        String truvari_collapse_flags = "--bnddist 100"
+        Int do_truvari_collapse
+        String truvari_collapse_flags
         
         String docker_image
         Int n_cpu = 4
