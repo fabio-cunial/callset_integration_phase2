@@ -1,15 +1,15 @@
 version 1.0
 
 
-# Like `SV_Integration_BndGetTrainingIntervals.wdl`, but uses SAM-derived 
-# breakpoints rather than SVIM-asm's BND calls as a source of truth.
+# Like `SV_Integration_BndGetTrainingIntervals.wdl`, but uses breakpoints 
+# derived directly from the SAM rather than SVIM-asm's BND calls as a source of 
+# truth.
 #
 workflow SV_Integration_BndGetTrainingIntervalsPrime {
     input {
         File samples_tsv
 
         Int breakpoint_max_distance = 500
-        Int breakpoint_filter_mode = 2
         File reference_agp
         
         String remote_indir_query
@@ -19,9 +19,8 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
     parameter_meta {
-        samples_tsv: "Format: ID, HAP1_BAM, HAP2_BAM"
+        samples_tsv: "Format: ID,..."
         breakpoint_max_distance: "Max distance between a BND and an assembly breakpoint to mark TPs"
-        breakpoint_filter_mode: "1=at least one side of the BND must be close to an assembly breakpoint; 2=both sides of the BND must be close to an assembly breakpoint."
         reference_agp: "Reference AGP file."
         remote_indir_query: "Without final slash"
         remote_indir_truth: "Without final slash"
@@ -33,7 +32,6 @@ workflow SV_Integration_BndGetTrainingIntervalsPrime {
             samples_tsv = samples_tsv,
 
             breakpoint_max_distance = breakpoint_max_distance,
-            breakpoint_filter_mode = breakpoint_filter_mode,
             reference_agp = reference_agp,
 
             remote_indir_query = remote_indir_query,
@@ -59,7 +57,6 @@ task Impl {
         File samples_tsv
 
         Int breakpoint_max_distance
-        Int breakpoint_filter_mode
         File reference_agp
         
         String remote_indir_query
@@ -128,6 +125,5 @@ task Impl {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }

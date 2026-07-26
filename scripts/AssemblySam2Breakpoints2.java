@@ -63,7 +63,7 @@ public class AssemblySam2Breakpoints2 {
      * Remark: the program prints a CSV of breakpoints, where every row 
      * represents a single side of an adjacency, with format:
      * 
-     * CHR,POS, MATE_CHR,MATE_POS
+     * CHR,POS, MATE_CHR,MATE_POS, TYPE
      * 
      * Rows with MATE_CHR=-1, MATE_POS=-1 represent breakpoints in the reference
      * that connect to new sequence in the assembly that is not covered by any

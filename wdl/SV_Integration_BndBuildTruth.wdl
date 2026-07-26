@@ -1,7 +1,8 @@
 version 1.0
 
 
-# Builds a BND truthset using diploid-assembly-to-reference BAMs
+# Builds a BND truthset directly from diploid-assembly-to-reference BAMs 
+# (without passing through an SV caller).
 #
 workflow SV_Integration_BndBuildTruth {
     input {
@@ -111,6 +112,5 @@ task Impl {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 0
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
