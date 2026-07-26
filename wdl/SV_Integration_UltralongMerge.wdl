@@ -18,7 +18,7 @@ workflow SV_Integration_UltralongMerge {
         String suffix
 
         Int bnd_remove_orientations = 0
-        Int truvari_bnddist = 100
+        String truvari_collapse_flags = "--bnddist 100"
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
@@ -33,7 +33,7 @@ workflow SV_Integration_UltralongMerge {
             svtype = svtype,
             suffix = suffix,
             bnd_remove_orientations = bnd_remove_orientations,
-            truvari_bnddist = truvari_bnddist,
+            truvari_collapse_flags = truvari_collapse_flags,
             docker_image = docker_image
     }
     
@@ -59,7 +59,7 @@ task Impl {
         String suffix
 
         Int bnd_remove_orientations
-        Int truvari_bnddist
+        String truvari_collapse_flags = "--bnddist 100"
         
         String docker_image
         Int n_cpu = 4
@@ -121,8 +121,8 @@ END
         
         # ---------------------------- Main program ----------------------------
         
-        # Simple concatenation, with only exact duplicate removal. In the
-        # future we may run truvari collapse to remove approximate duplicates.
+        # Concatenation with exact duplicate removal, and optional truvari
+        # collapse.
         rm -f list.txt
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
@@ -135,8 +135,7 @@ END
         ls *.vcf.gz > list.txt
         ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
         ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
-        if [ ~{svtype} = "bnd" -o ~{svtype} = "BND" ]; then
-            # Collapsing highly similar BNDs
+        if [ ~{do_truvari_collapse} -eq 1 ]; then
             cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
                 /^#CHROM/ {print $0, "Artificial"; next} \
                 /^#/ {print; next} \
@@ -144,7 +143,7 @@ END
             ' | bgzip > out_prime.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t out_prime.vcf.gz
             rm -f out.vcf
-            ${TIME_COMMAND} truvari collapse --intra --input out_prime.vcf.gz --bnddist ~{truvari_bnddist} | bcftools view --samples SAMPLE --output-type v --output out.vcf
+            ${TIME_COMMAND} truvari collapse --intra ~{truvari_collapse_flags} --input out_prime.vcf.gz | bcftools view --samples SAMPLE --output-type v --output out.vcf
             rm -f out_prime.vcf.gz
         fi
 
@@ -161,12 +160,12 @@ END
         else
             mv out.vcf ~{svtype}~{suffix}_merged.vcf
         fi
+
+        # Sorting and uploading
         ${TIME_COMMAND} bcftools sort --output-type z ~{svtype}~{suffix}_merged.vcf --output ~{svtype}~{suffix}_merged.vcf.gz
         rm -f ~{svtype}~{suffix}_merged.vcf
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t ~{svtype}~{suffix}_merged.vcf.gz
         ls -laht 1>&2
-        
-        # Uploading
         ${TIME_COMMAND} gcloud storage mv ~{svtype}~{suffix}'*_merged.vcf.gz*' ~{remote_outdir}/
     >>>
     
