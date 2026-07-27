@@ -129,7 +129,7 @@ SVTYPE=$2
 INPUT_VCF_GZ=$3
 
 bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}_reheader.vcf.gz
-rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
+rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi ; mv ${INPUT_VCF_GZ}_reheader.vcf.gz ${INPUT_VCF_GZ}
 
 # Canonizing BNDs
 if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
