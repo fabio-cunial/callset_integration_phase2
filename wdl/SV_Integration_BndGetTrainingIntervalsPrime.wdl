@@ -5,6 +5,9 @@ version 1.0
 # derived directly from the SAM rather than SVIM-asm's BND calls as a source of 
 # truth.
 #
+# Remark: the TPs in output are canonized, but the input is left untouched so it
+# may still be not canonized.
+#
 workflow SV_Integration_BndGetTrainingIntervalsPrime {
     input {
         File samples_tsv
