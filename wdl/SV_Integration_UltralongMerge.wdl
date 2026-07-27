@@ -120,12 +120,41 @@ fi
 bcftools index -f -t ${INPUT_VCF_GZ}
 END
         chmod +x fix_sample.sh
+
+
+        cat << 'END' > fix_sample_prime.sh
+#!/bin/bash
+DOCKER_DIR=$1
+SVTYPE=$2
+INPUT_VCF_GZ=$3
+
+bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}_reheader.vcf.gz
+rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
+
+# Canonizing BNDs
+if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
+    java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type z > ${INPUT_VCF_GZ}_canonized.vcf.gz
+    rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_canonized.vcf.gz ${INPUT_VCF_GZ}
+fi
+
+# Replacing ALT with ID
+java -cp ${DOCKER_DIR} SetAltToID ${INPUT_VCF_GZ} | bgzip --compress-level 1 > ${INPUT_VCF_GZ}_prime
+rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_prime ${INPUT_VCF_GZ}
+
+bcftools index -f -t ${INPUT_VCF_GZ}
+END
+        chmod +x fix_sample_prime.sh
         
+
+
         
         # ---------------------------- Main program ----------------------------
         
-        # Concatenation with exact duplicate removal, and optional truvari
-        # collapse.
+        # Concatenation without any duplicate removal, since we are only 
+        # interested in feature values for training the models. Removing 
+        # duplicates may discard information if e.g. one instance is true in one
+        # sample and false in another sample.
+        # The optional truvari collapse should remove all duplicates, if needed.
         rm -f list.txt
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
@@ -136,8 +165,9 @@ END
         df -h 1>&2
         ls -laht 1>&2
         ls *.vcf.gz > list.txt
-        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --remove-duplicates --file-list list.txt --output-type v --output out.vcf
+        #${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
+        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample_prime.sh ~{docker_dir} ~{svtype}
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list.txt --output-type v --output out.vcf
         if [ ~{do_truvari_collapse} -eq 1 ]; then
             cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
                 /^#CHROM/ {print $0, "Artificial"; next} \
