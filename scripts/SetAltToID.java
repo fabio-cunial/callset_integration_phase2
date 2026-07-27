@@ -33,6 +33,7 @@ public class SetAltToID {
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records");
             tokens=str.split("\t");
             tokens[4]=tokens[2];
+            tokens[7]=addOrReplaceInfoField(tokens[7],"SVTYPE","DEL");
             System.out.println(String.join("\t",tokens));
             
             // Next iteration
@@ -41,5 +42,19 @@ public class SetAltToID {
         br.close();
         System.err.println("nRecords="+nRecords);
     }
+
+
+    private static final String addOrReplaceInfoField(String info, String field, String newValue) {
+		final int FIELD_LENGTH = field.length()+1;
+        int p, q;
+        
+        if (info.equals(".")) return field+"="+newValue;
+        p=-FIELD_LENGTH;
+        do { p=info.indexOf(field+"=",p+FIELD_LENGTH); }
+        while (p>0 && info.charAt(p-1)!=';');
+		if (p<0) return info+";"+field+"="+newValue;
+		q=info.indexOf(";",p+FIELD_LENGTH);
+        return info.substring(0,p+FIELD_LENGTH)+newValue+(q>=0?info.substring(q):"");
+	}
 
 }
