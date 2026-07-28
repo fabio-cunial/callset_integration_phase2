@@ -10,6 +10,9 @@ version 1.0
 # These (along with SVLEN and SUPP_PAV) should not be used for scoring (PAV does
 # not emit BND records).
 #
+# Remark: BNDs are not canonized at this stage. Every BND record from each 
+# sample is kept intact and simply annotated.
+#
 workflow SV_Integration_BndAnnotate {
     input {
         File chunk_tsv

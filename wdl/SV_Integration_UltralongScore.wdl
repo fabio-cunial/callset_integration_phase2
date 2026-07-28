@@ -264,17 +264,42 @@ task Score {
             bcftools norm --check-ref s --fasta-ref ~{reference_fa} --do-not-normalize --output-type z ~{resource_vcf_gz} --output resource_cleaned.vcf.gz
             bcftools index -f -t resource_cleaned.vcf.gz
             rm -f ~{resource_vcf_gz}
+            INPUT_FOR_EXTRACT="input_cleaned.vcf.gz"
+            RESOURCE_FOR_EXTRACT="resource_cleaned.vcf.gz"
+            INPUT_FOR_SCORE="input_cleaned.vcf.gz"
+            N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
+            N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
+            echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
         else
-            # We do not run the command above, since it seems to destroy 
-            # BND's ALTs (example: N]chr5:181473415] -> GNcNNNNNNNNNNNNNN ):
-            mv ~{input_vcf_gz} input_cleaned.vcf.gz
-            mv ~{input_vcf_gz_tbi} input_cleaned.vcf.gz.tbi
-            mv ~{resource_vcf_gz} resource_cleaned.vcf.gz
-            mv ~{resource_vcf_gz_tbi} resource_cleaned.vcf.gz.tbi
+            # Remark: we do not run the command above, since it seems to destroy 
+            # BND's ALTs (example: N]chr5:181473415] -> GNcNNNNNNNNNNNNNN ).
+            #
+            # Remark: we train/test only on even-even or odd-odd BNDs, to
+            # prevent data leakage.
+            bcftools filter --include "BND_PARITY_TYPE=0" --output-type z ~{input_vcf_gz} --output input_even_even.vcf.gz 
+            bcftools index -f -t input_even_even.vcf.gz
+            bcftools filter --include "BND_PARITY_TYPE=2" --output-type z ~{input_vcf_gz} --output input_odd_odd.vcf.gz
+            bcftools index -f -t input_odd_odd.vcf.gz
+            N_EVEN_EVEN="$(bcftools index --nrecords input_even_even.vcf.gz)"
+            N_ODD_ODD="$(bcftools index --nrecords input_odd_odd.vcf.gz)"
+            if [ ${N_EVEN_EVEN} -ge ${N_ODD_ODD} ]; then
+                INPUT_FOR_EXTRACT="input_even_even.vcf.gz"
+                bcftools filter --include "BND_PARITY_TYPE=0" --output-type z ~{resource_vcf_gz} --output resource_even_even.vcf.gz
+                bcftools index -f -t resource_even_even.vcf.gz
+                RESOURCE_FOR_EXTRACT="resource_even_even.vcf.gz"
+                INPUT_FOR_SCORE="input_odd_odd.vcf.gz"
+            else
+                INPUT_FOR_EXTRACT="input_odd_odd.vcf.gz"
+                bcftools filter --include "BND_PARITY_TYPE=2" --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
+                bcftools index -f -t resource_odd_odd.vcf.gz
+                RESOURCE_FOR_EXTRACT="resource_odd_odd.vcf.gz"
+                INPUT_FOR_SCORE="input_even_even.vcf.gz"
+            fi
+            N_RECORDS_INPUT="$(bcftools index --nrecords ${INPUT_FOR_EXTRACT})"
+            N_RECORDS_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_EXTRACT})"
+            N_RECORDS_TESTING="$(bcftools index --nrecords ${INPUT_FOR_SCORE})"
+            echo "Total training records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE} Total testing records: ${N_RECORDS_TESTING}" 1>&2
         fi
-        N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
-        N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
-        echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
 
         # 2. Scoring
         if ~{defined(training_resource_bed)}
@@ -283,7 +308,7 @@ task Score {
         else
             BED_FLAG=""
         fi
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V input_cleaned.vcf.gz ~{exclude_chromosomes_string} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION ${BED_FLAG}
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_FOR_EXTRACT} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_EXTRACT} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION ${BED_FLAG}
         ls -laht 1>&2
         # Output:
         # extract.annot.hdf5
@@ -297,7 +322,7 @@ task Score {
         # train.train.indel.calibrationScores.hdf5
         # train.train.indel.trainingScores.hdf5
         # train.train.indel.scorer.pkl
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V input_cleaned.vcf.gz -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true resource_cleaned.vcf.gz --resource:extracted,extracted=true extract.vcf.gz --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_FOR_SCORE} -O score -A ~{sep=" -A " annotations} --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
         ls -laht 1>&2
         # Output:
         # score.vcf.gz

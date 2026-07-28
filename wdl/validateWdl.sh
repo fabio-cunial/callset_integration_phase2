@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongScore.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongMerge.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongGetTrainingIntervals.wdl
@@ -15,7 +16,6 @@ java -jar ${WOMTOOL_PATH} validate -l SameChromPos.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndBuildTruth.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndGetTrainingIntervalsPrime.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndScore.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongScore.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndGetTrainingIntervals.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage15.wdl
 java -jar ${WOMTOOL_PATH} validate -l TestKanpigLength.wdl

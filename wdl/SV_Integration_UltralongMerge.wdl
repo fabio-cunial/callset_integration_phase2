@@ -4,9 +4,8 @@ version 1.0
 # Merges the per-sample, per-SVTYPE VCFs produced by 
 # `SV_Integration_{Ultralong,Bnd}Annotate.wdl` and 
 # `SV_Integration_{Ultralong,Bnd}GetTrainingIntervals.wdl` into a single, sorted
-# VCF, removing only exact duplicates. The input VCFs are assumed to have
-# standard symbolic ALT fields, e.g. ALT=<DEL> with SVLEN=23456 in INFO, and not 
-# ALT=<DEL-23456>.
+# VCF, without doing any form of collapse, and overwriting ALT in an ad hoc, 
+# non-standard way that is necessary for running VETS correctly downstream.
 #
 workflow SV_Integration_UltralongMerge {
     input {
@@ -16,10 +15,6 @@ workflow SV_Integration_UltralongMerge {
         
         String svtype
         String suffix
-
-        Int bnd_remove_orientations = 0
-        Int do_truvari_collapse = 0
-        String truvari_collapse_flags = "--bnddist 100"
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong:latest"
     }
@@ -33,9 +28,6 @@ workflow SV_Integration_UltralongMerge {
             remote_outdir = remote_outdir,
             svtype = svtype,
             suffix = suffix,
-            bnd_remove_orientations = bnd_remove_orientations,
-            do_truvari_collapse = do_truvari_collapse,
-            truvari_collapse_flags = truvari_collapse_flags,
             docker_image = docker_image
     }
     
@@ -47,9 +39,8 @@ workflow SV_Integration_UltralongMerge {
 # Performance on a 4-core, 4GB VM, all HPRC+HGSVC samples:
 #
 # TOOL                                                CPU     RAM     TIME
-# fix_sample.sh                                      300%     11M       4s
-# bcftools concat                                    300%    1.5G      20s
-# truvari collapse (BNDs only)                       
+# fix_sample.sh                                      
+# bcftools concat                                    
 #
 task Impl {
     input {
@@ -59,10 +50,6 @@ task Impl {
         
         String svtype
         String suffix
-
-        Int bnd_remove_orientations
-        Int do_truvari_collapse
-        String truvari_collapse_flags
         
         String docker_image
         Int n_cpu = 4
@@ -86,75 +73,49 @@ task Impl {
         
         # ----------------------- Steps of the pipeline ------------------------
         
-        cat << 'END' > fix_sample.sh
-#!/bin/bash
-DOCKER_DIR=$1
-SVTYPE=$2
-BND_REMOVE_ORIENTATIONS=$3
-INPUT_VCF_GZ=$4
-
-bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}_reheader.vcf.gz
-rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi
-
-# Adding SVLEN to symbolic ALTs, to avoid overcollapse by `bcftools concat`
-# downstream.
-if [ ${SVTYPE} != "ins" -a ${SVTYPE} != "INS" -a ${SVTYPE} != "bnd" -a ${SVTYPE} != "BND" ]; then
-    java -cp ${DOCKER_DIR} AddSvlenToSymbolicAlt ${INPUT_VCF_GZ}_reheader.vcf.gz | bgzip --compress-level 1 > ${INPUT_VCF_GZ}
-    rm -f ${INPUT_VCF_GZ}_reheader.vcf.gz
-else
-    mv ${INPUT_VCF_GZ}_reheader.vcf.gz ${INPUT_VCF_GZ}
-fi
-
-# Canonizing BNDs and removing orientations, if needed.
-if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
-    java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type v > ${INPUT_VCF_GZ}_canonized.vcf
-    rm -f ${INPUT_VCF_GZ}
-    if [ ${BND_REMOVE_ORIENTATIONS} -eq 1 ]; then
-        java -cp ${DOCKER_DIR} BndRemoveOrientations ${INPUT_VCF_GZ}_canonized.vcf | bgzip > ${INPUT_VCF_GZ}
-    else
-        bgzip -c ${INPUT_VCF_GZ}_canonized.vcf > ${INPUT_VCF_GZ}
-    fi
-    rm -f ${INPUT_VCF_GZ}_canonized.vcf
-fi
-
-bcftools index -f -t ${INPUT_VCF_GZ}
-END
-        chmod +x fix_sample.sh
-
-
-        cat << 'END' > fix_sample_prime.sh
+        cat << 'END' > preprocess_single_sample.sh
 #!/bin/bash
 DOCKER_DIR=$1
 SVTYPE=$2
 INPUT_VCF_GZ=$3
 
+# Forcing a fixed artificial sample name
 bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}_reheader.vcf.gz
 rm -f ${INPUT_VCF_GZ} ${INPUT_VCF_GZ}.tbi ; mv ${INPUT_VCF_GZ}_reheader.vcf.gz ${INPUT_VCF_GZ}
 
-# Canonizing BNDs
+# Canonizing BNDs. This is necessary for the annotated BND VCFs, since they are 
+# not yet canonized. It is redundant for the TPs VCFs, since they are already
+# canonized.
 if [ ${SVTYPE} = "bnd" -o ${SVTYPE} = "BND" ]; then
     java -cp ${DOCKER_DIR} BndCanonize ${INPUT_VCF_GZ} | bcftools sort - --output-type z > ${INPUT_VCF_GZ}_canonized.vcf.gz
     rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_canonized.vcf.gz ${INPUT_VCF_GZ}
 fi
 
-# Replacing ALT with ID
+# Creating an artificial ALT that contains ID (we assume that all IDs are unique
+# both at the intra-sample level and at the inter-sample level: this is 
+# enforced by the steps upstream). This is necessary to make 
+# `ExtractVariantAnnotations --resource-matching-strategy START_POSITION_AND_
+# GIVEN_REPRESENTATION` work downstream, and it prevents `bcftools concat` to
+# collapse any record.
 java -cp ${DOCKER_DIR} SetAltToID ${INPUT_VCF_GZ} | bgzip --compress-level 1 > ${INPUT_VCF_GZ}_prime
 rm -f ${INPUT_VCF_GZ} ; mv ${INPUT_VCF_GZ}_prime ${INPUT_VCF_GZ}
 
 bcftools index -f -t ${INPUT_VCF_GZ}
 END
-        chmod +x fix_sample_prime.sh
+        chmod +x preprocess_single_sample.sh
         
 
 
         
         # ---------------------------- Main program ----------------------------
         
-        # Concatenation without any duplicate removal, since we are only 
-        # interested in feature values for training the models. Removing 
-        # duplicates may discard information if e.g. one instance is true in one
-        # sample and false in another sample.
-        # The optional truvari collapse should remove all duplicates, if needed.
+        # Concatenation without any form of collapse, since here we are only 
+        # interested in preserving the original intra-sample feature values for
+        # training the models downstream. The rest of a VCF record is just a key
+        # used to match the resource to the input by ExtractVariantAnnotations.
+        # Removing duplicates may discard information if e.g. one instance is 
+        # true in one sample and false in another sample (with different feature
+        # values in each).
         rm -f list.txt
         while read LINE; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
@@ -165,34 +126,8 @@ END
         df -h 1>&2
         ls -laht 1>&2
         ls *.vcf.gz > list.txt
-        #${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample.sh ~{docker_dir} ~{svtype} ~{bnd_remove_orientations}
-        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./fix_sample_prime.sh ~{docker_dir} ~{svtype}
-        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list.txt --output-type v --output out.vcf
-        if [ ~{do_truvari_collapse} -eq 1 ]; then
-            cat out.vcf | awk 'BEGIN {FS=OFS="\t"} \
-                /^#CHROM/ {print $0, "Artificial"; next} \
-                /^#/ {print; next} \
-                {print $0, "0/1"} \
-            ' | bgzip > out_prime.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t out_prime.vcf.gz
-            rm -f out.vcf
-            ${TIME_COMMAND} truvari collapse --intra ~{truvari_collapse_flags} --input out_prime.vcf.gz | bcftools view --samples SAMPLE --output-type v --output out.vcf
-            rm -f out_prime.vcf.gz
-        fi
-
-        # Removing SVLEN from symbolic ALTs
-        if [ ~{svtype} != "ins" -a ~{svtype} != "INS" -a ~{svtype} != "bnd" -a ~{svtype} != "BND" ]; then
-            bcftools view --header-only out.vcf --output ~{svtype}~{suffix}_merged.vcf
-            ${TIME_COMMAND} bcftools view --no-header out.vcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' >> ~{svtype}~{suffix}_merged.vcf
-            rm -f out.vcf
-        else
-            mv out.vcf ~{svtype}~{suffix}_merged.vcf
-        fi
+        ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./preprocess_single_sample.sh ~{docker_dir} ~{svtype}
+        ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --file-list list.txt --output-type v --output ~{svtype}~{suffix}_merged.vcf
 
         # Sorting and uploading
         ${TIME_COMMAND} bcftools sort --output-type z ~{svtype}~{suffix}_merged.vcf --output ~{svtype}~{suffix}_merged.vcf.gz

@@ -2,7 +2,8 @@ version 1.0
 
 
 # Builds a BND truthset directly from diploid-assembly-to-reference BAMs 
-# (without passing through an SV caller).
+# (without passing through an SV caller). The truth is a CSV file that encodes
+# breakpoint locations.
 #
 workflow SV_Integration_BndBuildTruth {
     input {
