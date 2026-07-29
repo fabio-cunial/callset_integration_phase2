@@ -288,12 +288,14 @@ task Score {
                 bcftools index -f -t resource_even_even.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_even_even.vcf.gz"
                 INPUT_FOR_SCORE="input_odd_odd.vcf.gz"
+                RESOURCE_FOR_SCORE="resource_odd_odd.vcf.gz"
             else
                 INPUT_FOR_EXTRACT="input_odd_odd.vcf.gz"
                 bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
                 bcftools index -f -t resource_odd_odd.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_odd_odd.vcf.gz"
                 INPUT_FOR_SCORE="input_even_even.vcf.gz"
+                RESOURCE_FOR_SCORE="resource_even_even.vcf.gz"
             fi
             N_RECORDS_INPUT="$(bcftools index --nrecords ${INPUT_FOR_EXTRACT})"
             N_RECORDS_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_EXTRACT})"
@@ -322,7 +324,7 @@ task Score {
         # train.train.indel.calibrationScores.hdf5
         # train.train.indel.trainingScores.hdf5
         # train.train.indel.scorer.pkl
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_FOR_SCORE} -O score -A ~{sep=" -A " annotations} --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_FOR_SCORE} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_SCORE} --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
         ls -laht 1>&2
         # Output:
         # score.vcf.gz
