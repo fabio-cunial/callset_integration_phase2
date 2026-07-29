@@ -276,21 +276,21 @@ task Score {
             #
             # Remark: we train/test only on even-even or odd-odd BNDs, to
             # prevent data leakage.
-            bcftools filter --include "BND_PARITY_TYPE=0" --output-type z ~{input_vcf_gz} --output input_even_even.vcf.gz 
+            bcftools filter --include 'BND_PARITY_TYPE="0"' --output-type z ~{input_vcf_gz} --output input_even_even.vcf.gz
             bcftools index -f -t input_even_even.vcf.gz
-            bcftools filter --include "BND_PARITY_TYPE=2" --output-type z ~{input_vcf_gz} --output input_odd_odd.vcf.gz
+            bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{input_vcf_gz} --output input_odd_odd.vcf.gz
             bcftools index -f -t input_odd_odd.vcf.gz
             N_EVEN_EVEN="$(bcftools index --nrecords input_even_even.vcf.gz)"
             N_ODD_ODD="$(bcftools index --nrecords input_odd_odd.vcf.gz)"
             if [ ${N_EVEN_EVEN} -ge ${N_ODD_ODD} ]; then
                 INPUT_FOR_EXTRACT="input_even_even.vcf.gz"
-                bcftools filter --include "BND_PARITY_TYPE=0" --output-type z ~{resource_vcf_gz} --output resource_even_even.vcf.gz
+                bcftools filter --include 'BND_PARITY_TYPE="0"' --output-type z ~{resource_vcf_gz} --output resource_even_even.vcf.gz
                 bcftools index -f -t resource_even_even.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_even_even.vcf.gz"
                 INPUT_FOR_SCORE="input_odd_odd.vcf.gz"
             else
                 INPUT_FOR_EXTRACT="input_odd_odd.vcf.gz"
-                bcftools filter --include "BND_PARITY_TYPE=2" --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
+                bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
                 bcftools index -f -t resource_odd_odd.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_odd_odd.vcf.gz"
                 INPUT_FOR_SCORE="input_even_even.vcf.gz"
