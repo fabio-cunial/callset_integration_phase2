@@ -267,6 +267,7 @@ task Score {
             INPUT_FOR_EXTRACT="input_cleaned.vcf.gz"
             RESOURCE_FOR_EXTRACT="resource_cleaned.vcf.gz"
             INPUT_FOR_SCORE="input_cleaned.vcf.gz"
+            RESOURCE_FOR_SCORE="resource_cleaned.vcf.gz"
             N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
             N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
             echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
@@ -280,27 +281,29 @@ task Score {
             bcftools index -f -t input_even_even.vcf.gz
             bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{input_vcf_gz} --output input_odd_odd.vcf.gz
             bcftools index -f -t input_odd_odd.vcf.gz
+            bcftools filter --include 'BND_PARITY_TYPE="0"' --output-type z ~{resource_vcf_gz} --output resource_even_even.vcf.gz
+            bcftools index -f -t resource_even_even.vcf.gz
+            bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
+            bcftools index -f -t resource_odd_odd.vcf.gz
             N_EVEN_EVEN="$(bcftools index --nrecords input_even_even.vcf.gz)"
             N_ODD_ODD="$(bcftools index --nrecords input_odd_odd.vcf.gz)"
             if [ ${N_EVEN_EVEN} -ge ${N_ODD_ODD} ]; then
                 INPUT_FOR_EXTRACT="input_even_even.vcf.gz"
-                bcftools filter --include 'BND_PARITY_TYPE="0"' --output-type z ~{resource_vcf_gz} --output resource_even_even.vcf.gz
-                bcftools index -f -t resource_even_even.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_even_even.vcf.gz"
                 INPUT_FOR_SCORE="input_odd_odd.vcf.gz"
                 RESOURCE_FOR_SCORE="resource_odd_odd.vcf.gz"
             else
                 INPUT_FOR_EXTRACT="input_odd_odd.vcf.gz"
-                bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{resource_vcf_gz} --output resource_odd_odd.vcf.gz
-                bcftools index -f -t resource_odd_odd.vcf.gz
                 RESOURCE_FOR_EXTRACT="resource_odd_odd.vcf.gz"
                 INPUT_FOR_SCORE="input_even_even.vcf.gz"
                 RESOURCE_FOR_SCORE="resource_even_even.vcf.gz"
             fi
-            N_RECORDS_INPUT="$(bcftools index --nrecords ${INPUT_FOR_EXTRACT})"
-            N_RECORDS_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_EXTRACT})"
-            N_RECORDS_TESTING="$(bcftools index --nrecords ${INPUT_FOR_SCORE})"
-            echo "Total training records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE} Total testing records: ${N_RECORDS_TESTING}" 1>&2
+            N_RECORDS_EXTRACT_INPUT="$(bcftools index --nrecords ${INPUT_FOR_EXTRACT})"
+            N_RECORDS_EXTRACT_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_EXTRACT})"
+            N_RECORDS_SCORE_INPUT="$(bcftools index --nrecords ${INPUT_FOR_SCORE})"
+            N_RECORDS_SCORE_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_SCORE})"
+            echo "Total testing records: ${N_RECORDS_SCORE_INPUT}  Marked as true: ${N_RECORDS_SCORE_RESOURCE}" 1>&2
+            echo "Total training records: ${N_RECORDS_EXTRACT_INPUT}  Marked as true: ${N_RECORDS_EXTRACT_RESOURCE}" 1>&2
         fi
 
         # 2. Scoring
