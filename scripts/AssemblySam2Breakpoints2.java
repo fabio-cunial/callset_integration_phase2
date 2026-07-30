@@ -51,6 +51,12 @@ public class AssemblySam2Breakpoints2 {
     private static int MIN_INTERNAL_SV_LENGTH;
 
     /**
+     * Min distance from the closest end of a contig for the first/last position
+     * of a longest path to be printed.
+     */
+    private static int MIN_DISTANCE_FROM_CONTIG_END;
+
+    /**
      * Temporary, reused space.
      */
     private static long[] minViolations, maxLength;
@@ -87,6 +93,7 @@ public class AssemblySam2Breakpoints2 {
         PRINT_CHAIN_START_END=Integer.parseInt(args[4])==1;
         CONTAINMENT_SLACK_BP=Integer.parseInt(args[5]);
         MIN_INTERNAL_SV_LENGTH=Integer.parseInt(args[6]);
+        MIN_DISTANCE_FROM_CONTIG_END=Integer.parseInt(args[7]);
 
         final boolean DEBUG = false;
         
@@ -389,6 +396,8 @@ public class AssemblySam2Breakpoints2 {
      * (FALSE) position of `alignment` in contig order.
      */
     private static void printFirstLast(Alignment alignment, boolean last) {
+        if ( (last && alignment.readLast>=alignment.readLength-MIN_DISTANCE_FROM_CONTIG_END) ||
+             (!last && alignment.readFirst<MIN_DISTANCE_FROM_CONTIG_END) ) return;
         if (CHROMOSOME_MODE==0 || (CHROMOSOME_MODE==1 && isStandardChromosome(alignment.chrId))) {
             nBreakpoints[0]++; nBreakpoints[4]++;
             if (last) System.out.println(alignment.chrId+","+(alignment.isRc?alignment.chrFirst:alignment.chrLast)+",-1,-1,4");

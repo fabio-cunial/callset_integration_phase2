@@ -17,6 +17,7 @@ workflow SV_Integration_BndBuildTruth {
         Int print_chain_start_end = 1
         Int containment_slack_bp = 1000
         Int min_internal_sv_length = 100000
+        Int min_distance_from_contig_end = 1000
 
         String remote_outdir
         
@@ -40,6 +41,7 @@ workflow SV_Integration_BndBuildTruth {
             print_chain_start_end = print_chain_start_end,
             containment_slack_bp = containment_slack_bp,
             min_internal_sv_length = min_internal_sv_length,
+            min_distance_from_contig_end = min_distance_from_contig_end,
 
             remote_outdir = remote_outdir,
 
@@ -69,6 +71,7 @@ task Impl {
         Int print_chain_start_end
         Int containment_slack_bp
         Int min_internal_sv_length
+        Int min_distance_from_contig_end
 
         String remote_outdir
         
@@ -98,8 +101,8 @@ task Impl {
 
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap1.sam ~{hap1_bam}
         ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -n -O SAM -o hap2.sam ~{hap2_bam}
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints1.csv &
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} > ~{sample_id}_breakpoints2.csv &
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap1.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} ~{min_distance_from_contig_end} > ~{sample_id}_breakpoints1.csv &
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M AssemblySam2Breakpoints2 hap2.sam ~{max_adjacency_distance} ~{min_violation_distance} ~{chromosome_mode} ~{print_chain_start_end} ~{containment_slack_bp} ~{min_internal_sv_length} ~{min_distance_from_contig_end} > ~{sample_id}_breakpoints2.csv &
         wait
         cat ~{sample_id}_breakpoints1.csv ~{sample_id}_breakpoints2.csv | sort -t , -k1,1 -k2,2n | uniq > ~{sample_id}_breakpoints.csv
         gcloud storage mv ~{sample_id}_breakpoints.csv ~{remote_outdir}/
