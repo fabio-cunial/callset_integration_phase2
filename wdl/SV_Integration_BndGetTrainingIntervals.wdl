@@ -6,9 +6,12 @@ version 1.0
 workflow SV_Integration_BndGetTrainingIntervals {
     input {
         File samples_tsv
+        Int remove_orientations = 1
+
+        Int use_interval_svtypes = 0
+        Int interval_svtypes_min_sv_length = 1000
+
         Int truvari_bnddist = 500
-        Int min_sv_length_truth = 1000
-        Int remove_orientations = 0
         
         String remote_indir_query
         String remote_indir_svimasm
@@ -20,15 +23,18 @@ workflow SV_Integration_BndGetTrainingIntervals {
         samples_tsv: "Format: ID, ???"
         remote_indir_query: "Without final slash. Contains per-sample annotated VCFs created by `SV_Integration_BndAnnotate.wdl`."
         remote_indir_svimasm: "Without final slash. Contains per-sample canonized and filtered svim-asm VCFs."
-        min_sv_length_truth: "Only simple, non-INS SVs with SVLEN>=this are kept in the truth VCF."
+        interval_svtypes_min_sv_length: "Only simple, non-INS SVs with SVLEN>=this are kept in the truth VCF."
     }
     
     call Impl {
         input:
             samples_tsv = samples_tsv,
-            truvari_bnddist = truvari_bnddist,
-            min_sv_length_truth = min_sv_length_truth,
             remove_orientations = remove_orientations,
+
+            use_interval_svtypes = use_interval_svtypes,
+            interval_svtypes_min_sv_length = interval_svtypes_min_sv_length,
+
+            truvari_bnddist = truvari_bnddist,
 
             remote_indir_query = remote_indir_query,
             remote_indir_svimasm = remote_indir_svimasm,
@@ -50,9 +56,12 @@ workflow SV_Integration_BndGetTrainingIntervals {
 task Impl {
     input {
         File samples_tsv
-        Int truvari_bnddist
-        Int min_sv_length_truth
         Int remove_orientations
+
+        Int use_interval_svtypes
+        Int interval_svtypes_min_sv_length
+
+        Int truvari_bnddist
         
         String remote_indir_query
         String remote_indir_svimasm
@@ -115,12 +124,17 @@ task Impl {
             fi
             rm -f ${SAMPLE_ID}_svimasm_bnd_canonized.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include '(SVTYPE="DEL" || SVTYPE="DUP" || SVTYPE="INV") && SVLEN>='~{min_sv_length_truth} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
+            if [ ~{use_interval_svtypes} -eq 1 ]; then
+                ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include '(SVTYPE="DEL" || SVTYPE="DUP" || SVTYPE="INV") && ABS(SVLEN)>='~{interval_svtypes_min_sv_length} --output-type z ${SAMPLE_ID}_canonized.vcf.gz --output ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm_ultralong.vcf.gz
+                ${TIME_COMMAND} bcftools concat --allow-overlaps --output-type z ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz ${SAMPLE_ID}_svimasm_ultralong.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
+                bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
+                rm -f ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz* ${SAMPLE_ID}_svimasm_ultralong.vcf.gz*
+            else
+                mv ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz ${SAMPLE_ID}_svimasm.vcf.gz
+                mv ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz.tbi ${SAMPLE_ID}_svimasm.vcf.gz.tbi
+            fi
             rm -f ${SAMPLE_ID}_canonized.vcf.gz*
-            ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type z ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz ${SAMPLE_ID}_svimasm_ultralong.vcf.gz --output ${SAMPLE_ID}_svimasm.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_svimasm.vcf.gz
-            rm -f ${SAMPLE_ID}_svimasm_bnd_canonized.vcf.gz* ${SAMPLE_ID}_svimasm_ultralong.vcf.gz*
 
             # Computing matches between query and truth VCF.
             # Remarks:
