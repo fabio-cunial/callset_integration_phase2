@@ -80,6 +80,7 @@ workflow SV_Integration_UltralongScore {
                 
         File? training_resource_bed
         String exclude_chromosomes_string = " "
+        Int bnd_even_odd_split = 1
         File reference_fa
         File reference_fai
 
@@ -99,6 +100,7 @@ workflow SV_Integration_UltralongScore {
         input_vcf_gz: "Assumed to contain all the annotations used in this workflow."
         remote_outdir: "Without final slash"
         exclude_chromosomes_string: "Example: -XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5"
+        bnd_even_odd_split: "1: split BNDs into (evenChr,evenChr) and (oddChr,oddChr), and train/test on different splits. 0: use all BNDs."
         hyperparameters_json: "Parameters for `gatk TrainVariantAnnotationsModel`."
     }
     
@@ -115,6 +117,7 @@ workflow SV_Integration_UltralongScore {
                 remote_outdir = remote_outdir,
                 training_resource_bed = training_resource_bed,
                 exclude_chromosomes_string = exclude_chromosomes_string,
+                bnd_even_odd_split = bnd_even_odd_split,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
@@ -136,6 +139,7 @@ workflow SV_Integration_UltralongScore {
                 remote_outdir = remote_outdir,
                 training_resource_bed = training_resource_bed,
                 exclude_chromosomes_string = exclude_chromosomes_string,
+                bnd_even_odd_split = bnd_even_odd_split,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
@@ -157,6 +161,7 @@ workflow SV_Integration_UltralongScore {
                 remote_outdir = remote_outdir,
                 training_resource_bed = training_resource_bed,
                 exclude_chromosomes_string = exclude_chromosomes_string,
+                bnd_even_odd_split = bnd_even_odd_split,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
@@ -177,6 +182,7 @@ workflow SV_Integration_UltralongScore {
             remote_outdir = remote_outdir,
             training_resource_bed = training_resource_bed,
             exclude_chromosomes_string = exclude_chromosomes_string,
+            bnd_even_odd_split = bnd_even_odd_split,
             reference_fa = reference_fa,
             reference_fai = reference_fai,
             training_python_script = training_python_script,
@@ -197,6 +203,7 @@ workflow SV_Integration_UltralongScore {
                 remote_outdir = remote_outdir,
                 training_resource_bed = training_resource_bed,
                 exclude_chromosomes_string = exclude_chromosomes_string,
+                bnd_even_odd_split = bnd_even_odd_split,
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
                 training_python_script = training_python_script,
@@ -231,6 +238,7 @@ task Score {
         
         File? training_resource_bed
         String exclude_chromosomes_string
+        Int bnd_even_odd_split
         File reference_fa
         File reference_fai
 
@@ -271,12 +279,16 @@ task Score {
             N_RECORDS_INPUT="$(bcftools index --nrecords input_cleaned.vcf.gz)"
             N_RECORDS_RESOURCE="$(bcftools index --nrecords resource_cleaned.vcf.gz)"
             echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
-        else
-            # Remark: we do not run the command above, since it seems to destroy 
-            # BND's ALTs (example: N]chr5:181473415] -> GNcNNNNNNNNNNNNNN ).
-            #
-            # Remark: we train/test only on even-even or odd-odd BNDs, to
+            EXCLUDE_CHROMOSOMES_STRING="~{exclude_chromosomes_string}"
+            EXTRACTED_STRING="--resource:extracted,extracted=true extract.vcf.gz"
+        elif [ ~{bnd_even_odd_split} -eq 1 ]; then
+            # We train/test only on even-even or odd-odd BNDs, to
             # prevent data leakage.
+            # Remark: we do not run `bcftools norm` above on BNDs, since it
+            # seems to destroy BND's ALTs, e.g.:
+            #
+            # N]chr5:181473415] -> GNcNNNNNNNNNNNNNN
+            #
             bcftools filter --include 'BND_PARITY_TYPE="0"' --output-type z ~{input_vcf_gz} --output input_even_even.vcf.gz
             bcftools index -f -t input_even_even.vcf.gz
             bcftools filter --include 'BND_PARITY_TYPE="2"' --output-type z ~{input_vcf_gz} --output input_odd_odd.vcf.gz
@@ -304,6 +316,23 @@ task Score {
             N_RECORDS_SCORE_RESOURCE="$(bcftools index --nrecords ${RESOURCE_FOR_SCORE})"
             echo "Total testing records: ${N_RECORDS_SCORE_INPUT}  Marked as true: ${N_RECORDS_SCORE_RESOURCE}" 1>&2
             echo "Total training records: ${N_RECORDS_EXTRACT_INPUT}  Marked as true: ${N_RECORDS_EXTRACT_RESOURCE}" 1>&2
+            EXCLUDE_CHROMOSOMES_STRING=" "
+            EXTRACTED_STRING=" "
+        else
+            # Remark: we do not run `bcftools norm` above on BNDs, since it
+            # seems to destroy BND's ALTs, e.g.:
+            #
+            # N]chr5:181473415] -> GNcNNNNNNNNNNNNNN
+            #
+            INPUT_FOR_EXTRACT="~{input_vcf_gz}"
+            RESOURCE_FOR_EXTRACT="~{resource_vcf_gz}"
+            INPUT_FOR_SCORE="~{input_vcf_gz}"
+            RESOURCE_FOR_SCORE="~{resource_vcf_gz}"
+            N_RECORDS_INPUT="$(bcftools index --nrecords ~{input_vcf_gz})"
+            N_RECORDS_RESOURCE="$(bcftools index --nrecords ~{resource_vcf_gz})"
+            echo "Total records: ${N_RECORDS_INPUT}  Marked as true: ${N_RECORDS_RESOURCE}" 1>&2
+            EXCLUDE_CHROMOSOMES_STRING=" "
+            EXTRACTED_STRING="--resource:extracted,extracted=true extract.vcf.gz"
         fi
 
         # 2. Scoring
@@ -313,7 +342,7 @@ task Score {
         else
             BED_FLAG=""
         fi
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_FOR_EXTRACT} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_EXTRACT} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION ${BED_FLAG}
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_FOR_EXTRACT} ${EXCLUDE_CHROMOSOMES_STRING} -O extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_EXTRACT} --maximum-number-of-unlabeled-variants 1000000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION ${BED_FLAG}
         ls -laht 1>&2
         # Output:
         # extract.annot.hdf5
@@ -327,7 +356,7 @@ task Score {
         # train.train.indel.calibrationScores.hdf5
         # train.train.indel.trainingScores.hdf5
         # train.train.indel.scorer.pkl
-        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_FOR_SCORE} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_SCORE} --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
+        gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_FOR_SCORE} -O score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_FOR_SCORE} ${EXTRACTED_STRING} --model-prefix train.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
         ls -laht 1>&2
         # Output:
         # score.vcf.gz
