@@ -3,6 +3,7 @@ version 1.0
 
 # Runs `FilterIntrasampleDevPhase2.wdl` up to task `IdentifyTrainingSites`
 # (included) in the same VM for multiple samples.
+# TODO: Update `FilterIntrasampleDevPhase2.wdl` to include changes?
 #
 workflow Workpackage2 {
     input {
@@ -14,8 +15,10 @@ workflow Workpackage2 {
         File training_resource_tbi
         File training_resource_bed
 
-        String identify_training_sites_extra_args = "--sizemin 20 --sizemax 1000000 --sizefilt 20 --pctsize 0.9 --pctseq 0.9 --pick multi"
-        
+        String preprocess_final_view_extra_args = "-i 'GT[*]=\"alt\" && SVLEN>=50'"
+        String identify_training_sites_extra_args = "--sizemin 20 --sizemax 1000000 --sizefilt 20 --pctsize 0.9 --pctseq 0.9 --pick single"
+        String identify_training_sites_view_extra_args = "-i 'GT[*]=\"alt\" && SVLEN>=50'"
+
         Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 50
@@ -28,10 +31,12 @@ workflow Workpackage2 {
             sv_integration_chunk_tsv = sv_integration_chunk_tsv,
             remote_indir = remote_indir,
             remote_outdir = remote_outdir,
-            training_resource_vcf_gz = training_resource_vcf_gz,
+            training_resource_vcf_gz = training_resource_vcf_gz,        # this should not have undergone truvari-bench matching and should not contain hom-ref records
             training_resource_tbi = training_resource_tbi,
             training_resource_bed = training_resource_bed,
+            preprocess_final_view_extra_args = preprocess_final_view_extra_args,
             identify_training_sites_extra_args = identify_training_sites_extra_args,
+            identify_training_sites_view_extra_args = identify_training_sites_view_extra_args,
             n_cpu = n_cpu,
             ram_size_gb = ram_size_gb,
             disk_size_gb = disk_size_gb
@@ -53,7 +58,9 @@ task Workpackage2Impl {
         File training_resource_tbi
         File training_resource_bed
 
+        String preprocess_final_view_extra_args
         String identify_training_sites_extra_args
+        String identify_training_sites_view_extra_args
         
         Int n_cpu
         Int ram_size_gb
@@ -178,7 +185,8 @@ task Workpackage2Impl {
                 printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",$1,$2,$3,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,$10,$11,$12); \
             }' | bgzip -c > ${SAMPLE_ID}_format.tsv.gz
             tabix -s1 -b2 -e2 ${SAMPLE_ID}_format.tsv.gz
-            bcftools annotate --threads ${N_THREADS} -a ${SAMPLE_ID}_format.tsv.gz -h ${SAMPLE_ID}_format.hdr.txt -c CHROM,POS,ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV ${SAMPLE_ID}_tmp.vcf.gz -Oz -o ${SAMPLE_ID}_preprocessed.vcf.gz
+            bcftools annotate --threads ${N_THREADS} -a ${SAMPLE_ID}_format.tsv.gz -h ${SAMPLE_ID}_format.hdr.txt -c CHROM,POS,~ID,KS_1,KS_2,SQ,GQ,DP,AD_NON_ALT,AD_ALL,GT_COUNT,SUPP_PBSV,SUPP_SNIFFLES,SUPP_PAV ${SAMPLE_ID}_tmp.vcf.gz \
+                bcftools view ~{preprocess_final_view_extra_args} -Oz -o ${SAMPLE_ID}_preprocessed.vcf.gz
             bcftools view --no-header ${SAMPLE_ID}_preprocessed.vcf.gz | head -n 10 || echo "0"
             bcftools index -t ${SAMPLE_ID}_preprocessed.vcf.gz
             # TODO do we still need to hard-filter SVLEN >= 50 for extract, and
@@ -194,8 +202,8 @@ task Workpackage2Impl {
             local INPUT_VCF_GZ=$2
             
             ${TIME_COMMAND} truvari bench -b ~{training_resource_vcf_gz} -c ${INPUT_VCF_GZ} --includebed ~{training_resource_bed} ~{identify_training_sites_extra_args} -o ${SAMPLE_ID}_truvari/
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz ${SAMPLE_ID}_training.vcf.gz
-            mv ${SAMPLE_ID}_truvari/tp-comp.vcf.gz.tbi ${SAMPLE_ID}_training.vcf.gz.tbi
+            bcftools view ~{identify_training_sites_view_extra_args} ${SAMPLE_ID}_truvari/tp-comp.vcf.gz -Oz -o ${SAMPLE_ID}_training.vcf.gz
+            bcftools index -t ${SAMPLE_ID}_training.vcf.gz
             
             # Removing temporary files
             rm -rf ./${SAMPLE_ID}_truvari/
