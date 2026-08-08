@@ -29,7 +29,7 @@ public class UltralongIntervalIntersectClips {
         final boolean CLIPS2_IS_LEFT_MAXIMAL = Integer.parseInt(args[5])==1;
         final int ADJACENCY_SLACK_BP = Integer.parseInt(args[6]);
         final int MODE = Integer.parseInt(args[7]);
-        final double MEAN_COVERAGE = Double.parseDouble(args[8]);
+        final double NORMALIZATION_FACTOR = Double.parseDouble(args[8]);
         
         boolean isRc1, isRc2;
         int i, j, k;
@@ -42,7 +42,7 @@ public class UltralongIntervalIntersectClips {
         
         // Returning immediately if the input files are empty
         n10=0.0; n11=0.0; n20=0.0; n21=0.0;
-        if (N_CLIPS1==0 || N_CLIPS2==0) {
+        if (NORMALIZATION_FACTOR==0 || N_CLIPS1==0 || N_CLIPS2==0) {
             System.out.println(String.format(Locale.US,"%.4f,%.4f,%.4f,%.4f",n10,n11,n20,n21));
             System.exit(0);
         }
@@ -102,7 +102,7 @@ public class UltralongIntervalIntersectClips {
         for (i=0; i<N_CLIPS2; i++) {
             if (marked2[1][i]) n21+=1.0;
         }
-        System.out.println(String.format(Locale.US,"%.4f,%.4f,%.4f,%.4f",n10/MEAN_COVERAGE,n11/MEAN_COVERAGE,n20/MEAN_COVERAGE,n21/MEAN_COVERAGE));
+        System.out.println(String.format(Locale.US,"%.4f,%.4f,%.4f,%.4f",n10/NORMALIZATION_FACTOR,n11/NORMALIZATION_FACTOR,n20/NORMALIZATION_FACTOR,n21/NORMALIZATION_FACTOR));
     }
     
     

@@ -250,7 +250,7 @@ MIN_MAPQ=$1
 INPUT_BAM=$2
 INPUT_BED=$3
 
-samtools bedcov --min-MQ ${MIN_MAPQ} ${INPUT_BED} ${INPUT_BAM} > ${INPUT_BED}_counts.bed
+samtools bedcov -j --min-MQ ${MIN_MAPQ} ${INPUT_BED} ${INPUT_BAM} > ${INPUT_BED}_counts.bed
 END
         chmod +x samtools_bedcov_thread.sh
 
@@ -321,7 +321,7 @@ END
             local MIN_MAPQ=$6
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} samtools bedcov --min-MQ ${MIN_MAPQ} ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
+            ${TIME_COMMAND} samtools bedcov -j --min-MQ ${MIN_MAPQ} ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} ${MEAN_COVERAGE} | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
@@ -456,6 +456,7 @@ END=$8
 ID=$9
 
 samtools view --min-MQ ${MIN_MAPQ} --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
+echo $(wc -l < ${ID}.sam) > ${ID}_n_alignments.txt
 java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${ID}
 rm -f ${ID}.sam
 sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt
@@ -471,18 +472,20 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-MEAN_COVERAGE=$3
-ID=$4
+ID=$3
 
 # Counting
+N_ALIGNMENTS_L=$(cat ${ID}_left_n_alignments.txt)
+N_ALIGNMENTS_R=$(cat ${ID}_right_n_alignments.txt)
+NORMALIZATION_FACTOR=$(echo "scale=4; ( ${N_ALIGNMENTS_L} + ${N_ALIGNMENTS_R} ) / 2" | bc)
 LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
 RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
 RR=$(wc -l < ${ID}_right_rightmaximal_sorted.txt)
-LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
-LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
-LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
-LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${MEAN_COVERAGE} | tr ',' '\t')
+LL_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
+LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmaximal_sorted.txt ${LL} 1 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
+LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
+LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
 L_INS=$(cut -f 1 ${ID}_left_indel.txt)
 L_DEL_START=$(cut -f 2 ${ID}_left_indel.txt)
@@ -493,16 +496,24 @@ R_DEL_END=$(cut -f 3 ${ID}_right_indel.txt)
 rm -f ${ID}_left_indel.txt ${ID}_right_indel.txt
 
 # Normalizing
-LL=$(printf "%.4f\n" $(echo "scale=4; ${LL} / ${MEAN_COVERAGE}" | bc))
-LR=$(printf "%.4f\n" $(echo "scale=4; ${LR} / ${MEAN_COVERAGE}" | bc))
-RL=$(printf "%.4f\n" $(echo "scale=4; ${RL} / ${MEAN_COVERAGE}" | bc))
-RR=$(printf "%.4f\n" $(echo "scale=4; ${RR} / ${MEAN_COVERAGE}" | bc))
-L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${MEAN_COVERAGE}" | bc))
-L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${MEAN_COVERAGE}" | bc))
-L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${MEAN_COVERAGE}" | bc))
-R_INS=$(printf "%.4f\n" $(echo "scale=4; ${R_INS} / ${MEAN_COVERAGE}" | bc))
-R_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_START} / ${MEAN_COVERAGE}" | bc))
-R_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_END} / ${MEAN_COVERAGE}" | bc))
+if [ ${N_ALIGNMENTS_L} -eq 0 ]; then
+    LL="0"; LR="0"; L_INS="0"; L_DEL_START="0"; L_DEL_END="0"
+else
+    LL=$(printf "%.4f\n" $(echo "scale=4; ${LL} / ${N_ALIGNMENTS_L}" | bc))
+    LR=$(printf "%.4f\n" $(echo "scale=4; ${LR} / ${N_ALIGNMENTS_L}" | bc))
+    L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${N_ALIGNMENTS_L}" | bc))
+    L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${N_ALIGNMENTS_L}" | bc))
+    L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${N_ALIGNMENTS_L}" | bc))
+fi
+if [ ${N_ALIGNMENTS_R} -eq 0 ]; then
+    RL="0"; RR="0"; R_INS="0"; R_DEL_START="0"; R_DEL_END="0"
+else
+    RL=$(printf "%.4f\n" $(echo "scale=4; ${RL} / ${N_ALIGNMENTS_R}" | bc))
+    RR=$(printf "%.4f\n" $(echo "scale=4; ${RR} / ${N_ALIGNMENTS_R}" | bc))
+    R_INS=$(printf "%.4f\n" $(echo "scale=4; ${R_INS} / ${N_ALIGNMENTS_R}" | bc))
+    R_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_START} / ${N_ALIGNMENTS_R}" | bc))
+    R_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_END} / ${N_ALIGNMENTS_R}" | bc))
+fi
 
 # Outputting
 echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}" > ${ID}_counts.txt
@@ -516,15 +527,15 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-MEAN_COVERAGE=$3
-ID=$4
+ID=$3
 
 # Counting
+N_ALIGNMENTS=$(cat ${ID}_point_n_alignments.txt)
 PL=$(wc -l < ${ID}_point_leftmaximal_sorted.txt)
 PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
-PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
-PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
-PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${MEAN_COVERAGE} | tr ',' '\t')
+PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
+PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
+PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
 P_INS=$(cut -f 1 ${ID}_point_indel.txt)
 P_DEL_START=$(cut -f 2 ${ID}_point_indel.txt)
@@ -532,11 +543,15 @@ P_DEL_END=$(cut -f 3 ${ID}_point_indel.txt)
 rm -f ${ID}_point_indel.txt
 
 # Normalizing
-PL=$(printf "%.4f\n" $(echo "scale=4; ${PL} / ${MEAN_COVERAGE}" | bc))
-PR=$(printf "%.4f\n" $(echo "scale=4; ${PR} / ${MEAN_COVERAGE}" | bc))
-P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${MEAN_COVERAGE}" | bc))
-P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${MEAN_COVERAGE}" | bc))
-P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${MEAN_COVERAGE}" | bc))
+if [ ${N_ALIGNMENTS} -eq 0 ]; then
+    PL="0"; PR="0"; P_INS="0"; P_DEL_START="0"; P_DEL_END="0"
+else
+    PL=$(printf "%.4f\n" $(echo "scale=4; ${PL} / ${N_ALIGNMENTS}" | bc))
+    PR=$(printf "%.4f\n" $(echo "scale=4; ${PR} / ${N_ALIGNMENTS}" | bc))
+    P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${N_ALIGNMENTS}" | bc))
+    P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${N_ALIGNMENTS}" | bc))
+    P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${N_ALIGNMENTS}" | bc))
+fi
 
 # Outputting
 echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}" > ${ID}_counts.txt
@@ -563,7 +578,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
@@ -622,7 +637,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
@@ -1092,13 +1107,15 @@ BIN_COVERAGE_RATIO=$4
 RAM_MB=$5
 MEI_BED_GZ=$6
 MEI_BED_TOLERANCE=$7
-REGION=$8
-ID=$9
+MIN_DEPTH_BREAKPOINT=$8
+MIN_DEPTH_INTERVAL=$9
+REGION=${10}
+ID=${11}
 
 # Remark: we do not filter by MAPQ here, to get a clearer breakpoint signal.
 samtools depth -aa -r ${REGION} ${INPUT_BAM} -o ${ID}_depth.tsv
 tabix ${MEI_BED_GZ} ${REGION} > ${ID}_mei.bed
-java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${ID}_mei.bed $(wc -l < ${ID}_mei.bed) ${MEI_BED_TOLERANCE} > ${ID}_breakpoints.tsv
+java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${ID}_mei.bed $(wc -l < ${ID}_mei.bed) ${MEI_BED_TOLERANCE} ${MIN_DEPTH_BREAKPOINT} ${MIN_DEPTH_INTERVAL} > ${ID}_breakpoints.tsv
 rm -f ${ID}_depth.tsv ${ID}_mei.bed
 END
         chmod +x interval_2_breakpoints.sh
@@ -1114,8 +1131,11 @@ END
             local BIN_LENGTH=$4
             local BIN_COVERAGE_RATIO=$5
             local DEPTH_N_THREADS=$6
+            local MEAN_COVERAGE=$7
 
             local RAM_PER_THREAD_MB=$(( ( (~{ram_size_gb} - 1) * 1024) / ${DEPTH_N_THREADS} ))
+            local MIN_DEPTH_BREAKPOINT=$( echo "scale=4; ${MEAN_COVERAGE} / 4" | bc )  # Arbitrary lower bound
+            local MIN_DEPTH_INTERVAL=${MEAN_COVERAGE}  # Arbitrary lower bound
 
             if [ ~{convert_ins_to_dup} -eq 1 ]; then
                 local INSDUP_MODE=0
@@ -1133,7 +1153,7 @@ END
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB} ~{mei_bed_gz} ~{mei_bed_tolerance}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB} ~{mei_bed_gz} ~{mei_bed_tolerance} ${MIN_DEPTH_BREAKPOINT} ${MIN_DEPTH_INTERVAL}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsExtractDups ${SAMPLE_ID}_ins.vcf . ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins_dup.vcf ${INSDUP_QUAL} ${INSDUP_MODE}
             rm -f *_breakpoints.tsv
@@ -1213,7 +1233,7 @@ END
             LocalizeSample ${SAMPLE_ID} ${LINE}
             df -h 1>&2
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
-            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio} $(( ${N_THREADS} / 2 ))
+            Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
 
             # 2. Adding custom annotations

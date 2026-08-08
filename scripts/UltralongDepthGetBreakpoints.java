@@ -8,13 +8,26 @@ import java.io.*;
  * simple estimate of the leftmost and rightmost positions that delimit an 
  * increase in coverage.
  * 
- * Remark: the program tries to avoid MEI intervals, since a frequent MEI in the
- * genome could create a coverage increase.
+ * Remark: the program tries to avoid pairs of breakpoints that coincide with a
+ * MEI interval, since a frequent MEI in the genome could create a coverage 
+ * increase. However, the program may output a pair of breakpoints that 
+ * coincides with a sequence of adjacent MEIs: this happens in practice, and we 
+ * do not try to avoid it since we saw that some of such events are marked as
+ * INSDUPs in the truth.
+ * 
+ * Remark: similarly, one could avoid intervals that are identical to segdups,
+ * but we saw in practice that some of these are marked as INSDUPs in the truth.
  */
 public class UltralongDepthGetBreakpoints {
     
     /**
      * @args
+     * 3: only bins whose avg. coverage is >=this times the avg. coverage of the 
+     *    previous/next bin are considered as candidate breakpoints;
+     * 7: min depth of a low-coverage bin for it to create a candidate 
+     *    breakpoint;
+     * 8: the median depth of a candidate interval has to be >=this for it to be
+     *    considered.
      */
     public static void main(String[] args) throws IOException {
         final String SAMTOOLS_DEPTH_FILE = args[0];
@@ -24,6 +37,8 @@ public class UltralongDepthGetBreakpoints {
         final String MEI_BED_FILE = args[4];
         final int MEI_BED_N_RECORDS = Integer.parseInt(args[5]);
         final int MEI_BED_TOLERANCE = Integer.parseInt(args[6]);
+        final double MIN_DEPTH_BREAKPOINT = Double.parseDouble(args[7]);
+        final double MIN_DEPTH_INTERVAL = Double.parseDouble(args[8]);
 
         final int MAX_BREAKPOINTS = 30;  // Arbitrary
         
@@ -95,7 +110,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=0; i<BIN_LENGTH; i++) sum1+=depth[i];
         sum2=0;
         for (i=BIN_LENGTH; i<2*BIN_LENGTH; i++) sum2+=depth[i];
-        if (sum1>=BIN_LENGTH) {
+        if (sum1>=BIN_LENGTH*MIN_DEPTH_BREAKPOINT) {
             maxRatio=((double)sum2)/sum1;
             if (maxRatio>=BIN_COVERAGE_RATIO) leftBreakpoints.add(new Breakpoint(i-BIN_LENGTH,((double)sum1)/BIN_LENGTH,maxRatio));   
         }
@@ -103,7 +118,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=2*BIN_LENGTH; i<SAMTOOLS_DEPTH_N_POSITIONS; i++) {
             sum1+=depth[i-BIN_LENGTH]-depth[i-2*BIN_LENGTH];
             sum2+=depth[i]-depth[i-BIN_LENGTH];
-            if (sum1<BIN_LENGTH) continue;
+            if (sum1<BIN_LENGTH*MIN_DEPTH_BREAKPOINT) continue;
             ratio=((double)sum2)/sum1;
             if (ratio>maxRatio) maxRatio=ratio;
             if (ratio>=BIN_COVERAGE_RATIO) leftBreakpoints.add(new Breakpoint(i-BIN_LENGTH,((double)sum1)/BIN_LENGTH,ratio));
@@ -117,7 +132,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-1; i>=SAMTOOLS_DEPTH_N_POSITIONS-BIN_LENGTH; i--) sum2+=depth[i];
         sum1=0;
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-BIN_LENGTH-1; i>=SAMTOOLS_DEPTH_N_POSITIONS-2*BIN_LENGTH; i--) sum1+=depth[i];
-        if (sum2>=BIN_LENGTH) {
+        if (sum2>=BIN_LENGTH*MIN_DEPTH_BREAKPOINT) {
             maxRatio=((double)sum1)/sum2;
             if (maxRatio>=BIN_COVERAGE_RATIO) rightBreakpoints.add(new Breakpoint(i+BIN_LENGTH,((double)sum2)/BIN_LENGTH,maxRatio));
         }
@@ -125,7 +140,7 @@ public class UltralongDepthGetBreakpoints {
         for (i=SAMTOOLS_DEPTH_N_POSITIONS-2*BIN_LENGTH-1; i>=0; i--) {
             sum1+=depth[i]-depth[i+BIN_LENGTH];
             sum2+=depth[i+BIN_LENGTH]-depth[i+2*BIN_LENGTH];
-            if (sum2<BIN_LENGTH) continue;
+            if (sum2<BIN_LENGTH*MIN_DEPTH_BREAKPOINT) continue;
             ratio=((double)sum1)/sum2;
             if (ratio>maxRatio) maxRatio=ratio;
             if (ratio>=BIN_COVERAGE_RATIO) rightBreakpoints.add(new Breakpoint(i+BIN_LENGTH,((double)sum2)/BIN_LENGTH,ratio));
@@ -162,7 +177,7 @@ public class UltralongDepthGetBreakpoints {
                 lowDepth2=rightBreakpoints.get(j).lowDepth;
                 int[] newArray = Arrays.copyOfRange(depth,leftBreakpoint,rightBreakpoint+1);
                 Arrays.sort(newArray);
-                if (newArray[newArray.length/2]>=(lowDepth1<lowDepth2?lowDepth1:lowDepth2)*BIN_COVERAGE_RATIO) {
+                if (newArray[newArray.length/2]>=MIN_DEPTH_INTERVAL && newArray[newArray.length/2]>=(lowDepth1<lowDepth2?lowDepth1:lowDepth2)*BIN_COVERAGE_RATIO) {
                     validPairs++;
                     if (rightBreakpoint-leftBreakpoint>maxLength) {
                         maxLength=rightBreakpoint-leftBreakpoint;
