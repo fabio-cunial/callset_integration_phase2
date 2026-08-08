@@ -16,6 +16,8 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
+        Int min_mapq = 60
+
         Int ins2dup_bin_length = 100
         Float ins2dup_bin_coverage_ratio = 1.5
         Int convert_ins_to_dup = 1
@@ -45,6 +47,7 @@ workflow SV_Integration_UltralongAnnotate {
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         mei_bed_gz: "A sorted, indexed, 3-column BED. Can be built with: gunzip -c repeatmasker.tsv.gz | awk 'BEGIN { FS = \"\t\"; OFS = \"\t\"; } $12==\"LINE\" || $12==\"SINE\" || $12==\"LTR\" || $12==\"DNA\" { print $6, $7, $8 }' | sort -k1,1 -k2,2n mei.bed | bzgip > mei.bed.gz ; tabix -p bed mei.bed.gz"
+        min_mapq: "Custom annotations only use alignments with MAPQ>=this (except for avg. MAPQ)."
     }
     
     call Impl {
@@ -55,6 +58,8 @@ workflow SV_Integration_UltralongAnnotate {
             
             reference_fa = reference_fa,
             reference_fai = reference_fai,
+
+            min_mapq = min_mapq,
 
             ins2dup_bin_length = ins2dup_bin_length,
             ins2dup_bin_coverage_ratio = ins2dup_bin_coverage_ratio,
@@ -121,6 +126,8 @@ task Impl {
         
         File reference_fa
         File reference_fai
+
+        Int min_mapq
 
         Int ins2dup_bin_length
         Float ins2dup_bin_coverage_ratio
@@ -239,10 +246,11 @@ cat << 'END' > samtools_bedcov_thread.sh
 #!/bin/bash
 set -euxo pipefail
 
-INPUT_BAM=$1
-INPUT_BED=$2
+MIN_MAPQ=$1
+INPUT_BAM=$2
+INPUT_BED=$3
 
-samtools bedcov ${INPUT_BED} ${INPUT_BAM} > ${INPUT_BED}_counts.bed
+samtools bedcov --min-MQ ${MIN_MAPQ} ${INPUT_BED} ${INPUT_BAM} > ${INPUT_BED}_counts.bed
 END
         chmod +x samtools_bedcov_thread.sh
 
@@ -261,6 +269,7 @@ END
             local BREAKPOINT_WINDOW_BP=$5
             local BEDCOV_N_THREADS=$6
             local MEAN_COVERAGE=$7
+            local MIN_MAPQ=$8
 
             # Running `samtools bedcov` in parallel, since it can be very slow
             # for large intervals.
@@ -268,7 +277,7 @@ END
             split -d -a 5 -l 1 ${SAMPLE_ID}_bins.bed ${SAMPLE_ID}_chunk_
             ls ${SAMPLE_ID}_chunk_* | sort -V > ${SAMPLE_ID}_list.txt
             rm -f ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${BEDCOV_N_THREADS} ./samtools_bedcov_thread.sh ${INPUT_BAM}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${BEDCOV_N_THREADS} ./samtools_bedcov_thread.sh ${MIN_MAPQ} ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_counts.bed
             while read -u 4 CHUNK; do
                 cat ${CHUNK}_counts.bed >> ${SAMPLE_ID}_counts.bed
@@ -309,9 +318,10 @@ END
             local INPUT_BAM=$3
             local BREAKPOINT_WINDOW_BP=$4
             local MEAN_COVERAGE=$5
+            local MIN_MAPQ=$6
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} > ${SAMPLE_ID}_bins.bed
-            ${TIME_COMMAND} samtools bedcov ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
+            ${TIME_COMMAND} samtools bedcov --min-MQ ${MIN_MAPQ} ${SAMPLE_ID}_bins.bed ${INPUT_BAM} > ${SAMPLE_ID}_counts.bed
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointCreateBedcovAnnotations ${SAMPLE_ID}_counts.bed ${BREAKPOINT_WINDOW_BP} ${MEAN_COVERAGE} | sort -k 1,1 > ${SAMPLE_ID}_tags.tsv
             rm -f ${SAMPLE_ID}_counts.bed
@@ -439,12 +449,13 @@ INPUT_BAM=$1
 CLASSPATH=$2
 MIN_CLIP_LENGTH=$3
 MIN_INDEL_LENGTH=$4
-CHROM=$5
-START=$6
-END=$7
-ID=$8
+MIN_MAPQ=$5
+CHROM=$6
+START=$7
+END=$8
+ID=$9
 
-samtools view --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
+samtools view --min-MQ ${MIN_MAPQ} --no-header ${INPUT_BAM} ${CHROM}:${START}-${END} > ${ID}.sam
 java -cp ${CLASSPATH} UltralongIntervalGetClips ${ID}.sam ${START} ${END} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${ID}
 rm -f ${ID}.sam
 sort -k 1,1 ${ID}_leftmaximal.txt > ${ID}_leftmaximal_sorted.txt
@@ -545,9 +556,10 @@ END
             local MIN_CLIP_LENGTH=$6
             local MIN_INDEL_LENGTH=$7
             local MEAN_COVERAGE=$8
+            local MIN_MAPQ=$9
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
@@ -603,9 +615,10 @@ END
             local MIN_CLIP_LENGTH=$6
             local MIN_INDEL_LENGTH=$7
             local MEAN_COVERAGE=$8
+            local MIN_MAPQ=$9
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
@@ -644,16 +657,17 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local MEAN_COVERAGE=$3
+            local MIN_MAPQ=$4
 
             local N_COVERAGE_BINS="10"
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
 
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE}
+            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE}
+            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -664,14 +678,15 @@ END
             local SAMPLE_ID=$1
             local INPUT_VCF=$2
             local MEAN_COVERAGE=$3
+            local MIN_MAPQ=$4
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
             
-            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE}
+            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE}
+            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
@@ -1080,6 +1095,7 @@ MEI_BED_TOLERANCE=$7
 REGION=$8
 ID=$9
 
+# Remark: we do not filter by MAPQ here, to get a clearer breakpoint signal.
 samtools depth -aa -r ${REGION} ${INPUT_BAM} -o ${ID}_depth.tsv
 tabix ${MEI_BED_GZ} ${REGION} > ${ID}_mei.bed
 java -cp ${CLASSPATH} -Xmx${RAM_MB}m UltralongDepthGetBreakpoints ${ID}_depth.tsv $(wc -l < ${ID}_depth.tsv) ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${ID}_mei.bed $(wc -l < ${ID}_mei.bed) ${MEI_BED_TOLERANCE} > ${ID}_breakpoints.tsv
@@ -1203,11 +1219,11 @@ END
             # 2. Adding custom annotations
             N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
-                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${MEAN_COVERAGE}
+                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${MEAN_COVERAGE} ~{min_mapq}
             fi
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
-                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${MEAN_COVERAGE}
+                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${MEAN_COVERAGE} ~{min_mapq}
             fi
 
             # 3. Adding repeat track annotations

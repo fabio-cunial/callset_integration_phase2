@@ -27,9 +27,9 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
         File reference_fai
         
         Int truvari_refdist_loose = 500
-        Float truvari_pctsize_loose = 0.5
+        Float truvari_pctsize_loose = 0.4
         Float truvari_pctsize_strict = 0.9
-        Float truvari_pctovl_loose = 0.5
+        Float truvari_pctovl_loose = 0.4
 
         Int max_read_length = 25000
         
