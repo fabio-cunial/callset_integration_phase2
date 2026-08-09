@@ -16,7 +16,7 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
-        Int min_mapq = 60
+        String min_mapq = "0,1,10,20,30,60"
 
         Int ins2dup_bin_length = 100
         Float ins2dup_bin_coverage_ratio = 1.5
@@ -47,7 +47,7 @@ workflow SV_Integration_UltralongAnnotate {
         segdup_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         mei_bed_gz: "A sorted, indexed, 3-column BED. Can be built with: gunzip -c repeatmasker.tsv.gz | awk 'BEGIN { FS = \"\t\"; OFS = \"\t\"; } $12==\"LINE\" || $12==\"SINE\" || $12==\"LTR\" || $12==\"DNA\" { print $6, $7, $8 }' | sort -k1,1 -k2,2n mei.bed | bzgip > mei.bed.gz ; tabix -p bed mei.bed.gz"
-        min_mapq: "Custom annotations only use alignments with MAPQ>=this (except for avg. MAPQ)."
+        min_mapq: "Comma-separated list of MAPQs. Custom annotations only use alignments with MAPQ>=this (except for avg. MAPQ)."
     }
     
     call Impl {
@@ -127,7 +127,7 @@ task Impl {
         File reference_fa
         File reference_fai
 
-        Int min_mapq
+        String min_mapq
 
         Int ins2dup_bin_length
         Float ins2dup_bin_coverage_ratio
@@ -290,16 +290,16 @@ END
             ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=BIN_BEFORE_COVERAGE,Number=1,Type=Float,Description="Coverage of the bin before the call">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_LEFT_COVERAGE,Number=1,Type=Float,Description="Coverage of the left-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_BEFORE_COVERAGE,INFO/BIN_LEFT_COVERAGE'
+            echo '##INFO=<ID=BIN_BEFORE_COVERAGE_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the bin before the call">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_LEFT_COVERAGE_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the left-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_BEFORE_COVERAGE_'${MIN_MAPQ}',INFO/BIN_LEFT_COVERAGE_'${MIN_MAPQ}
             for i in $( seq 1 ${N_BINS} ); do
-                echo '##INFO=<ID=BIN_'${i}'_COVERAGE,Number=1,Type=Float,Description="Coverage of the i-th bin">' >> ${SAMPLE_ID}_header.txt
-                COLUMNS=${COLUMNS}',INFO/BIN_'${i}'_COVERAGE'
+                echo '##INFO=<ID=BIN_'${i}'_COVERAGE_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the i-th bin">' >> ${SAMPLE_ID}_header.txt
+                COLUMNS=${COLUMNS}',INFO/BIN_'${i}'_COVERAGE_'${MIN_MAPQ}
             done
-            echo '##INFO=<ID=BIN_RIGHT_COVERAGE,Number=1,Type=Float,Description="Coverage of the right-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=BIN_AFTER_COVERAGE,Number=1,Type=Float,Description="Coverage of the bin after the call">' >> ${SAMPLE_ID}_header.txt
-            COLUMNS=${COLUMNS}',INFO/BIN_RIGHT_COVERAGE,INFO/BIN_AFTER_COVERAGE'
+            echo '##INFO=<ID=BIN_RIGHT_COVERAGE_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the right-breakpoint bin">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=BIN_AFTER_COVERAGE_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the bin after the call">' >> ${SAMPLE_ID}_header.txt
+            COLUMNS=${COLUMNS}',INFO/BIN_RIGHT_COVERAGE_'${MIN_MAPQ}',INFO/BIN_AFTER_COVERAGE_'${MIN_MAPQ}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -329,8 +329,8 @@ END
             ${TIME_COMMAND} join -t $'\t' -1 5 -2 1 ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\n",$2,$3,$4,$5,$1,  $6); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_ref_alt_id.tsv ${SAMPLE_ID}_tags.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=BIN_POS,Number=1,Type=Float,Description="Coverage of the bin around the POS breakpoint">' > ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POS'
+            echo '##INFO=<ID=BIN_POS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Coverage of the bin around the POS breakpoint">' > ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/BIN_POS_'${MIN_MAPQ}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -586,33 +586,33 @@ END
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=LL,Number=1,Type=Float,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR,Number=1,Type=Float,Description="Left window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RL,Number=1,Type=Float,Description="Right window: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=RR,Number=1,Type=Float,Description="Right window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RL_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LL_RR_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RL_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=LR_RR_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL,INFO/LR,INFO/RL,INFO/RR,INFO/LL_RL_1,INFO/LL_RL_2,INFO/LL_RL_3,INFO/LL_RL_4,INFO/LL_RR_1,INFO/LL_RR_2,INFO/LL_RR_3,INFO/LL_RR_4,INFO/LR_RL_1,INFO/LR_RL_2,INFO/LR_RL_3,INFO/LR_RL_4,INFO/LR_RR_1,INFO/LR_RR_2,INFO/LR_RR_3,INFO/LR_RR_4,INFO/L_INS,INFO/L_DEL_START,INFO/L_DEL_END,INFO/R_INS,INFO/R_DEL_START,INFO/R_DEL_END'
+            echo '##INFO=<ID=LL_'${MIN_MAPQ}',Number=1,Type=Float,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_'${MIN_MAPQ}',Number=1,Type=Float,Description="Left window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=RL_'${MIN_MAPQ}',Number=1,Type=Float,Description="Right window: number of left-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=RR_'${MIN_MAPQ}',Number=1,Type=Float,Description="Right window: number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RL_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LL_RR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RL_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a left-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=LR_RR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=L_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=R_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL_'${MIN_MAPQ}',INFO/LR_'${MIN_MAPQ}',INFO/RL_'${MIN_MAPQ}',INFO/RR_'${MIN_MAPQ}',INFO/LL_RL_1_'${MIN_MAPQ}',INFO/LL_RL_2_'${MIN_MAPQ}',INFO/LL_RL_3_'${MIN_MAPQ}',INFO/LL_RL_4_'${MIN_MAPQ}',INFO/LL_RR_1_'${MIN_MAPQ}',INFO/LL_RR_2_'${MIN_MAPQ}',INFO/LL_RR_3_'${MIN_MAPQ}',INFO/LL_RR_4_'${MIN_MAPQ}',INFO/LR_RL_1_'${MIN_MAPQ}',INFO/LR_RL_2_'${MIN_MAPQ}',INFO/LR_RL_3_'${MIN_MAPQ}',INFO/LR_RL_4_'${MIN_MAPQ}',INFO/LR_RR_1_'${MIN_MAPQ}',INFO/LR_RR_2_'${MIN_MAPQ}',INFO/LR_RR_3_'${MIN_MAPQ}',INFO/LR_RR_4_'${MIN_MAPQ}',INFO/L_INS_'${MIN_MAPQ}',INFO/L_DEL_START_'${MIN_MAPQ}',INFO/L_DEL_END_'${MIN_MAPQ}',INFO/R_INS_'${MIN_MAPQ}',INFO/R_DEL_START_'${MIN_MAPQ}',INFO/R_DEL_END_'${MIN_MAPQ}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -645,24 +645,24 @@ END
             ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
-            echo '##INFO=<ID=PL,Number=1,Type=Float,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR,Number=1,Type=Float,Description="Number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PL_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_1,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_2,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_3,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PL_PR_4,Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_1,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_2,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_3,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=PR_PR_4,Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_INS,Number=1,Type=Float,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_START,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_END,Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL,INFO/PR,INFO/PL_PL_1,INFO/PL_PL_2,INFO/PL_PL_3,INFO/PL_PL_4,INFO/PL_PR_1,INFO/PL_PR_2,INFO/PL_PR_3,INFO/PL_PR_4,INFO/PR_PR_1,INFO/PR_PR_2,INFO/PR_PR_3,INFO/PR_PR_4,INFO/P_INS,INFO/P_DEL_START,INFO/P_DEL_END'
+            echo '##INFO=<ID=PL_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of right-clipped alignments.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PL_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a left-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PL_PR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a left-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_1_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=PR_PR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
+            echo '##INFO=<ID=P_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL_'${MIN_MAPQ}',INFO/PR_'${MIN_MAPQ}',INFO/PL_PL_1_'${MIN_MAPQ}',INFO/PL_PL_2_'${MIN_MAPQ}',INFO/PL_PL_3_'${MIN_MAPQ}',INFO/PL_PL_4_'${MIN_MAPQ}',INFO/PL_PR_1_'${MIN_MAPQ}',INFO/PL_PR_2_'${MIN_MAPQ}',INFO/PL_PR_3_'${MIN_MAPQ}',INFO/PL_PR_4_'${MIN_MAPQ}',INFO/PR_PR_1_'${MIN_MAPQ}',INFO/PR_PR_2_'${MIN_MAPQ}',INFO/PR_PR_3_'${MIN_MAPQ}',INFO/PR_PR_4_'${MIN_MAPQ}',INFO/P_INS_'${MIN_MAPQ}',INFO/P_DEL_START_'${MIN_MAPQ}',INFO/P_DEL_END_'${MIN_MAPQ}
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -675,15 +675,20 @@ END
             local MIN_MAPQ=$4
 
             local N_COVERAGE_BINS="10"
+            local MAPQS=$( echo ${MIN_MAPQ} | tr ',' ' ' )
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
 
-            AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE} ${MIN_MAPQ}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            for MAPQ in ${MAPQS}; do
+                AnnotateCoverageBins_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ${N_COVERAGE_BINS} ~{custom_breakpoint_window_bp} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE} ${MAPQ}
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            done
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MIN_MAPQ}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            for MAPQ in ${MAPQS}; do
+                AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ}
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            done
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
         }
@@ -694,15 +699,21 @@ END
             local INPUT_VCF=$2
             local MEAN_COVERAGE=$3
             local MIN_MAPQ=$4
+
+            local MAPQS=$( echo ${MIN_MAPQ} | tr ',' ' ' )
             
             mv ${INPUT_VCF} ${SAMPLE_ID}_in.vcf
             
-            AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE} ${MIN_MAPQ}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            for MAPQ in ${MAPQS}; do
+                AnnotateCoverageBins_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ${MEAN_COVERAGE} ${MAPQ}
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            done
             AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
-            AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MIN_MAPQ}
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            for MAPQ in ${MAPQS}; do
+                AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ}
+                rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
+            done
 
             mv ${SAMPLE_ID}_in.vcf ${INPUT_VCF}
         }
