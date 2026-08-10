@@ -182,6 +182,7 @@ task Impl {
             local QUERY_VCF_GZ=$5
             local TRUTH_VCF_GZ=$6
             local OUTPUT_VCF_GZ=$7
+            local PRINT_REMAP_PERC_VALUES=$8
 
             local DEFAULT_TRUVARI_CHUNKSIZE="1000"
             if [ ${REFDIST} -gt ${DEFAULT_TRUVARI_CHUNKSIZE} ]; then
@@ -198,6 +199,9 @@ task Impl {
             ${TIME_COMMAND} bcftools sort --output-type z ${OUTPUT_VCF_GZ} --output ${SAMPLE_ID}_out.vcf.gz
             mv ${SAMPLE_ID}_out.vcf.gz ${OUTPUT_VCF_GZ}
             bcftools index --threads ${N_THREADS} -f -t ${OUTPUT_VCF_GZ}
+            if [ ${PRINT_REMAP_PERC_VALUES} -eq 1 ]; then
+                bcftools query --format '%INFO/remap_classification\t%INFO/remap_perc\n' ${SAMPLE_ID}_truvari/tp-base.vcf.gz 1>&2
+            fi
             rm -rf ${SAMPLE_ID}_truvari/
         }
 
@@ -253,13 +257,13 @@ task Impl {
             # BED does not improve performance, and it decreases it both within
             # the confident BED and on the whole genome.
             # Approx. 8% of all DEL get marked as true by a dipcall gap.
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_svimasm_del.vcf.gz ${SAMPLE_ID}_del1.vcf.gz            
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_svimasm_del.vcf.gz ${SAMPLE_ID}_del1.vcf.gz 0        
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_del.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed DEL >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
-                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_del2.vcf.gz
+                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_del.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_del2.vcf.gz 0
                 N_DEL1=$(bcftools index --nrecords ${SAMPLE_ID}_del1.vcf.gz)
                 N_DEL2=$(bcftools index --nrecords ${SAMPLE_ID}_del2.vcf.gz)
                 if [ ${N_DEL1} -eq 0 ]; then
@@ -288,7 +292,7 @@ task Impl {
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
 
             # 3. INSDUP
             # Remark: we do not enforce breakpoint distance in INSDUP-INSDUP 
@@ -303,7 +307,7 @@ task Impl {
                 TRUVARI_REFDIST="2000000"
                 ENFORCE_BREAKPOINT_DISTANCE="1"
             fi
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ${TRUVARI_REFDIST} ${ENFORCE_BREAKPOINT_DISTANCE} ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ${TRUVARI_REFDIST} ${ENFORCE_BREAKPOINT_DISTANCE} ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_insdup_training.vcf.gz 1
             if [ ~{convert_ins_to_dup} -eq 1 -a ~{match_insdups_to_dups} -eq 1 ]; then
                 # We compare the query INS->DUPs to svim-asm's DUPs, since the
                 # former might contain simple DUPs.
@@ -311,7 +315,7 @@ task Impl {
                 # so this comparison might be irrelevant. This is probably due
                 # to the fact that we truvari-collapsed query INSDUPs to query
                 # DUPs, favoring the latter representation.
-                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ${TRUVARI_REFDIST} 1 ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz
+                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ${TRUVARI_REFDIST} 1 ${SAMPLE_ID}_insdup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_insdup_training_prime.vcf.gz 0
                 N_INSDUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training.vcf.gz)
                 N_INSDUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_insdup_training_prime.vcf.gz)
                 if [ ${N_INSDUP_TRAINING} -eq 0 ]; then
@@ -341,7 +345,7 @@ task Impl {
             # Remark: it is not useful to convert to intervals short DUPs that 
             # are represented as INS records in the query VCF, since there is
             # likely no BAM pattern at the interval's boundaries.
-            Bench ${SAMPLE_ID} 0 ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins.vcf.gz ${SAMPLE_ID}_out1.vcf.gz
+            Bench ${SAMPLE_ID} 0 ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_ins.vcf.gz ${SAMPLE_ID}_out1.vcf.gz 0
             CONCAT_STRING="${SAMPLE_ID}_out1.vcf.gz"
             if [ ~{match_ins_to_dup} -eq 1 ]; then
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongMatchInsToDup ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz $(bcftools index --nrecords ${SAMPLE_ID}_svimasm_dup.vcf.gz) ~{truvari_pctsize_strict} ~{match_ins_to_dup_slack_bp} ~{max_read_length} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
@@ -370,13 +374,13 @@ task Impl {
             # performance, probably because it adds to the training set several
             # events that are not simple INVs.
             # Approx. 15% of all INV get marked as true by a dipcall gap.
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
                 bgzip -@ ${N_THREADS} ${SAMPLE_ID}_gaps.vcf
                 bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_gaps.vcf.gz
-                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz
+                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_gaps.vcf.gz ${SAMPLE_ID}_inv2.vcf.gz 0
                 N_INV1=$(bcftools index --nrecords ${SAMPLE_ID}_inv1.vcf.gz)
                 N_INV2=$(bcftools index --nrecords ${SAMPLE_ID}_inv2.vcf.gz)
                 if [ ${N_INV1} -eq 0 ]; then
