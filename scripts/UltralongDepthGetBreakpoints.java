@@ -183,9 +183,9 @@ public class UltralongDepthGetBreakpoints {
                         maxLength=rightBreakpoint-leftBreakpoint;
                         bestLeft=leftBreakpoint; bestRight=rightBreakpoint;
                     }
+                    ratio=((double)newArray[newArray.length/2])/(lowDepth1<lowDepth2?lowDepth1:lowDepth2);
+                    if (ratio>maxRatio) maxRatio=ratio;
                 }
-                ratio=((double)newArray[newArray.length/2])/(lowDepth1<lowDepth2?lowDepth1:lowDepth2);
-                if (ratio>maxRatio) maxRatio=ratio;
             }
         }
         System.err.println("validPairs="+validPairs+" maxLength="+maxLength+" maxRatio="+String.format("%.2f",maxRatio));

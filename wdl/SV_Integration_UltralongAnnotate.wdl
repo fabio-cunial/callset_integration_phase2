@@ -202,7 +202,7 @@ task Impl {
         function DelocalizeSample() {
             local SAMPLE_ID=$1
             
-            rm -f ${SAMPLE_ID}*.bam* ${SAMPLE_ID}*.bcf* ${SAMPLE_ID}*.vcf* ${SAMPLE_ID}*.tsv* ${SAMPLE_ID}*.csv*
+            rm -f ${SAMPLE_ID}*.bam* ${SAMPLE_ID}*.bcf* ${SAMPLE_ID}*.vcf* ${SAMPLE_ID}*.tsv* ${SAMPLE_ID}*.csv* ${SAMPLE_ID}*.txt
         }
         
         
@@ -477,6 +477,7 @@ ID=$3
 # Counting
 N_ALIGNMENTS_L=$(cat ${ID}_left_n_alignments.txt)
 N_ALIGNMENTS_R=$(cat ${ID}_right_n_alignments.txt)
+rm -f ${ID}_*_n_alignments.txt
 NORMALIZATION_FACTOR=$(echo "scale=4; ( ${N_ALIGNMENTS_L} + ${N_ALIGNMENTS_R} ) / 2" | bc)
 LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
@@ -531,6 +532,7 @@ ID=$3
 
 # Counting
 N_ALIGNMENTS=$(cat ${ID}_point_n_alignments.txt)
+rm -f ${ID}_point_n_alignments.txt
 PL=$(wc -l < ${ID}_point_leftmaximal_sorted.txt)
 PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
 PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
@@ -1205,7 +1207,7 @@ END
                     printf("\n"); \
                 }' >> ${SAMPLE_ID}_not_ins.vcf
                 rm -f ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf.gz* ${SAMPLE_ID}_ins_dup.vcf.gz* ; bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_not_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
-                ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf
+                ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf --removed-output /dev/null
                 rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
             else
                 # In this case both VCFs have non-symbolic ALTs
