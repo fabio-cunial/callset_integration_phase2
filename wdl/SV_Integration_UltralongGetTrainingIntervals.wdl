@@ -20,6 +20,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
         Int match_to_gaps = 0
         Int match_insdups_to_dups = 1
+        Int match_dups_to_insdups = 1
         Int match_ins_to_dup = 1
         Int match_ins_to_insdup = 0
         Int match_ins_to_dup_slack_bp = 200
@@ -55,6 +56,7 @@ workflow SV_Integration_UltralongGetTrainingIntervals {
 
             match_to_gaps = match_to_gaps,
             match_insdups_to_dups = match_insdups_to_dups,
+            match_dups_to_insdups = match_dups_to_insdups,
             match_ins_to_dup = match_ins_to_dup,
             match_ins_to_insdup = match_ins_to_insdup,
             match_ins_to_dup_slack_bp = match_ins_to_dup_slack_bp,
@@ -96,6 +98,7 @@ task Impl {
 
         Int match_to_gaps
         Int match_insdups_to_dups
+        Int match_dups_to_insdups
         Int match_ins_to_dup
         Int match_ins_to_insdup
         Int match_ins_to_dup_slack_bp
@@ -146,9 +149,9 @@ task Impl {
 
             # Adding SVLEN to symbolic ALTs
             ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${INPUT1_VCF_GZ} | bgzip --compress-level 1 > ${SAMPLE_ID}_out1.vcf.gz
-            rm -f ${INPUT1_VCF_GZ} ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
+            rm -f ${INPUT1_VCF_GZ}* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out1.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${INPUT2_VCF_GZ} | bgzip --compress-level 1 > ${SAMPLE_ID}_out2.vcf.gz
-            rm -f ${INPUT2_VCF_GZ} ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
+            rm -f ${INPUT2_VCF_GZ}* ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_out2.vcf.gz
 
             # Concatenating
             ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_out1.vcf.gz ${SAMPLE_ID}_out2.vcf.gz --output ${SAMPLE_ID}_out.vcf
@@ -164,6 +167,7 @@ task Impl {
             }' >> ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf
             rm -f ${SAMPLE_ID}_out.vcf
             bcftools sort --output-type z ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf --output ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
+            rm -f ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_${OUTPUT_SUFFIX}.vcf.gz
         }
 
@@ -284,24 +288,29 @@ task Impl {
             fi
 
             # 2. DUP
-            # We compare the query DUPs only to svim-asm's DUPs (i.e. we exclude
-            # svim-asm's INS->DUPs) since records that are originally called as 
-            # DUP on both sides are likely enriched in simple DUPs, whereas
-            # INS->DUP records are likely enriched in complex DUPs.
-            #
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
-
-
-
-
-            # Original, enforcing breakpoint distance: Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 0 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
-
-
-
-
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
+            if [ ~{convert_ins_to_dup} -eq 1 -a ~{match_dups_to_insdups} -eq 1 ]; then
+                # Remark: records that are originally called as DUP on both 
+                # query and truth are likely enriched in simple DUPs, whereas
+                # INS->DUP records are likely enriched in complex DUPs. However,
+                # it could still happen that some truth INSDUPs represent simple
+                # DUPs.
+                Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_ins_dup.vcf.gz ${SAMPLE_ID}_dup_training_prime.vcf.gz 0
+                N_DUP_TRAINING=$(bcftools index --nrecords ${SAMPLE_ID}_dup_training.vcf.gz)
+                N_DUP_TRAINING_PRIME=$(bcftools index --nrecords ${SAMPLE_ID}_dup_training_prime.vcf.gz)
+                if [ ${N_DUP_TRAINING} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_dup_training.vcf.gz*
+                    mv ${SAMPLE_ID}_dup_training_prime.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz
+                    mv ${SAMPLE_ID}_dup_training_prime.vcf.gz.tbi ${SAMPLE_ID}_dup_training.vcf.gz.tbi
+                elif [ ${N_DUP_TRAINING_PRIME} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_dup_training_prime.vcf.gz*
+                else
+                    Concat ${SAMPLE_ID} ${SAMPLE_ID}_dup_training.vcf.gz ${SAMPLE_ID}_dup_training_prime.vcf.gz dup_training
+                fi
+            fi
 
             # 3. INSDUP
             # Remark: we do not enforce breakpoint distance in INSDUP-INSDUP 
@@ -383,18 +392,7 @@ task Impl {
             # performance, probably because it adds to the training set several
             # events that are not simple INVs.
             # Approx. 15% of all INV get marked as true by a dipcall gap.
-
-
-
-
-
-            # Original, enforcing breakpoint distance: Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 0 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
-
-
-
-
-
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
