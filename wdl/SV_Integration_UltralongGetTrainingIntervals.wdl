@@ -292,7 +292,16 @@ task Impl {
             # Remark: DUP records from svim-asm seem to be generally 
             # comprehensive, and they do not need to be augmented with e.g. gaps
             # in dipcall's BED.
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
+
+
+
+
+            # Original, enforcing breakpoint distance: Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 0 ${SAMPLE_ID}_dup.vcf.gz ${SAMPLE_ID}_svimasm_dup.vcf.gz ${SAMPLE_ID}_dup_training.vcf.gz 0
+
+
+
+
 
             # 3. INSDUP
             # Remark: we do not enforce breakpoint distance in INSDUP-INSDUP 
@@ -374,7 +383,18 @@ task Impl {
             # performance, probably because it adds to the training set several
             # events that are not simple INVs.
             # Approx. 15% of all INV get marked as true by a dipcall gap.
-            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
+
+
+
+
+
+            # Original, enforcing breakpoint distance: Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 1 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
+            Bench ${SAMPLE_ID} ~{truvari_pctovl_loose} ~{truvari_refdist_loose} 0 ${SAMPLE_ID}_inv.vcf.gz ${SAMPLE_ID}_svimasm_inv.vcf.gz ${SAMPLE_ID}_inv1.vcf.gz 0
+
+
+
+
+
             if [ ~{match_to_gaps} -eq 1 -a ${N_GAPS} -gt 0 ]; then
                 bcftools view --header-only ${SAMPLE_ID}_inv.vcf.gz > ${SAMPLE_ID}_gaps.vcf
                 ${TIME_COMMAND} java -cp ~{docker_dir} UltralongBed2IntervalVcf ${SAMPLE_ID}_gaps.bed INV >> ${SAMPLE_ID}_gaps.vcf
