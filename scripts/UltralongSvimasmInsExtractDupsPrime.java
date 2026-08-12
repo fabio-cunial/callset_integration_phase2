@@ -4,9 +4,15 @@ import java.io.*;
 
 /**
  * Given a VCF that contains only svim-asm INS records annotated with `truvari 
- * anno remap`, the program separates records that are classified as DUP,
- * assuming that `INFO/remap_coords` contains the accurate span of the entire
+ * anno remap`, the program extracts records that are classified as DUP,
+ * assuming that `INFO/remap_coords` contains the accurate span of the 
  * (possibly complex) duplication.
+ * 
+ * Remark: records with `remap_classification=partial` are written to the DUP 
+ * VCF only if their `remap_coords` are within SVLEN of POS. Every record with 
+ * `remap_classification=partial` is also written to the output INS VCF. A DUP
+ * record gets its coordinates from `remap_coords`, which may explain just a
+ * small fraction of the INS sequence.
  * 
  * Remark: the output DUP VCF is not necessarily sorted if it contains DUP 
  * records.
@@ -23,9 +29,10 @@ public class UltralongSvimasmInsExtractDupsPrime {
         final String OUTPUT_VCF_INS = args[2];
         final int OUTPUT_DUP_MODE = Integer.parseInt(args[3]);
 
+        boolean isPartial;
         int i, p, q;
-        int pos, start, end, nRecords, nDups;
-        String str, alt, info, classification, coords;
+        int pos, remapStart, remapEnd, svlen, nRecords, nDups, nDupAndIns;
+        String str, chrom, alt, qual, info, classification, coords, remapChrom;
         BufferedReader br;
         BufferedWriter bwIns, bwDup;
         String[] tokens;
@@ -33,7 +40,7 @@ public class UltralongSvimasmInsExtractDupsPrime {
         bwDup = new BufferedWriter(new FileWriter(OUTPUT_VCF_DUP));
         bwIns = new BufferedWriter(new FileWriter(OUTPUT_VCF_INS));
         br = new BufferedReader( new InputStreamReader( (INPUT_VCF_GZ.length()>=7&&INPUT_VCF_GZ.substring(INPUT_VCF_GZ.length()-7).equalsIgnoreCase(".vcf.gz")) ? new GZIPInputStream(new FileInputStream(INPUT_VCF_GZ)) : new FileInputStream(INPUT_VCF_GZ) ) );
-        str=br.readLine(); nRecords=0; nDups=0;
+        str=br.readLine(); nRecords=0; nDups=0; nDupAndIns=0;
         while (str!=null) {
             if (str.charAt(0)=='#') {
                 if (str.startsWith("#CHROM") && OUTPUT_DUP_MODE==0) {
@@ -48,33 +55,50 @@ public class UltralongSvimasmInsExtractDupsPrime {
             }
             nRecords++;
             tokens=str.split("\t");
+            chrom=tokens[0];
+            pos=Integer.parseInt(tokens[1]);
+            alt=tokens[4];
+            qual=tokens[5];
             info=tokens[7];
             classification=getInfoField(info,"remap_classification");
-            if (classification!=null && (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted") || classification.equals("partial"))) {
-                nDups++;
-                if (OUTPUT_DUP_MODE==0) {
-                    coords=getInfoField(info,"remap_coords");
-                    p=coords.indexOf(":");
-                    q=coords.indexOf("-");
-                    start=Integer.parseInt(coords.substring(p+1,q));
-                    end=Integer.parseInt(coords.substring(q+1));
-                    pos=Integer.parseInt(tokens[1]); tokens[1]=start+"";
-                    alt=tokens[4]; tokens[4]="<DUP>";
-                    info=addOrReplaceInfoField(info,"END",end+"");
-                    info=addOrReplaceInfoField(info,"SVLEN",(end-start)+"");
-                    info=addOrReplaceInfoField(info,"SVTYPE","DUP");
-                    info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+tokens[5];
-                    tokens[7]=info;
+            isPartial=(classification!=null && classification.equals("partial"));
+            if (classification!=null && (classification.equals("tandem") || classification.equals("tandem_complex") || classification.equals("tandem_inverted") || isPartial)) {
+                svlen=Integer.parseInt(getInfoField(info,"SVLEN"));
+                coords=getInfoField(info,"remap_coords");
+                p=coords.indexOf(":"); q=coords.indexOf("-",p+1);
+                remapChrom=coords.substring(0,p);
+                remapStart=Integer.parseInt(coords.substring(p+1,q));
+                remapEnd=Integer.parseInt(coords.substring(q+1));
+                if ( remapChrom.equals(chrom) && 
+                     ( !isPartial || (pos>=remapStart-svlen && pos<=remapEnd+svlen) )
+                   ) {
+                    nDups++;
+                    if (OUTPUT_DUP_MODE==0) {
+                        tokens[1]=remapStart+"";
+                        tokens[4]="<DUP>";
+                        info=addOrReplaceInfoField(info,"END",remapEnd+"");
+                        info=addOrReplaceInfoField(info,"SVLEN",(remapEnd-remapStart)+"");
+                        info=addOrReplaceInfoField(info,"SVTYPE","DUP");
+                        info+=";INS_POS="+pos+";INS_ALT="+alt+";INS_QUAL="+qual;
+                        tokens[7]=info;
+                        bwDup.write(tokens[0]);
+                        for (i=1; i<tokens.length; i++) bwDup.write("\t"+tokens[i]);
+                        bwDup.write("\n");
+                    }
+                    else bwDup.write(str+"\n");
+                    if (isPartial) {
+                        nDupAndIns++;
+                        bwIns.write(str+"\n");
+                    }
                 }
-                bwDup.write(tokens[0]);
-                for (i=1; i<tokens.length; i++) bwDup.write("\t"+tokens[i]);
-                bwDup.write("\n");
+                else bwIns.write(str+"\n");
             }
             else bwIns.write(str+"\n");
             str=br.readLine();
         }
         br.close(); bwDup.close(); bwIns.close();
         System.err.println("Extracted "+nDups+" DUPs out of "+nRecords+" INS records ("+String.format("%.2f",(100.0*nDups)/nRecords)+"%) with truvari anno remap.");
+        if (nDupAndIns!=0) System.err.println(nDupAndIns+" of the extracted DUPs are also kept as INS ("+String.format("%.2f",(100.0*nDupAndIns)/nDups)+"%).");
     }
 
 
