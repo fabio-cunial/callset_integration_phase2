@@ -13,7 +13,7 @@ import java.io.*;
  * The program also outputs a file with the number of CIGAR INS inside the 
  * window, and with the number of CIGAR DEL that start or end inside the window:
  * 
- * Output format: N_INS,N_DEL_START,N_DEL_END
+ * Output format: N_INS_i,N_DEL_START_i,N_DEL_END_i for every i
  */
 public class UltralongIntervalGetClips {
     
@@ -21,31 +21,38 @@ public class UltralongIntervalGetClips {
      * @param args 
      * 1: 0-based, inclusive;
      * 2: 0-based, exclusive;
-     * 4: only CIGAR INDELs >=this are counted.
+     * 4: comma-separated, not necessarily sorted sequence; only CIGAR INDELs
+     *    >=this are counted.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_SAM = args[0];
         final int START = Integer.parseInt(args[1]);
         final int END = Integer.parseInt(args[2]);
         final int MIN_CLIP_LENGTH = Integer.parseInt(args[3]);
-        final int MIN_INDEL_LENGTH = Integer.parseInt(args[4]);
+        final String[] MIN_INDEL_LENGTH = args[4].split(",");
         final String OUTPUT_PREFIX = args[5];
         
         final int RC_MASK = 16;
         
         boolean isRc, matchFound;
         char c;
-        int i, j;
-        int refPos, readPos, newReadPos, cigarLength, readLength, length, nIns, nDelStart, nDelEnd;
+        int i, j, k;
+        int refPos, readPos, newReadPos, cigarLength, readLength, length;
         String str, cigar, output;
         BufferedReader br;
         BufferedWriter bwLeft, bwRight, bwIndel;
+        int[] minIndelLengths, nIns, nDelStart, nDelEnd;
         String[] tokens;
-        
+
+        minIndelLengths = new int[MIN_INDEL_LENGTH.length];
+        for (i=0; i<MIN_INDEL_LENGTH.length; i++) minIndelLengths[i]=Integer.parseInt(MIN_INDEL_LENGTH[i]);
+        nIns = new int[minIndelLengths.length]; 
+        nDelStart = new int[minIndelLengths.length]; 
+        nDelEnd = new int[minIndelLengths.length];
         bwLeft = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_leftmaximal.txt"));
         bwRight = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_rightmaximal.txt"));
         br = new BufferedReader(new InputStreamReader(new FileInputStream(INPUT_SAM)));
-        str=br.readLine(); nIns=0; nDelStart=0; nDelEnd=0;
+        str=br.readLine(); 
         while (str!=null) {
             tokens=str.split("\t");
             refPos=Integer.parseInt(tokens[3]);  // 1-based, first mapping pos.
@@ -77,16 +84,28 @@ public class UltralongIntervalGetClips {
                 }
                 else if (c=='I') {
                     length=Integer.parseInt(cigar.substring(i,j));
-                    if (length>=MIN_INDEL_LENGTH && refPos-1>=START && refPos-1<END) nIns++;
+                    if (refPos-1>=START && refPos-1<END) {
+                        for (k=0; k<minIndelLengths.length; k++) {
+                            if (length>=minIndelLengths[k]) nIns[k]++;
+                        }
+                    }
                     readPos+=length;
                     i=j+1;
                 }
                 else if (c=='D') {
                     matchFound=true;
                     length=Integer.parseInt(cigar.substring(i,j));
-                    if (length>=MIN_INDEL_LENGTH && refPos-1>=START && refPos-1<END) nDelStart++;
+                    if (refPos-1>=START && refPos-1<END) {
+                        for (k=0; k<minIndelLengths.length; k++) {
+                            if (length>=minIndelLengths[k]) nDelStart[k]++;
+                        }
+                    }
                     refPos+=length;
-                    if (length>=MIN_INDEL_LENGTH && refPos-1>=START && refPos-1<END) nDelEnd++;
+                    if (refPos-1>=START && refPos-1<END) {
+                        for (k=0; k<minIndelLengths.length; k++) {
+                            if (length>=minIndelLengths[k]) nDelEnd[k]++;
+                        }
+                    }
                     i=j+1;
                 }
                 else if (c=='N') {
@@ -112,8 +131,12 @@ public class UltralongIntervalGetClips {
             str=br.readLine();
         }
         br.close(); bwLeft.close(); bwRight.close();
+
+        // Outputting
         bwIndel = new BufferedWriter(new FileWriter(OUTPUT_PREFIX+"_indel.txt"));
-        bwIndel.write(nIns+"\t"+nDelStart+"\t"+nDelEnd+"\n");
+        bwIndel.write(nIns[0]+"\t"+nDelStart[0]+"\t"+nDelEnd[0]);
+        for (k=1; k<minIndelLengths.length; k++) bwIndel.write("\t"+nIns[k]+"\t"+nDelStart[k]+"\t"+nDelEnd[k]);
+        bwIndel.newLine();
         bwIndel.close();
     }
 

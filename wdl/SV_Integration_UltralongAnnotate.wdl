@@ -16,7 +16,7 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
-        String min_mapq = "0,1,10,20,30,60"
+        String min_mapq = "0"
 
         Int ins2dup_bin_length = 100
         Float ins2dup_bin_coverage_ratio = 1.5
@@ -24,7 +24,7 @@ workflow SV_Integration_UltralongAnnotate {
         
         Int custom_breakpoint_window_bp = 500
         Int custom_min_clip_length = 200
-        Int custom_min_indel_length = 5000
+        String custom_min_indel_length = "500,1000,5000"
         Int custom_adjacency_slack_bp = 300
 
         Int use_cutefc = 0
@@ -48,6 +48,7 @@ workflow SV_Integration_UltralongAnnotate {
         gc_content_bed: "From: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/genome-stratifications/v3.6/GRCh38@all/"
         mei_bed_gz: "A sorted, indexed, 3-column BED. Can be built with: gunzip -c repeatmasker.tsv.gz | awk 'BEGIN { FS = \"\t\"; OFS = \"\t\"; } $12==\"LINE\" || $12==\"SINE\" || $12==\"LTR\" || $12==\"DNA\" { print $6, $7, $8 }' | sort -k1,1 -k2,2n mei.bed | bzgip > mei.bed.gz ; tabix -p bed mei.bed.gz"
         min_mapq: "Comma-separated list of MAPQs. Custom annotations only use alignments with MAPQ>=this (except for avg. MAPQ)."
+        custom_min_indel_length: "Comma-separated list of min CIGAR INDEL lengths. Custom annotations only use CIGAR INDELs >=this."
     }
     
     call Impl {
@@ -135,7 +136,7 @@ task Impl {
         
         Int custom_breakpoint_window_bp
         Int custom_min_clip_length
-        Int custom_min_indel_length
+        String custom_min_indel_length
         Int custom_adjacency_slack_bp
 
         Int use_cutefc
@@ -472,13 +473,22 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-ID=$3
+MEAN_COVERAGE=$3
+NORMALIZATION_MODE=$4
+MIN_INDEL_LENGTH=$5
+ID=$6
 
 # Counting
-N_ALIGNMENTS_L=$(cat ${ID}_left_n_alignments.txt)
-N_ALIGNMENTS_R=$(cat ${ID}_right_n_alignments.txt)
+if [ "${NORMALIZATION_MODE}" -eq 0 ]; then
+    N_ALIGNMENTS_L=${MEAN_COVERAGE}
+    N_ALIGNMENTS_R=${MEAN_COVERAGE}
+    NORMALIZATION_FACTOR=${MEAN_COVERAGE}
+else
+    N_ALIGNMENTS_L=$(cat ${ID}_left_n_alignments.txt)
+    N_ALIGNMENTS_R=$(cat ${ID}_right_n_alignments.txt)
+    NORMALIZATION_FACTOR=$(echo "scale=4; ( ${N_ALIGNMENTS_L} + ${N_ALIGNMENTS_R} ) / 2" | bc)
+fi
 rm -f ${ID}_*_n_alignments.txt
-NORMALIZATION_FACTOR=$(echo "scale=4; ( ${N_ALIGNMENTS_L} + ${N_ALIGNMENTS_R} ) / 2" | bc)
 LL=$(wc -l < ${ID}_left_leftmaximal_sorted.txt)
 LR=$(wc -l < ${ID}_left_rightmaximal_sorted.txt)
 RL=$(wc -l < ${ID}_right_leftmaximal_sorted.txt)
@@ -488,36 +498,44 @@ LL_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_leftmax
 LR_RL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_leftmaximal_sorted.txt ${RL} 1 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
 LR_RR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_left_rightmaximal_sorted.txt ${LR} 0 ${ID}_right_rightmaximal_sorted.txt ${RR} 0 ${ADJACENCY_SLACK_BP} 0 ${NORMALIZATION_FACTOR} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
-L_INS=$(cut -f 1 ${ID}_left_indel.txt)
-L_DEL_START=$(cut -f 2 ${ID}_left_indel.txt)
-L_DEL_END=$(cut -f 3 ${ID}_left_indel.txt)
-R_INS=$(cut -f 1 ${ID}_right_indel.txt)
-R_DEL_START=$(cut -f 2 ${ID}_right_indel.txt)
-R_DEL_END=$(cut -f 3 ${ID}_right_indel.txt)
-rm -f ${ID}_left_indel.txt ${ID}_right_indel.txt
 
 # Normalizing
-if [ ${N_ALIGNMENTS_L} -eq 0 ]; then
-    LL="0"; LR="0"; L_INS="0"; L_DEL_START="0"; L_DEL_END="0"
+if [ $(echo "${N_ALIGNMENTS_L} == 0" | bc) -eq 1 ]; then
+    LL="0"; LR="0";
 else
     LL=$(printf "%.4f\n" $(echo "scale=4; ${LL} / ${N_ALIGNMENTS_L}" | bc))
     LR=$(printf "%.4f\n" $(echo "scale=4; ${LR} / ${N_ALIGNMENTS_L}" | bc))
-    L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${N_ALIGNMENTS_L}" | bc))
-    L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${N_ALIGNMENTS_L}" | bc))
-    L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${N_ALIGNMENTS_L}" | bc))
 fi
-if [ ${N_ALIGNMENTS_R} -eq 0 ]; then
-    RL="0"; RR="0"; R_INS="0"; R_DEL_START="0"; R_DEL_END="0"
+if [ $(echo "${N_ALIGNMENTS_R} == 0" | bc) -eq 1 ]; then
+    RL="0"; RR="0";
 else
     RL=$(printf "%.4f\n" $(echo "scale=4; ${RL} / ${N_ALIGNMENTS_R}" | bc))
     RR=$(printf "%.4f\n" $(echo "scale=4; ${RR} / ${N_ALIGNMENTS_R}" | bc))
-    R_INS=$(printf "%.4f\n" $(echo "scale=4; ${R_INS} / ${N_ALIGNMENTS_R}" | bc))
-    R_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_START} / ${N_ALIGNMENTS_R}" | bc))
-    R_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_END} / ${N_ALIGNMENTS_R}" | bc))
 fi
-
-# Outputting
-echo -e "${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}" > ${ID}_counts.txt
+OUTPUT="${ID}\t${LL}\t${LR}\t${RL}\t${RR}\t${LL_RL}\t${LL_RR}\t${LR_RL}\t${LR_RR}"
+i=0
+for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+    i=$(( ${i} + 1 )); L_INS=$(cut -f ${i} ${ID}_left_indel.txt); R_INS=$(cut -f ${i} ${ID}_right_indel.txt)
+    i=$(( ${i} + 1 )); L_DEL_START=$(cut -f ${i} ${ID}_left_indel.txt); R_DEL_START=$(cut -f ${i} ${ID}_right_indel.txt)
+    i=$(( ${i} + 1 )); L_DEL_END=$(cut -f ${i} ${ID}_left_indel.txt); R_DEL_END=$(cut -f ${i} ${ID}_right_indel.txt)
+    if [ $(echo "${N_ALIGNMENTS_L} == 0" | bc) -eq 1 ]; then
+        L_INS="0"; L_DEL_START="0"; L_DEL_END="0"
+    else
+        L_INS=$(printf "%.4f\n" $(echo "scale=4; ${L_INS} / ${N_ALIGNMENTS_L}" | bc))
+        L_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_START} / ${N_ALIGNMENTS_L}" | bc))
+        L_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${L_DEL_END} / ${N_ALIGNMENTS_L}" | bc))
+    fi
+    if [ $(echo "${N_ALIGNMENTS_R} == 0" | bc) -eq 1 ]; then
+        R_INS="0"; R_DEL_START="0"; R_DEL_END="0"
+    else
+        R_INS=$(printf "%.4f\n" $(echo "scale=4; ${R_INS} / ${N_ALIGNMENTS_R}" | bc))
+        R_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_START} / ${N_ALIGNMENTS_R}" | bc))
+        R_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${R_DEL_END} / ${N_ALIGNMENTS_R}" | bc))
+    fi
+    OUTPUT="${OUTPUT}\t${L_INS}\t${L_DEL_START}\t${L_DEL_END}\t${R_INS}\t${R_DEL_START}\t${R_DEL_END}"
+done
+rm -f ${ID}_left_indel.txt ${ID}_right_indel.txt
+echo -e "${OUTPUT}" > ${ID}_counts.txt
 END
         chmod +x annotate_clipped_alignments_2_interval.sh
 
@@ -528,10 +546,17 @@ set -euxo pipefail
 
 CLASSPATH=$1
 ADJACENCY_SLACK_BP=$2
-ID=$3
+MEAN_COVERAGE=$3
+NORMALIZATION_MODE=$4
+MIN_INDEL_LENGTH=$5
+ID=$6
 
 # Counting
-N_ALIGNMENTS=$(cat ${ID}_point_n_alignments.txt)
+if [ "${NORMALIZATION_MODE}" -eq 0 ]; then
+    N_ALIGNMENTS=${MEAN_COVERAGE}
+else
+    N_ALIGNMENTS=$(cat ${ID}_point_n_alignments.txt)
+fi
 rm -f ${ID}_point_n_alignments.txt
 PL=$(wc -l < ${ID}_point_leftmaximal_sorted.txt)
 PR=$(wc -l < ${ID}_point_rightmaximal_sorted.txt)
@@ -539,24 +564,31 @@ PL_PL=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftma
 PL_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_leftmaximal_sorted.txt ${PL} 1 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
 PR_PR=$(java -cp ${CLASSPATH} UltralongIntervalIntersectClips ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ID}_point_rightmaximal_sorted.txt ${PR} 0 ${ADJACENCY_SLACK_BP} 1 ${N_ALIGNMENTS} | tr ',' '\t')
 rm -f ${ID}_*maximal_sorted.txt
-P_INS=$(cut -f 1 ${ID}_point_indel.txt)
-P_DEL_START=$(cut -f 2 ${ID}_point_indel.txt)
-P_DEL_END=$(cut -f 3 ${ID}_point_indel.txt)
-rm -f ${ID}_point_indel.txt
 
 # Normalizing
-if [ ${N_ALIGNMENTS} -eq 0 ]; then
-    PL="0"; PR="0"; P_INS="0"; P_DEL_START="0"; P_DEL_END="0"
+if [ $(echo "${N_ALIGNMENTS} == 0" | bc) -eq 1 ]; then
+    PL="0"; PR="0";
 else
     PL=$(printf "%.4f\n" $(echo "scale=4; ${PL} / ${N_ALIGNMENTS}" | bc))
     PR=$(printf "%.4f\n" $(echo "scale=4; ${PR} / ${N_ALIGNMENTS}" | bc))
-    P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${N_ALIGNMENTS}" | bc))
-    P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${N_ALIGNMENTS}" | bc))
-    P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${N_ALIGNMENTS}" | bc))
 fi
-
-# Outputting
-echo -e "${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}" > ${ID}_counts.txt
+OUTPUT="${ID}\t${PL}\t${PR}\t${PL_PL}\t${PL_PR}\t${PR_PR}"
+i=0
+for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+    i=$(( ${i} + 1 )); P_INS=$(cut -f ${i} ${ID}_point_indel.txt)
+    i=$(( ${i} + 1 )); P_DEL_START=$(cut -f ${i} ${ID}_point_indel.txt)
+    i=$(( ${i} + 1 )); P_DEL_END=$(cut -f ${i} ${ID}_point_indel.txt)
+    if [ $(echo "${N_ALIGNMENTS} == 0" | bc) -eq 1 ]; then
+        P_INS="0"; P_DEL_START="0"; P_DEL_END="0"
+    else
+        P_INS=$(printf "%.4f\n" $(echo "scale=4; ${P_INS} / ${N_ALIGNMENTS}" | bc))
+        P_DEL_START=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_START} / ${N_ALIGNMENTS}" | bc))
+        P_DEL_END=$(printf "%.4f\n" $(echo "scale=4; ${P_DEL_END} / ${N_ALIGNMENTS}" | bc))
+    fi
+    OUTPUT="${OUTPUT}\t${P_INS}\t${P_DEL_START}\t${P_DEL_END}"
+done
+rm -f ${ID}_point_indel.txt
+echo -e "${OUTPUT}" > ${ID}_counts.txt
 END
         chmod +x annotate_clipped_alignments_2_point.sh
 
@@ -574,18 +606,23 @@ END
             local MIN_INDEL_LENGTH=$7
             local MEAN_COVERAGE=$8
             local MIN_MAPQ=$9
+            local NORMALIZATION_MODE=${10}
 
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongIntervalGetBins ${INPUT_VCF} ~{reference_fai} 0 ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_interval.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE} ${NORMALIZATION_MODE} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                printf("%s\t%d\t%s\t%s\t%s",$2,$3,$4,$5,$1); \
+                for (i=6; i<=NF; i++) printf("\t%.4f",$i); \
+                printf("\n"); \
+            }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=LL_'${MIN_MAPQ}',Number=1,Type=Float,Description="Left window: number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
@@ -608,13 +645,18 @@ END
             echo '##INFO=<ID=LR_RR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=LR_RR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=LR_RR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment in the left window and a right-clipped alignment in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=L_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=R_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right window.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL_'${MIN_MAPQ}',INFO/LR_'${MIN_MAPQ}',INFO/RL_'${MIN_MAPQ}',INFO/RR_'${MIN_MAPQ}',INFO/LL_RL_1_'${MIN_MAPQ}',INFO/LL_RL_2_'${MIN_MAPQ}',INFO/LL_RL_3_'${MIN_MAPQ}',INFO/LL_RL_4_'${MIN_MAPQ}',INFO/LL_RR_1_'${MIN_MAPQ}',INFO/LL_RR_2_'${MIN_MAPQ}',INFO/LL_RR_3_'${MIN_MAPQ}',INFO/LL_RR_4_'${MIN_MAPQ}',INFO/LR_RL_1_'${MIN_MAPQ}',INFO/LR_RL_2_'${MIN_MAPQ}',INFO/LR_RL_3_'${MIN_MAPQ}',INFO/LR_RL_4_'${MIN_MAPQ}',INFO/LR_RR_1_'${MIN_MAPQ}',INFO/LR_RR_2_'${MIN_MAPQ}',INFO/LR_RR_3_'${MIN_MAPQ}',INFO/LR_RR_4_'${MIN_MAPQ}',INFO/L_INS_'${MIN_MAPQ}',INFO/L_DEL_START_'${MIN_MAPQ}',INFO/L_DEL_END_'${MIN_MAPQ}',INFO/R_INS_'${MIN_MAPQ}',INFO/R_DEL_START_'${MIN_MAPQ}',INFO/R_DEL_END_'${MIN_MAPQ}
+            for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+                echo '##INFO=<ID=L_INS_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the left window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=L_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the left window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=L_DEL_END_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the left window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=R_INS_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS in the right window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=R_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start in the right window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=R_DEL_END_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end in the right window of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+            done
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/LL_'${MIN_MAPQ}',INFO/LR_'${MIN_MAPQ}',INFO/RL_'${MIN_MAPQ}',INFO/RR_'${MIN_MAPQ}',INFO/LL_RL_1_'${MIN_MAPQ}',INFO/LL_RL_2_'${MIN_MAPQ}',INFO/LL_RL_3_'${MIN_MAPQ}',INFO/LL_RL_4_'${MIN_MAPQ}',INFO/LL_RR_1_'${MIN_MAPQ}',INFO/LL_RR_2_'${MIN_MAPQ}',INFO/LL_RR_3_'${MIN_MAPQ}',INFO/LL_RR_4_'${MIN_MAPQ}',INFO/LR_RL_1_'${MIN_MAPQ}',INFO/LR_RL_2_'${MIN_MAPQ}',INFO/LR_RL_3_'${MIN_MAPQ}',INFO/LR_RL_4_'${MIN_MAPQ}',INFO/LR_RR_1_'${MIN_MAPQ}',INFO/LR_RR_2_'${MIN_MAPQ}',INFO/LR_RR_3_'${MIN_MAPQ}',INFO/LR_RR_4_'${MIN_MAPQ}
+            for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+                COLUMNS=${COLUMNS}',INFO/L_INS_'${MIN_MAPQ}'_'${LENGTH}',INFO/L_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',INFO/L_DEL_END_'${MIN_MAPQ}'_'${LENGTH}',INFO/R_INS_'${MIN_MAPQ}'_'${LENGTH}',INFO/R_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',INFO/R_DEL_END_'${MIN_MAPQ}'_'${LENGTH}
+            done
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -633,18 +675,23 @@ END
             local MIN_INDEL_LENGTH=$7
             local MEAN_COVERAGE=$8
             local MIN_MAPQ=$9
+            local NORMALIZATION_MODE=${10}
     
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongPointGetBins ${INPUT_VCF} ~{reference_fai} ${BREAKPOINT_WINDOW_BP} | tr '\t' ' ' > ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_bins.wsv --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_1.sh ${INPUT_BAM} ~{docker_dir} ${MIN_CLIP_LENGTH} ${MIN_INDEL_LENGTH} ${MIN_MAPQ}
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} > ${SAMPLE_ID}_variantID.txt
             rm -f *_counts.txt
-            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP}
+            ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_variantID.txt --max-lines=1 --max-procs=${N_THREADS} ./annotate_clipped_alignments_2_point.sh ~{docker_dir} ${ADJACENCY_SLACK_BP} ${MEAN_COVERAGE} ${NORMALIZATION_MODE} ${MIN_INDEL_LENGTH}
             rm -f ${SAMPLE_ID}_variantID.txt
             cat *_counts.txt | sort -k 1,1 > ${SAMPLE_ID}_counts.tsv
             rm -f *_counts.txt
             ${TIME_COMMAND} bcftools view --no-header ${INPUT_VCF} | cut -f 1-5 | sort -k 3,3 > ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv
-            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",$2,$3,$4,$5,$1,  $6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22); }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
+            ${TIME_COMMAND} join -t $'\t' -1 3 -2 1 ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                printf("%s\t%d\t%s\t%s\t%s",$2,$3,$4,$5,$1); \
+                for (i=6; i<=NF; i++) printf("\t%.4f",$i); \
+                printf("\n"); \
+            }' | sort -k 1,1 -k 2,2n | bgzip > ${SAMPLE_ID}_annotations.tsv.gz
             rm -f ${SAMPLE_ID}_chrom_pos_id_ref_alt.tsv ${SAMPLE_ID}_counts.tsv
             tabix -@ ${N_THREADS} -f -s1 -b2 -e2 ${SAMPLE_ID}_annotations.tsv.gz
             echo '##INFO=<ID=PL_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of left-clipped alignments.">' > ${SAMPLE_ID}_header.txt
@@ -661,10 +708,15 @@ END
             echo '##INFO=<ID=PR_PR_2_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=PR_PR_3_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=PR_PR_4_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a right-clipped alignment and a right-clipped alignment in the same window.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_INS_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_START_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start.">' >> ${SAMPLE_ID}_header.txt
-            echo '##INFO=<ID=P_DEL_END_'${MIN_MAPQ}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end.">' >> ${SAMPLE_ID}_header.txt
-            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL_'${MIN_MAPQ}',INFO/PR_'${MIN_MAPQ}',INFO/PL_PL_1_'${MIN_MAPQ}',INFO/PL_PL_2_'${MIN_MAPQ}',INFO/PL_PL_3_'${MIN_MAPQ}',INFO/PL_PL_4_'${MIN_MAPQ}',INFO/PL_PR_1_'${MIN_MAPQ}',INFO/PL_PR_2_'${MIN_MAPQ}',INFO/PL_PR_3_'${MIN_MAPQ}',INFO/PL_PR_4_'${MIN_MAPQ}',INFO/PR_PR_1_'${MIN_MAPQ}',INFO/PR_PR_2_'${MIN_MAPQ}',INFO/PR_PR_3_'${MIN_MAPQ}',INFO/PR_PR_4_'${MIN_MAPQ}',INFO/P_INS_'${MIN_MAPQ}',INFO/P_DEL_START_'${MIN_MAPQ}',INFO/P_DEL_END_'${MIN_MAPQ}
+            for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+                echo '##INFO=<ID=P_INS_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR INS of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=P_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL start of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+                echo '##INFO=<ID=P_DEL_END_'${MIN_MAPQ}'_'${LENGTH}',Number=1,Type=Float,Description="Number of reads with a CIGAR DEL end of length >='${LENGTH}'.">' >> ${SAMPLE_ID}_header.txt
+            done
+            local COLUMNS='CHROM,POS,REF,ALT,~ID,INFO/PL_'${MIN_MAPQ}',INFO/PR_'${MIN_MAPQ}',INFO/PL_PL_1_'${MIN_MAPQ}',INFO/PL_PL_2_'${MIN_MAPQ}',INFO/PL_PL_3_'${MIN_MAPQ}',INFO/PL_PL_4_'${MIN_MAPQ}',INFO/PL_PR_1_'${MIN_MAPQ}',INFO/PL_PR_2_'${MIN_MAPQ}',INFO/PL_PR_3_'${MIN_MAPQ}',INFO/PL_PR_4_'${MIN_MAPQ}',INFO/PR_PR_1_'${MIN_MAPQ}',INFO/PR_PR_2_'${MIN_MAPQ}',INFO/PR_PR_3_'${MIN_MAPQ}',INFO/PR_PR_4_'${MIN_MAPQ}
+            for LENGTH in $(echo ${MIN_INDEL_LENGTH} | tr ',' ' '); do
+                COLUMNS=${COLUMNS}',INFO/P_INS_'${MIN_MAPQ}'_'${LENGTH}',INFO/P_DEL_START_'${MIN_MAPQ}'_'${LENGTH}',INFO/P_DEL_END_'${MIN_MAPQ}'_'${LENGTH}
+            done
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations ${SAMPLE_ID}_annotations.tsv.gz --header-lines ${SAMPLE_ID}_header.txt --columns ${COLUMNS} --output-type v ${INPUT_VCF} --output ${SAMPLE_ID}_annotated.vcf
             rm -f ${SAMPLE_ID}_annotations.tsv.gz ${SAMPLE_ID}_header.txt
         }
@@ -675,6 +727,7 @@ END
             local INPUT_VCF=$2
             local MEAN_COVERAGE=$3
             local MIN_MAPQ=$4
+            local NORMALIZATION_MODE=$5
 
             local N_COVERAGE_BINS="10"
             local MAPQS=$( echo ${MIN_MAPQ} | tr ',' ' ' )
@@ -688,7 +741,7 @@ END
             AnnotateMapqSecondary_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             for MAPQ in ${MAPQS}; do
-                AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ}
+                AnnotateClippedAlignments_Interval ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ} ${NORMALIZATION_MODE}
                 rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             done
 
@@ -701,6 +754,7 @@ END
             local INPUT_VCF=$2
             local MEAN_COVERAGE=$3
             local MIN_MAPQ=$4
+            local NORMALIZATION_MODE=$5
 
             local MAPQS=$( echo ${MIN_MAPQ} | tr ',' ' ' )
             
@@ -713,7 +767,7 @@ END
             AnnotateMapqSecondary_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp}
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             for MAPQ in ${MAPQS}; do
-                AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ}
+                AnnotateClippedAlignments_Point ${SAMPLE_ID} ${SAMPLE_ID}_in.vcf ${SAMPLE_ID}.bam ~{custom_breakpoint_window_bp} ~{custom_adjacency_slack_bp} ~{custom_min_clip_length} ~{custom_min_indel_length} ${MEAN_COVERAGE} ${MAPQ} ${NORMALIZATION_MODE}
                 rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_annotated.vcf ${SAMPLE_ID}_in.vcf
             done
 
@@ -1134,8 +1188,11 @@ END
         chmod +x interval_2_breakpoints.sh
 
 
-        # ~40% of all the ultralong INS of a sample are reclassified as DUP.
-        # This is not too far from the results of `truvari anno remap`.
+        # Remark: this procedure creates the following files, which may be
+        # empty:  `_ins.vcf`, `_ins_dup.vcf`, `_not_ins.vcf`.
+        #
+        # Remark: ~40% of all the ultralong INS of a sample are reclassified as
+        # DUP. This is not too far from the results of `truvari anno remap`.
         #
         function Ins2Dup() {
             local SAMPLE_ID=$1
@@ -1157,14 +1214,13 @@ END
             fi
             local INSDUP_QUAL=1
 
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf
             ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE=\"INS\"" --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins.vcf
             local N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -eq 0 ]; then
-                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf
+                bcftools view --header-only --output-type v ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_ins_dup.vcf
                 return
             fi
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "SVTYPE!=\"INS\"" --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_not_ins.vcf.gz
-            bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
             ${TIME_COMMAND} java -cp ~{docker_dir} UltralongInsGetIntervals ${SAMPLE_ID}_ins.vcf ~{reference_fai} > ${SAMPLE_ID}_ins_intervals.wsv
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_ins_intervals.wsv --max-lines=1 --max-procs=${DEPTH_N_THREADS} ./interval_2_breakpoints.sh ~{docker_dir} ${INPUT_BAM} ${BIN_LENGTH} ${BIN_COVERAGE_RATIO} ${RAM_PER_THREAD_MB} ~{mei_bed_gz} ~{mei_bed_tolerance} ${MIN_DEPTH_BREAKPOINT} ${MIN_DEPTH_INTERVAL}
             rm -f ${SAMPLE_ID}_ins_intervals.wsv
@@ -1172,29 +1228,47 @@ END
             rm -f *_breakpoints.tsv
             local N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
             if [ ${N_INS_DUP} -eq 0 ]; then
-                rm -f ${SAMPLE_ID}_ins_dup.vcf ${SAMPLE_ID}_ins_ins.vcf
-                gunzip ${SAMPLE_ID}_not_ins.vcf.gz
+                rm -f ${SAMPLE_ID}_ins_ins.vcf
+            else
+                rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
+            fi
+        }
+
+
+        # Merges `_ins_dup.vcf` with `_not_ins.vcf` or `_ins.vcf`, removing
+        # `_ins_dup.vcf` afterwards.
+        #
+        # Remark: `truvari collapse` is run with the same parameters as in
+        # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
+        # lower QUAL to make truvari choose an original DUP record as a 
+        # cluster representative. If the DUP record has a GT it will be 
+        # selected, since its column after bcftools merge is the first one.
+        # This collapses ~3-5 variants per sample.
+        #
+        # Remark: truvari needs `bcftools merge` and it does not work with 
+        # `bcftools concat`.
+        function MergeInsdups() {
+            local SAMPLE_ID=$1
+            local N_NOT_INS=$2
+            local N_INS_DUP=$3
+            local N_INS=$4
+
+            if [ ${N_INS_DUP} -eq 0 ]; then
+                rm -f ${SAMPLE_ID}_ins_dup.vcf
                 return
             fi
-            rm -f ${SAMPLE_ID}_ins.vcf ; mv ${SAMPLE_ID}_ins_ins.vcf ${SAMPLE_ID}_ins.vcf
-            # Merging `ins_dup` and `not_ins` or `ins`.
-            #
-            # Remark: `truvari collapse` is run with the same parameters as in
-            # `SV_Integration_Workpackage1.wdl`. INS->DUP records are assigned
-            # lower QUAL to make truvari choose an original DUP record as a 
-            # cluster representative. If the DUP record has a GT it will be 
-            # selected, since its column after bcftools merge is the first one.
-            # This collapses ~3-5 variants per sample.
-            #
-            # Remark: truvari needs `bcftools merge` and it does not work with 
-            # `bcftools concat`.
             if [ ~{convert_ins_to_dup} -eq 1 ]; then
+                if [ ${N_NOT_INS} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_not_ins.vcf
+                    mv ${SAMPLE_ID}_ins_dup.vcf ${SAMPLE_ID}_not_ins.vcf
+                    return
+                fi
                 # Adding SVLEN to symbolic ALTs, to avoid overcollapse in
                 # `bcftools merge`.
                 ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_ins_dup.vcf > ${SAMPLE_ID}_out.vcf
                 rm -f ${SAMPLE_ID}_ins_dup.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_ins_dup.vcf
-                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_not_ins.vcf.gz | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
-                rm -f ${SAMPLE_ID}_not_ins.vcf.gz ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
+                ${TIME_COMMAND} java -cp ~{docker_dir} AddSvlenToSymbolicAlt ${SAMPLE_ID}_not_ins.vcf | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+                rm -f ${SAMPLE_ID}_not_ins.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_not_ins.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_not_ins.vcf.gz
                 ${TIME_COMMAND} bcftools sort --output-type z ${SAMPLE_ID}_ins_dup.vcf --output ${SAMPLE_ID}_ins_dup.vcf.gz
                 rm -f ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
                 ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_not_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf
@@ -1210,12 +1284,16 @@ END
                 ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_not_ins.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf --removed-output /dev/null
                 rm -f ${SAMPLE_ID}_not_ins.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_not_ins.vcf
             else
+                if [ ${N_INS} -eq 0 ]; then
+                    rm -f ${SAMPLE_ID}_ins.vcf
+                    mv ${SAMPLE_ID}_ins_dup.vcf ${SAMPLE_ID}_ins.vcf
+                    return
+                fi
                 # In this case both VCFs have non-symbolic ALTs
                 ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins.vcf.gz
                 ${TIME_COMMAND} bgzip --threads ${N_THREADS} --compress-level 1 ${SAMPLE_ID}_ins_dup.vcf ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_ins_dup.vcf.gz
                 ${TIME_COMMAND} bcftools concat --allow-overlaps --remove-duplicates --output-type v ${SAMPLE_ID}_ins.vcf.gz ${SAMPLE_ID}_ins_dup.vcf.gz --output ${SAMPLE_ID}_out.vcf
                 rm -f ${SAMPLE_ID}_ins.vcf* ${SAMPLE_ID}_ins_dup.vcf* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_ins.vcf
-                gunzip ${SAMPLE_ID}_not_ins.vcf.gz
             fi
         }
         
@@ -1252,15 +1330,25 @@ END
             # 2. Adding custom annotations
             N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
-                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${MEAN_COVERAGE} ~{min_mapq}
+                AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf ${MEAN_COVERAGE} ~{min_mapq} 0
+            fi
+            N_INS_DUP=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins_dup.vcf | wc -l)
+            if [ ${N_INS_DUP} -gt 0 ]; then
+                if [ ~{convert_ins_to_dup} -eq 1 ]; then
+                    AnnotateCustom_NotIns ${SAMPLE_ID} ${SAMPLE_ID}_ins_dup.vcf ${MEAN_COVERAGE} ~{min_mapq} 1
+                else
+                    AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins_dup.vcf ${MEAN_COVERAGE} ~{min_mapq} 1
+                fi
             fi
             N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
-                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${MEAN_COVERAGE} ~{min_mapq}
+                AnnotateCustom_Ins ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf ${MEAN_COVERAGE} ~{min_mapq} 0
             fi
+            MergeInsdups ${SAMPLE_ID} ${N_NOT_INS} ${N_INS_DUP} ${N_INS}
 
             # 3. Adding repeat track annotations
             # 3.1 Not INS
+            N_NOT_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_not_ins.vcf | wc -l)
             if [ ${N_NOT_INS} -gt 0 ]; then
                 VcfToBed_StartEndInterval ${SAMPLE_ID} ${SAMPLE_ID}_not_ins.vcf
 
@@ -1288,6 +1376,7 @@ END
                 rm -f ${SAMPLE_ID}_start.bed ${SAMPLE_ID}_end.bed ${SAMPLE_ID}_interval.bed
             fi
             # 3.2 INS
+            N_INS=$(bcftools query --format '%ID\n' ${SAMPLE_ID}_ins.vcf | wc -l)
             if [ ${N_INS} -gt 0 ]; then
                 VcfToBed_Start ${SAMPLE_ID} ${SAMPLE_ID}_ins.vcf
 
