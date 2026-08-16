@@ -16,7 +16,7 @@ workflow SV_Integration_UltralongAnnotate {
         File reference_fa
         File reference_fai
         
-        String min_mapq = "0"
+        String min_mapq = "0,60"
 
         Int ins2dup_bin_length = 100
         Float ins2dup_bin_coverage_ratio = 1.5
@@ -183,18 +183,21 @@ task Impl {
             local SAMPLE_ID=$1
             local LINE=$2
             
-            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
-            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
-            
-            ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
-            gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
             gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ultralong.bcf ./${SAMPLE_ID}.bcf
             gcloud storage cp ~{remote_indir}/${SAMPLE_ID}_ultralong.bcf.csi ./${SAMPLE_ID}.bcf.csi
-            
+
             # Converting to .vcf.gz for downstream tools
             bcftools view --threads ${N_THREADS} --output-type z ${SAMPLE_ID}.bcf --output ${SAMPLE_ID}.vcf.gz
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
             rm -f ${SAMPLE_ID}.bcf*
+
+            local N_RECORDS=$( bcftools index --nrecords ${SAMPLE_ID}.vcf.gz.tbi )
+            if [ "${N_RECORDS}" != "0" ]; then
+                local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
+                local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+                ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
+                gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
+            fi
         }
         
         
@@ -1315,7 +1318,7 @@ END
             # Skipping the sample if it has already been processed
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )
-            if [ ${TEST} != "0" ]; then
+            if [ "${TEST}" != "0" ]; then
                 continue
             fi
             MEAN_COVERAGE=$(echo ${LINE} | cut -d , -f 2)
@@ -1323,6 +1326,24 @@ END
             # 1. Canonizing the VCF and handling alternative representations
             LocalizeSample ${SAMPLE_ID} ${LINE}
             df -h 1>&2
+            N_RECORDS=$( bcftools index --nrecords ${SAMPLE_ID}.vcf.gz.tbi )
+            if [ ${N_RECORDS} -eq 0 ]; then
+                cp ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_del.vcf.gz
+                cp ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_dup.vcf.gz
+                cp ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_insdup.vcf.gz
+                cp ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_inv.vcf.gz
+                cp ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}_ins.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_del.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_dup.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_insdup.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_inv.vcf.gz
+                bcftools index -f -t ${SAMPLE_ID}_ins.vcf.gz
+                gcloud storage mv ${SAMPLE_ID}_'del.vcf.gz*' ${SAMPLE_ID}_'inv.vcf.gz*' ${SAMPLE_ID}_'dup.vcf.gz*' ${SAMPLE_ID}_'insdup.vcf.gz*' ${SAMPLE_ID}_'ins.vcf.gz*' ~{remote_outdir}/
+                touch ${SAMPLE_ID}.done
+                gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+                DelocalizeSample ${SAMPLE_ID}
+                continue
+            fi
             CanonizeVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz
             Ins2Dup ${SAMPLE_ID} ${SAMPLE_ID}_canonized.vcf.gz ${SAMPLE_ID}.bam ~{ins2dup_bin_length} ~{ins2dup_bin_coverage_ratio} $(( ${N_THREADS} / 2 )) ${MEAN_COVERAGE}
             rm -f ${SAMPLE_ID}_canonized.vcf.gz
