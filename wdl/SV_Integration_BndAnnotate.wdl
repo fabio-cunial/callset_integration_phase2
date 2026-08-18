@@ -165,7 +165,7 @@ task Impl {
             rm -f ${SAMPLE_ID}.bcf*
 
             local N_RECORDS=$( bcftools index --nrecords ${SAMPLE_ID}.vcf.gz.tbi )
-            if [ ${N_RECORDS} != "0" ]; then
+            if [ "${N_RECORDS}" != "0" ]; then
                 local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
                 local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
                 ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
