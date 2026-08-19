@@ -207,8 +207,8 @@ task Impl {
             bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}.vcf.gz
             rm -f ${SAMPLE_ID}.bcf*
 
-            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 3)
-            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 4)
+            local ALIGNED_BAI=$(echo ${LINE} | cut -d , -f 4)
+            local ALIGNED_BAM=$(echo ${LINE} | cut -d , -f 5)
             ${TIME_COMMAND} gcloud storage cp ${ALIGNED_BAM} ./${SAMPLE_ID}.bam
             gcloud storage cp ${ALIGNED_BAI} ./${SAMPLE_ID}.bam.bai
         }
