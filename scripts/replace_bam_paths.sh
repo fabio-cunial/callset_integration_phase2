@@ -11,8 +11,8 @@ set -euo pipefail
 
 INPUT_DIR=$1
 
-OLD_STRING="gs://fc-secure-8f7d6a20-04ce-40d7-8c88-aececeac3e09/CCS/terra-d45cc5ca/outputs/GRCh38/alignments/"
-NEW_STRING="gs://prod-drc-broad/longreads/demo_group/BI/CCS/outputs/GRCh38/alignments/"
+OLD_STRING="gs://fc-secure-8f7d6a20-04ce-40d7-8c88-aececeac3e09/CCS/terra-f6671367/outputs/GRCh38/alignments/"
+NEW_STRING="gs://prod-drc-broad/longreads/demo_group/UW/CCS/outputs/GRCh38/alignments/"
 
 if [ ! -d "${INPUT_DIR}" ]; then
     echo "ERROR: not a directory: ${INPUT_DIR}" >&2
