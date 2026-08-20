@@ -337,7 +337,6 @@ task GetFrequentInfrequentBcfs {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -410,7 +409,6 @@ task SplitTruvariCollapsedBcfBySample {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -479,7 +477,6 @@ task SplitInfrequentBcfBySample {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -576,7 +573,6 @@ task Kanpig {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -627,7 +623,6 @@ task ComplementBed {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -879,7 +874,6 @@ task PrecisionRecallAnalysis {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
 
@@ -1069,6 +1063,5 @@ task BenchTrio {
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
-        zones: "us-central1-a us-central1-b us-central1-c us-central1-f"
     }
 }
