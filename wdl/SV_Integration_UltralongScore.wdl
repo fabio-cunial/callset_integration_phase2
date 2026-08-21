@@ -7,8 +7,13 @@ version 1.0
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC","INTERVAL_TR","INTERVAL_SD","INTERVAL_GC",
 #                        "BIN_BEFORE_COVERAGE_0","BIN_LEFT_COVERAGE_0","BIN_1_COVERAGE_0","BIN_2_COVERAGE_0","BIN_3_COVERAGE_0","BIN_4_COVERAGE_0","BIN_5_COVERAGE_0","BIN_6_COVERAGE_0","BIN_7_COVERAGE_0","BIN_8_COVERAGE_0","BIN_9_COVERAGE_0","BIN_10_COVERAGE_0","BIN_RIGHT_COVERAGE_0","BIN_AFTER_COVERAGE_0",
 #                        "BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY",
-#                        "LL_0","LR_0","RL_0","RR_0","LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0","LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0","LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0","LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
-#                        "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500","R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500"
+#                        "LL_0","LR_0","RL_0","RR_0",
+#                        "LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0",
+#                        "LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0",
+#                        "LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0",
+#                        "LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
+#                        "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500",
+#                        "R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500"
 #                      ]
 # annotations_fex =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC","INTERVAL_TR","INTERVAL_SD","INTERVAL_GC",
@@ -22,8 +27,13 @@ version 1.0
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC","INTERVAL_TR","INTERVAL_SD","INTERVAL_GC",
 #                        "BIN_BEFORE_COVERAGE_0","BIN_LEFT_COVERAGE_0","BIN_1_COVERAGE_0","BIN_2_COVERAGE_0","BIN_3_COVERAGE_0","BIN_4_COVERAGE_0","BIN_5_COVERAGE_0","BIN_6_COVERAGE_0","BIN_7_COVERAGE_0","BIN_8_COVERAGE_0","BIN_9_COVERAGE_0","BIN_10_COVERAGE_0","BIN_RIGHT_COVERAGE_0","BIN_AFTER_COVERAGE_0",
 #                        "BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY",
-#                        "LL_0","LR_0","RL_0","RR_0","LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0","LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0","LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0","LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
-#                        "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500","R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500",
+#                        "LL_0","LR_0","RL_0","RR_0",
+#                        "LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0",
+#                        "LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0",
+#                        "LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0",
+#                        "LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
+#                        "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500",
+#                        "R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_STRAND" 
 #                      ]
@@ -31,9 +41,14 @@ version 1.0
 #                                      "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC","INTERVAL_TR","INTERVAL_SD","INTERVAL_GC",
 #                                      "BIN_BEFORE_COVERAGE_0","BIN_LEFT_COVERAGE_0","BIN_1_COVERAGE_0","BIN_2_COVERAGE_0","BIN_3_COVERAGE_0","BIN_4_COVERAGE_0","BIN_5_COVERAGE_0","BIN_6_COVERAGE_0","BIN_7_COVERAGE_0","BIN_8_COVERAGE_0","BIN_9_COVERAGE_0","BIN_10_COVERAGE_0","BIN_RIGHT_COVERAGE_0","BIN_AFTER_COVERAGE_0",
 #                                      "BIN_LEFT_MAPQ","BIN_RIGHT_MAPQ","BIN_LEFT_SECONDARY","BIN_RIGHT_SECONDARY",
-#                                      "LL_0","LR_0","RL_0","RR_0","LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0","LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0","LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0","LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
-#                                      "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500","R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500",
-#                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK" 
+#                                      "LL_0","LR_0","RL_0","RR_0",
+#                                      "LL_RL_1_0","LL_RL_2_0","LL_RL_3_0","LL_RL_4_0",
+#                                      "LL_RR_1_0","LL_RR_2_0","LL_RR_3_0","LL_RR_4_0",
+#                                      "LR_RL_1_0","LR_RL_2_0","LR_RL_3_0","LR_RL_4_0",
+#                                      "LR_RR_1_0","LR_RR_2_0","LR_RR_3_0","LR_RR_4_0",
+#                                      "L_INS_0_500","L_DEL_START_0_500","L_DEL_END_0_500",
+#                                      "R_INS_0_500","R_DEL_START_0_500","R_DEL_END_0_500",
+#                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                                    ]
 # For INS:
 #
@@ -41,7 +56,10 @@ version 1.0
 #                        "START_TR","START_SD","START_GC",
 #                        "BIN_POS_0",
 #                        "BIN_POINT_MAPQ","BIN_POINT_SECONDARY",
-#                        "PL_0","PR_0","PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0","PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0","PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
+#                        "PL_0","PR_0",
+#                        "PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0",
+#                        "PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0",
+#                        "PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
 #                        "P_INS_0_500","P_DEL_START_0_500","P_DEL_END_0_500"
 #                      ]
 # annotations_fex =    [ "GT_COUNT","SVLEN","SUPP_SNIFFLES","SUPP_PBSV","SUPP_PAV",
@@ -56,7 +74,10 @@ version 1.0
 #                        "START_TR","START_SD","START_GC",
 #                        "BIN_POS_0",
 #                        "BIN_POINT_MAPQ","BIN_POINT_SECONDARY",
-#                        "PL_0","PR_0","PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0","PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0","PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
+#                        "PL_0","PR_0",
+#                        "PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0",
+#                        "PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0",
+#                        "PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
 #                        "P_INS_0_500","P_DEL_START_0_500","P_DEL_END_0_500",
 #                        "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK",
 #                        "CUTEFC_GT_COUNT","CUTEFC_GQ","CUTEFC_DR","CUTEFC_DV","CUTEFC_PL_1","CUTEFC_PL_2","CUTEFC_PL_3","CUTEFC_CIPOS_1","CUTEFC_CIPOS_2","CUTEFC_CILEN_1","CUTEFC_CILEN_2","CUTEFC_STRAND"
@@ -65,7 +86,10 @@ version 1.0
 #                                      "START_TR","START_SD","START_GC",
 #                                      "BIN_POS_0",
 #                                      "BIN_POINT_MAPQ","BIN_POINT_SECONDARY",
-#                                      "PL_0","PR_0","PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0","PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0","PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
+#                                      "PL_0","PR_0",
+#                                      "PL_PL_1_0","PL_PL_2_0","PL_PL_3_0","PL_PL_4_0",
+#                                      "PL_PR_1_0","PL_PR_2_0","PL_PR_3_0","PL_PR_4_0",
+#                                      "PR_PR_1_0","PR_PR_2_0","PR_PR_3_0","PR_PR_4_0",
 #                                      "P_INS_0_500","P_DEL_START_0_500","P_DEL_END_0_500",
 #                                      "FEX_DEPTH_RATIO","FEX_DEPTH_MAD","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_READ_LEN_MED","FEX_STRAND_BIAS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                                    ]
@@ -75,9 +99,17 @@ version 1.0
 # annotations_custom = [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "BIN_POS_0_0","BIN_POS_1_0","BIN_POS_2_0","BIN_POS_3_0",
-#                        "BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3",
-#                        "C0R_0","C1L_0","C2R_0","C3L_0","C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0","C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0","C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_4_0","C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
-#                        "C0_INS_0_500","C0_DEL_START_0_500","C0_DEL_END_0_500","C1_INS_0_500","C1_DEL_START_0_500","C1_DEL_END_0_500","C2_INS_0_500","C2_DEL_START_0_500","C2_DEL_END_0_500","C3_INS_0_500","C3_DEL_START_0_500","C3_DEL_END_0_500"
+#                        "BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3",
+#                        "BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3",
+#                        "C0R_0","C1L_0","C2R_0","C3L_0",
+#                        "C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0",
+#                        "C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0",
+#                        "C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_3_0","C1L_C2R_4_0",
+#                        "C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
+#                        "C0_INS_0_500","C0_DEL_START_0_500","C0_DEL_END_0_500",
+#                        "C1_INS_0_500","C1_DEL_START_0_500","C1_DEL_END_0_500",
+#                        "C2_INS_0_500","C2_DEL_START_0_500","C2_DEL_END_0_500",
+#                        "C3_INS_0_500","C3_DEL_START_0_500","C3_DEL_END_0_500"
 #                      ]
 # annotations_fex =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
@@ -86,9 +118,17 @@ version 1.0
 # annotations_all =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV",
 #                        "START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "BIN_POS_0_0","BIN_POS_1_0","BIN_POS_2_0","BIN_POS_3_0",
-#                        "BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3",
-#                        "C0R_0","C1L_0","C2R_0","C3L_0","C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0","C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0","C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_4_0","C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
-#                        "C0_INS_0_500","C0_DEL_START_0_500","C0_DEL_END_0_500","C1_INS_0_500","C1_DEL_START_0_500","C1_DEL_END_0_500","C2_INS_0_500","C2_DEL_START_0_500","C2_DEL_END_0_500","C3_INS_0_500","C3_DEL_START_0_500","C3_DEL_END_0_500",
+#                        "BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3",
+#                        "BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3",
+#                        "C0R_0","C1L_0","C2R_0","C3L_0",
+#                        "C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0",
+#                        "C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0",
+#                        "C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_3_0","C1L_C2R_4_0",
+#                        "C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
+#                        "C0_INS_0_500","C0_DEL_START_0_500","C0_DEL_END_0_500",
+#                        "C1_INS_0_500","C1_DEL_START_0_500","C1_DEL_END_0_500",
+#                        "C2_INS_0_500","C2_DEL_START_0_500","C2_DEL_END_0_500",
+#                        "C3_INS_0_500","C3_DEL_START_0_500","C3_DEL_END_0_500",
 #                        "FEX_DEPTH_RATIO","FEX_AB","FEX_CN_SLOP","FEX_MQ_DROP","FEX_CLIP_FRAC","FEX_SPLIT_READS","FEX_GC_FRAC","FEX_HOMOPOLYMER_MAX","FEX_LCR_MASK"
 #                      ]
 #
@@ -97,7 +137,7 @@ version 1.0
 # annotations_all =    [ "GT_COUNT","SUPP_SNIFFLES","SUPP_PBSV","START_TR","END_TR","START_SD","END_SD","START_GC","END_GC",
 #                        "BIN_POS_0_0","BIN_POS_1_0","BIN_POS_2_0","BIN_POS_3_0",
 #                        "BIN_POINT_MAPQ_0","BIN_POINT_MAPQ_1","BIN_POINT_MAPQ_2","BIN_POINT_MAPQ_3","BIN_POINT_SECONDARY_0","BIN_POINT_SECONDARY_1","BIN_POINT_SECONDARY_2","BIN_POINT_SECONDARY_3",
-#                        "C0R_0","C1L_0","C2R_0","C3L_0","C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0","C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0","C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_4_0","C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
+#                        "C0R_0","C1L_0","C2R_0","C3L_0","C0R_C2R_1_0","C0R_C2R_2_0","C0R_C2R_3_0","C0R_C2R_4_0","C0R_C3L_1_0","C0R_C3L_2_0","C0R_C3L_3_0","C0R_C3L_4_0","C1L_C2R_1_0","C1L_C2R_2_0","C1L_C2R_3_0","C1L_C2R_4_0","C1L_C3L_1_0","C1L_C3L_2_0","C1L_C3L_3_0","C1L_C3L_4_0",
 #                        "C0_INS_0_500","C0_DEL_START_0_500","C0_DEL_END_0_500","C1_INS_0_500","C1_DEL_START_0_500","C1_DEL_END_0_500","C2_INS_0_500","C2_DEL_START_0_500","C2_DEL_END_0_500","C3_INS_0_500","C3_DEL_START_0_500","C3_DEL_END_0_500",
 #                        "C0_INS_0_1000","C0_DEL_START_0_1000","C0_DEL_END_0_1000","C1_INS_0_1000","C1_DEL_START_0_1000","C1_DEL_END_0_1000","C2_INS_0_1000","C2_DEL_START_0_1000","C2_DEL_END_0_1000","C3_INS_0_1000","C3_DEL_START_0_1000","C3_DEL_END_0_1000",
 #                        "C0_INS_0_5000","C0_DEL_START_0_5000","C0_DEL_END_0_5000","C1_INS_0_5000","C1_DEL_START_0_5000","C1_DEL_END_0_5000","C2_INS_0_5000","C2_DEL_START_0_5000","C2_DEL_END_0_5000","C3_INS_0_5000","C3_DEL_START_0_5000","C3_DEL_END_0_5000",

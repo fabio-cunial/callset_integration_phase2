@@ -695,4 +695,10 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_UltralongAndBndAnnotate.wdl
   testParameterFiles:
+- name: SV_Integration_Workpackage3_UltralongAndBnd
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_Workpackage3_UltralongAndBnd.wdl
+  testParameterFiles:
+
 
