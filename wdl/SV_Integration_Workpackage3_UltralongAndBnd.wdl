@@ -97,8 +97,8 @@ workflow SV_Integration_Workpackage3_UltralongAndBnd {
                                         ]
         File scoring_python_script
 
-        String filter_string_lenient
-        String filter_string_stringent
+        String filter_string_lenient = "FORMAT/CALIBRATION_SENSITIVITY<=0.95"
+        String filter_string_stringent = "FORMAT/CALIBRATION_SENSITIVITY<=0.6"
         
         String docker_image = "us.gcr.io/broad-dsde-methods/broad-gatk-snapshots/gatk:sl_aou_lr_intrasample_filtering_xgb"
         File UltralongInsdups2Ins_java
