@@ -304,7 +304,7 @@ END
         split -l ~{n_files_per_merge} -d -a 4 list.txt list_
         N_LIST_FILES=$(ls list_* | wc -l)
         for LIST_FILE in $(ls list_* | sort -V); do
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules DP:avg,DP4:avg --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
             xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
             rm -f ${LIST_FILE}
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf --output ${LIST_FILE}_normed.bcf
@@ -318,7 +318,7 @@ END
         # Step 2: merging all samples over each chromosome.
         while read -u 4 CHROMOSOME; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules DP:avg,DP4:avg --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ./${CHROMOSOME}/merged.bcf --output ./${CHROMOSOME}/normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/normed.bcf
             gcloud storage mv ./${CHROMOSOME}/normed.bcf ~{remote_outdir}/${CHROMOSOME}.bcf
