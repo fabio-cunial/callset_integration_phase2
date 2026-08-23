@@ -12,9 +12,10 @@ set -euxo pipefail
 
 
 for SOURCE in all lenient stringent ; do
-    REMOTE_INDIR="${BUCKET}/v3/30x/workpackage_3_ultralong_${SOURCE}"
-    REMOTE_OUTDIR="${BUCKET}/v3/30x/workpackage_3_ultralong_${SOURCE}/for_integration"
+    REMOTE_INDIR="${BUCKET}/v3/30x/workpackage_3_ultralong_fourth_attempt_${SOURCE}"
+    REMOTE_OUTDIR="${BUCKET}/v3/30x/workpackage_3_ultralong_fourth_attempt_${SOURCE}/for_integration"
     for SAMPLE_ID in ${SAMPLES} ; do
-        gcloud storage cp ${REMOTE_INDIR}/${SAMPLE_ID}_${SOURCE}.'bcf*' ${REMOTE_OUTDIR}/
+        gcloud storage cp ${REMOTE_INDIR}/${SAMPLE_ID}_ultralong_${SOURCE}.'bcf*' ${REMOTE_OUTDIR}/
+        gcloud storage cp ${REMOTE_INDIR}/${SAMPLE_ID}_bnd_${SOURCE}.'bcf*' ${REMOTE_OUTDIR}/
     done
 done

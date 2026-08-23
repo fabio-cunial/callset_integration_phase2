@@ -94,6 +94,8 @@ task Impl {
         
         cat << 'END' > chunk_by_region.sh
 #!/bin/bash
+set -euxo pipefail
+
 REGION=$1
 CHUNK_ID=$2
 bcftools view --regions ${REGION} --regions-overlap pos --output-type b ~{chromosome_id}.bcf --output chunk_${CHUNK_ID}.bcf

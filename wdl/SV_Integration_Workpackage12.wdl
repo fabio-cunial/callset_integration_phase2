@@ -31,7 +31,7 @@ workflow SV_Integration_Workpackage12 {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
-        sample_ids: "Speficies the order of the samples to use in bcftools merge."
+        sample_ids: "Specifies the order of the samples to use in bcftools merge."
         remote_indir_bi: "Without final slash"
         remote_outdir: "Without final slash"
         suffix: "Denoting the type of intra-sample VCFs we want to merge: 'ultralong' or 'bnd'."
@@ -209,10 +209,12 @@ task Impl {
             # Failing immediately if the files are too large WRT the available
             # disk. Otherwise the VM may get stuck forever, and this gets worse
             # with preemption.
-            local AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
+            local AVAILABLE_GB
+            AVAILABLE_GB=$(df -h | grep "cromwell_root" | tr -s ' ' | cut -d ' ' -f 4)
             AVAILABLE_GB=${AVAILABLE_GB%G}
             AVAILABLE_GB=${AVAILABLE_GB%.*}
-            local REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
+            local REMOTE_GB
+            REMOTE_GB=$(java -cp ~{docker_dir} SumFileSizes all_remote_files.txt)
             local SLACK_GB="5"
             REMOTE_GB=$(( ${REMOTE_GB} + ${SLACK_GB} ))
             if [ ${REMOTE_GB} -gt ${AVAILABLE_GB} ]; then
@@ -233,13 +235,15 @@ task Impl {
             fi
             if [ ~{n_expected_samples_bi} -gt 0 -a ~{n_expected_samples_ha} -gt 0 ]; then
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
-                rm -f list.txt
-                local SAMPLE_ID
-                while read -u 5 SAMPLE_ID; do
-                    echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf" >> list.txt
-                    echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf.csi" >> list.txt
-                done 5< bi_samples_to_prefer_over_ha.txt
-                cat list.txt | gcloud storage cp -I ./input_files/
+                if [ -s bi_samples_to_prefer_over_ha.txt ]; then
+                    rm -f list.txt
+                    local SAMPLE_ID
+                    while read -u 5 SAMPLE_ID; do
+                        echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf" >> list.txt
+                        echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf.csi" >> list.txt
+                    done 5< bi_samples_to_prefer_over_ha.txt
+                    cat list.txt | gcloud storage cp -I ./input_files/
+                fi
             fi
             if [ ~{n_expected_samples_uw} -gt 0 ]; then
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_uw}/'*_'~{suffix}'.bcf*' ./input_files/
@@ -254,7 +258,7 @@ task Impl {
                 ${TIME_COMMAND} gcloud storage cp ~{remote_indir_controls_30x}/'*_'~{suffix}'.bcf*' ./input_files/
             fi
             date 1>&2
-            local N_DOWNLOADED_SAMPLES=$(ls ./input_files/*.bcf | wc -l)
+            local N_DOWNLOADED_SAMPLES=$(find ./input_files -name '*.bcf' | wc -l)
             local N_SAMPLES=$(cat ~{sample_ids} | wc -l)
             if [ ${N_DOWNLOADED_SAMPLES} -lt ${N_SAMPLES} ]; then
                 echo "ERROR: The number of downloaded samples (${N_DOWNLOADED_SAMPLES}) is smaller than the number of samples specified (${N_SAMPLES})."
@@ -266,6 +270,8 @@ task Impl {
         
         cat << 'END' > chunk_by_chr.sh
 #!/bin/bash
+set -euxo pipefail
+
 INPUT_BCF=$1
 CHROMOSOME=$2
 mkdir -p ./${CHROMOSOME}/
@@ -283,6 +289,13 @@ END
         LocalizeFiles
         
         # Trivial "hierarchical" bcftools merge with just two steps.
+        #
+        # Remark: we overwrite bcftools' default merging criterion for INFO/DP
+        # since it is `sum`, so it creates very large values whose downstream 
+        # utility is unclear. The default for all other values is to copy from
+        # the first sample, which is also of unclear utility but at least does
+        # not create large values. QUAL is always set to the max.
+        #
         # Step 1: merging a few samples at a time over the whole genome.
         rm -f list.txt
         while read -u 3 SAMPLE_ID; do
@@ -291,39 +304,29 @@ END
         split -l ~{n_files_per_merge} -d -a 4 list.txt list_
         N_LIST_FILES=$(ls list_* | wc -l)
         for LIST_FILE in $(ls list_* | sort -V); do
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules DP:avg,DP4:avg --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
             xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
             rm -f ${LIST_FILE}
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ${LIST_FILE}_merged.bcf --output ${LIST_FILE}_normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_merged.bcf*
-            ${TIME_COMMAND} xargs --arg-file=chromosomes.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_chr.sh ./${LIST_FILE}_normed.bcf
+            ${TIME_COMMAND} xargs --arg-file=chromosomes.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_chr.sh ${LIST_FILE}_normed.bcf
             rm -f ${LIST_FILE}_normed.bcf*
         done
         rm -rf ./input_files/
         
         # Step 2: merging all samples over each chromosome.
-        rm -f files_list.txt
         while read -u 4 CHROMOSOME; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
-            ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules DP:avg,DP4:avg --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --do-not-normalize --multiallelics -any --output-type b ./${CHROMOSOME}/merged.bcf --output ./${CHROMOSOME}/normed.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ./${CHROMOSOME}/normed.bcf
-            mv ./${CHROMOSOME}/normed.bcf ${CHROMOSOME}.bcf
-            mv ./${CHROMOSOME}/normed.bcf.csi ${CHROMOSOME}.bcf.csi
-            echo "${CHROMOSOME}.bcf" >> files_list.txt
-            echo "${CHROMOSOME}.bcf.csi" >> files_list.txt
+            gcloud storage mv ./${CHROMOSOME}/normed.bcf ~{remote_outdir}/${CHROMOSOME}.bcf
+            gcloud storage mv ./${CHROMOSOME}/normed.bcf.csi ~{remote_outdir}/${CHROMOSOME}.bcf.csi
             rm -rf ./${CHROMOSOME}/
         done 4< chromosomes.txt
         df -h 1>&2
         ls -laht 1>&2
-        
-        # Uploading
-        date 1>&2
-        cat files_list.txt | gcloud storage mv -I ~{remote_outdir}/
-        date 1>&2
     >>>
     
     output {
