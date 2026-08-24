@@ -432,7 +432,7 @@ task Impl {
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
@@ -472,7 +472,7 @@ task Impl {
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_ultralong.vcf.gz ${SAMPLE_ID}_pbsv_ultralong.vcf.gz ${SAMPLE_ID}_sniffles_ultralong.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --output-type v ${SAMPLE_ID}_pav_ultralong.vcf.gz ${SAMPLE_ID}_pbsv_ultralong.vcf.gz ${SAMPLE_ID}_sniffles_ultralong.vcf.gz --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_*_ultralong.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
@@ -532,7 +532,7 @@ task Impl {
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --output-type v ${SAMPLE_ID}_pav_bnd.vcf.gz ${SAMPLE_ID}_pbsv_bnd.vcf.gz ${SAMPLE_ID}_sniffles_bnd.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --output-type v ${SAMPLE_ID}_pav_bnd.vcf.gz ${SAMPLE_ID}_pbsv_bnd.vcf.gz ${SAMPLE_ID}_sniffles_bnd.vcf.gz --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_*_bnd.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz

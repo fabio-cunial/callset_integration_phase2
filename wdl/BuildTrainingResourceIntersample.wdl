@@ -51,7 +51,7 @@ task BuildTrainingResourceIntersampleImpl {
             tabix -f ${INPUT_FILE}
             echo ${INPUT_FILE} >> list.txt
         done
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list list.txt --output-type v > tmp1.vcf
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --file-list list.txt --output-type v > tmp1.vcf
         bcftools view --header-only tmp1.vcf > header.txt
         N_ROWS=$(wc -l < header.txt)
         head -n $(( ${N_ROWS} - 1 )) header.txt > merged.vcf

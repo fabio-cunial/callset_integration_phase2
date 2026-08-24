@@ -274,6 +274,12 @@ task Impl {
         
         # Trivial "hierarchical" merge with just two steps.
         #
+        # Remark: we overwrite bcftools' default merging criterion for INFO/DP
+        # since it is `sum`, so it creates very large values whose downstream 
+        # utility is unclear. The default for all other values is to copy from
+        # the first sample, which is also of unclear utility but at least does
+        # not create large values. QUAL is always set to the max.
+        #
         function MergeChunkFiles() {
             local MERGE_FLAG
             if [ ~{merge_mode} -eq 1 ]; then
@@ -295,7 +301,7 @@ task Impl {
             local N_LIST_FILES=$(ls list_* | wc -l)
             local LIST_FILE
             for LIST_FILE in $(ls list_* | sort -V); do
-                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
+                ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --info-rules - --file-list ${LIST_FILE} --output-type b --output ${LIST_FILE}_merged.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ${LIST_FILE}_merged.bcf
                 df -h 1>&2
                 xargs --arg-file=${LIST_FILE} --max-lines=1 --max-procs=${N_THREADS} rm -f
@@ -309,7 +315,7 @@ task Impl {
             
             # Step 2
             ls list_*.bcf | sort -V > list.txt
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --file-list list.txt --output-type b --output ~{chunk_id}_merged.bcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge ${MERGE_FLAG} --info-rules - --file-list list.txt --output-type b --output ~{chunk_id}_merged.bcf
             ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_merged.bcf
             df -h 1>&2
             xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} rm -f

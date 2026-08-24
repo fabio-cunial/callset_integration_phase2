@@ -233,7 +233,7 @@ task Impl {
             
             # Merging
             date 1>&2
-            bcftools merge --threads ${N_THREADS} --merge none --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 > out.vcf
+            bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --file-list ${FILE_LIST_TXT} --output-type v | cut -f 1-10 > out.vcf
             date 1>&2
             mv out.vcf in.vcf
             
