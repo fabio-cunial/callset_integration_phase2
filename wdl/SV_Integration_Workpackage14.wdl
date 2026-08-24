@@ -49,7 +49,7 @@ workflow SV_Integration_Workpackage14 {
 # bcftools view | awk                        20m
 # bcftools query            30%      2G       3m
 # bcftools annotate        200%      5G       5m
-# truvari collapse         100%   13.5G      50m
+# truvari collapse         100%     27G       2h
 # bcftools sort            100%      3G       2m
 #
 # Peak disk: 17G
