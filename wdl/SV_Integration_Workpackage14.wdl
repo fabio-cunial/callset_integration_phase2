@@ -46,7 +46,7 @@ workflow SV_Integration_Workpackage14 {
 # Performance on 12'680 samples, 15x, GRCh38, a chunk with the whole chr1:
 #
 # TOOL                      CPU     RAM     TIME   OUTPUT VCF
-# bcftools view | awk                        15m
+# bcftools view | awk                        20m
 # bcftools query            30%      2G       3m
 # bcftools annotate        200%      5G       5m
 # truvari collapse         100%   13.5G      50m
@@ -68,7 +68,7 @@ task Impl {
         Int n_cpu = 2
         Int ram_size_gb = 16
         Int disk_size_gb = 20
-        Int preemptible_number = 4
+        Int preemptible_number = 3
     }
     parameter_meta {
     }
@@ -197,7 +197,7 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        while read -u 3 CHUNK_ID; do
+        while read -u 3 CHUNK_ID || [ -n "${CHUNK_ID}" ]; do
             # Skipping the chunk if it has already been processed
             TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then

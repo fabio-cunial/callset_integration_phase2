@@ -2,7 +2,7 @@ version 1.0
 
 
 # Runs `truvari collapse` on a small chunk of a bcftools merged cohort VCF.
-# Default truvari parameters are optimal for 10k samples.
+# Default truvari parameters have been tested on 10k samples.
 #
 workflow SV_Integration_Workpackage7 {
     input {
@@ -111,7 +111,7 @@ task Impl {
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.vcf.gz
             rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
-            rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
+            rm -f chunk_${CHUNK_ID}_annotations.tsv.gz*
             
             mv chunk_${CHUNK_ID}_in.vcf.gz chunk_${CHUNK_ID}_annotated.vcf.gz
             mv chunk_${CHUNK_ID}_in.vcf.gz.tbi chunk_${CHUNK_ID}_annotated.vcf.gz.tbi
@@ -177,10 +177,10 @@ task Impl {
         else 
             BED_FLAGS=" "
         fi
-        while read -u 3 CHUNK_ID; do
+        while read -u 3 CHUNK_ID || [ -n "${CHUNK_ID}" ]; do
             # Skipping the chunk if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
-            if [ ${TEST} != "0" ]; then
+            TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
+            if [ "${TEST}" != "0" ]; then
                 continue
             fi
             
