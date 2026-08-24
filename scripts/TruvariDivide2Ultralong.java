@@ -16,7 +16,7 @@ public class TruvariDivide2Ultralong {
         final int EXPECTED_N_RECORDS_TOTAL = Integer.parseInt(args[4]);
         final int MODE = args[5].equalsIgnoreCase("ultralong")?0:1;
         
-        final int SLACK = 5;  // Arbitrary
+        final int SLACK_BP = 5;  // Arbitrary
         
         int i, p, q;
         int chunkID, pos, svlen, nRecords, nRecordsTotal;
@@ -32,12 +32,12 @@ public class TruvariDivide2Ultralong {
             q=str.indexOf('\t',p+1);
             pos=Integer.parseInt(str.substring(0,p));            
             if (MODE==0) {
-                if (str.charAt(q+1)=='<') {
+                if (str.charAt(q+1)=='<' && !str.substring(q+1,q+5).equals("<INS")) {
                     svlen=Integer.parseInt(str.substring(q+6,str.length()-1));
                     first=pos+1;
                     last=pos+svlen-1;
                 }
-                else {  // INS
+                else {  // INS, possibly symbolic.
                     first=pos;
                     last=pos+1;
                 }
@@ -47,7 +47,7 @@ public class TruvariDivide2Ultralong {
                 last=pos+1;
             }
             if (first>maxLast+BUFFER && nRecords>=MIN_RECORDS_PER_VCF) {
-                System.out.println(CHROM+":"+(minFirst-SLACK)+"-"+(maxLast+SLACK)+" "+chunkID);
+                System.out.println(CHROM+":"+Math.max(1,minFirst-SLACK_BP)+"-"+(maxLast+SLACK_BP)+" "+chunkID);
                 nRecordsTotal+=nRecords;
                 System.err.println("chunk="+chunkID+" nRecords="+nRecords);
                 chunkID++;
@@ -63,11 +63,11 @@ public class TruvariDivide2Ultralong {
             str=br.readLine();
         }
         br.close();
-        System.out.println(CHROM+":"+(minFirst-SLACK)+"-"+(maxLast+SLACK)+" "+chunkID);
+        System.out.println(CHROM+":"+Math.max(1,minFirst-SLACK_BP)+"-"+(maxLast+SLACK_BP)+" "+chunkID);
         nRecordsTotal+=nRecords;
         System.err.println("chunk="+chunkID+" nRecords="+nRecords);
         if (nRecordsTotal!=EXPECTED_N_RECORDS_TOTAL) {
-            System.err.println("ERROR: Expected "+EXPECTED_N_RECORDS_TOTAL+" records but created "+nRecords+" records.");
+            System.err.println("ERROR: Expected "+EXPECTED_N_RECORDS_TOTAL+" records but created "+nRecordsTotal+" records.");
             System.exit(1);
         }
         else System.err.println("Created "+(chunkID+1)+" truvari chunks");

@@ -268,6 +268,10 @@ task Impl {
         #
         # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
         #
+        # Remark: since we don't re-genotype the cohort-level VCF downstream, at
+        # this stage we should copy other INFO fields that may be useful later,
+        # e.g. the number of supporting reads.
+        #
         # @param 2 A VCF where all IDs are distinct. This is guaranteed by the
         # workpackages upstream.
         #

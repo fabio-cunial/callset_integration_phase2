@@ -8,9 +8,9 @@ workflow SV_Integration_Workpackage13 {
     input {
         String chromosome_id
         String suffix
-        Int truvari_chunk_min_records = 2000
+        Int truvari_chunk_min_records = 500
         Int truvari_collapse_refdist = 1000
-        Int consistency_checks
+        Int consistency_checks = 1
         
         String remote_indir
         String remote_outdir
@@ -20,7 +20,7 @@ workflow SV_Integration_Workpackage13 {
     parameter_meta {
         suffix: "Denoting the type of VCF we want to split: 'ultralong' or 'bnd'."
         truvari_chunk_min_records: "Min number of records per output chunk"
-        truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is this value."
+        truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is <= this value."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
     }
@@ -69,7 +69,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 4
         Int disk_size_gb = 50
         Int preemptible_number = 4
     }
@@ -108,22 +108,25 @@ END
         
         # ---------------------------- Main program ----------------------------
         
+        TEST=$( gsutil ls ~{remote_indir}/~{chromosome_id}.bcf || echo "0" )
+        if [ ${TEST} = "0" ]; then 
+            exit 0
+        fi
         gcloud storage cp ~{remote_indir}/~{chromosome_id}.'bcf*' .
         
-        # Removing symbolic INS. This is just a temporary fix and should be
-        # removed, since we have fixed Workpackage1. The code is still here in
-        # case we need to run another iteration on the current data.
-        if [ ~{suffix} = "ultralong" ]; then
-            ${TIME_COMMAND} bcftools filter --exclude 'ALT="<INS>"' --output-type b ~{chromosome_id}.bcf --output out.bcf
-            rm -f ~{chromosome_id}.bcf* ; mv out.bcf ~{chromosome_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
-        fi
+        # # Removing symbolic INS. This is just a temporary fix and should be
+        # # removed, since we have fixed Workpackage1. The code is still here in
+        # # case we need to run another iteration on the current data.
+        # if [ ~{suffix} = "ultralong" ]; then
+        #     ${TIME_COMMAND} bcftools filter --exclude 'ALT="<INS>"' --output-type b ~{chromosome_id}.bcf --output out.bcf
+        #     rm -f ~{chromosome_id}.bcf* ; mv out.bcf ~{chromosome_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
+        # fi
         
         # Splitting
-        N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf)
-        if [ ~{consistency_checks} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools query --format '%ID\n' ~{chromosome_id}.bcf > ids_truth.txt
-        fi
-        ${TIME_COMMAND} bcftools query --format '%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > pos_ref_alt.tsv
+        N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)
+        ${TIME_COMMAND} bcftools query --format '%ID\t%POS\t%REF\t%ALT\n' ~{chromosome_id}.bcf > id_pos_ref_alt.tsv
+        cut -f 1 id_pos_ref_alt.tsv > ids_truth.txt
+        cut -f 2,3,4 id_pos_ref_alt.tsv > pos_ref_alt.tsv
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2Ultralong pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} ${N_RECORDS} ~{suffix} > regions.txt
         rm -f pos_ref_alt.tsv
         ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_region.sh

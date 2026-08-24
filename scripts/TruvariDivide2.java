@@ -79,7 +79,7 @@ public class TruvariDivide2 {
         nRecordsTotal+=nRecords;
         System.err.println("chunk="+chunkID+" nRecords="+nRecords);
         if (nRecordsTotal!=EXPECTED_N_RECORDS_TOTAL) {
-            System.err.println("ERROR: Expected "+EXPECTED_N_RECORDS_TOTAL+" records but created "+nRecords+" records.");
+            System.err.println("ERROR: Expected "+EXPECTED_N_RECORDS_TOTAL+" records but created "+nRecordsTotal+" records.");
             System.exit(1);
         }
         else System.err.println("Created "+(chunkID+1)+" truvari chunks");

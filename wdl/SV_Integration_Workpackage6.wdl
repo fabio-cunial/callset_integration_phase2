@@ -20,7 +20,7 @@ workflow SV_Integration_Workpackage6 {
     parameter_meta {
         bcftools_chunks: "Comma-separated and sorted integers. Chunks are assumed to be sorted by POS."
         truvari_chunk_min_records: "Min number of records per output chunk"
-        truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is this value."
+        truvari_collapse_refdist: "The actual collapse downstream will run `truvari collapse --refdist X`, where X is <= this value."
         remote_indir: "Without final slash"
         remote_outdir: "Without final slash"
     }
