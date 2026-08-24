@@ -129,13 +129,20 @@ END
         cut -f 2,3,4 id_pos_ref_alt.tsv > pos_ref_alt.tsv
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G TruvariDivide2Ultralong pos_ref_alt.tsv ~{truvari_collapse_refdist} ~{truvari_chunk_min_records} ~{chromosome_id} ${N_RECORDS} ~{suffix} > regions.txt
         rm -f pos_ref_alt.tsv
-        ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_region.sh
+        N_REGIONS=$(wc -l < regions.txt)
+        if [ ${N_REGIONS} -eq 1 ]; then
+            # Failed to split
+            mv ~{chromosome_id}.bcf chunk_0.bcf
+            mv ~{chromosome_id}.bcf.csi chunk_0.bcf.csi
+        else
+            ${TIME_COMMAND} xargs --arg-file=regions.txt --max-lines=1 --max-procs=${N_THREADS} ./chunk_by_region.sh
+        fi
         ls -laht 1>&2
         df -h  1>&2
         rm -f ~{chromosome_id}.bcf*
 
         # Simple consistency checks
-        if [ ~{consistency_checks} -eq 1 ]; then
+        if [ ~{consistency_checks} -eq 1 -a ${N_REGIONS} -gt 1 ]; then
             N_RECORDS_CHUNKED="0"
             for FILE in $(ls chunk_*.bcf.csi | sort -V); do
                 N=$( bcftools index --nrecords ${FILE} )

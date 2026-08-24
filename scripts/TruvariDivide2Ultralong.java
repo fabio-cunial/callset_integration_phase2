@@ -32,7 +32,7 @@ public class TruvariDivide2Ultralong {
             q=str.indexOf('\t',p+1);
             pos=Integer.parseInt(str.substring(0,p));            
             if (MODE==0) {
-                if (str.charAt(q+1)=='<' && !str.substring(q+1,q+5).equals("<INS")) {
+                if (str.charAt(q+1)=='<' && !str.substring(q+1,q+5).equalsIgnoreCase("<INS")) {
                     svlen=Integer.parseInt(str.substring(q+6,str.length()-1));
                     first=pos+1;
                     last=pos+svlen-1;
