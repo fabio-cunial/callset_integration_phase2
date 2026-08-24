@@ -2,7 +2,7 @@ version 1.0
 
 
 # Runs `truvari collapse` on a small chunk of an ultralong bcftools merged
-# cohort VCF. Default truvari parameters are optimal for 10k samples.
+# cohort VCF. Default truvari parameters have been tested on 10k samples.
 #
 # Remark: this is almost identical to `SV_Integration_Workpackage7.wdl`: use the
 # latter for BNDs.
@@ -89,24 +89,6 @@ task Impl {
         
         # ----------------------- Steps of the pipeline ------------------------
         
-        # Removes SVLEN from symbolic ALTs, in order not to interfere with
-        # `truvari collapse`.
-        #
-        function ResetAlts() {
-            local CHUNK_ID=$1
-            
-            date 1>&2
-            ( bcftools view --header-only chunk_${CHUNK_ID}.bcf ; bcftools view --no-header chunk_${CHUNK_ID}.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
-                if (substr($0,1,1)!="#" && substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
-                printf("%s",$1); \
-                for (i=2; i<=NF; i++) printf("\t%s",$i); \
-                printf("\n"); \
-            }' ) | bcftools view --output-type b --output out.bcf
-            date 1>&2
-            rm -f chunk_${CHUNK_ID}.bcf* ; mv out.bcf chunk_${CHUNK_ID}.bcf ; bcftools index --threads ${N_THREADS} chunk_${CHUNK_ID}.bcf
-        }
-        
-        
         # Sets QUAL to the number of samples where a record was discovered, to
         # simulate `--keep common` (which is slow on 10k samples) with `--keep
         # maxqual` in `truvari collapse`. See e.g.:
@@ -119,23 +101,42 @@ task Impl {
         # independently in more samples is more informative than it being
         # genotyped more times in fewer samples.
         #
+        # Remark: we cannot join annotations just by ID at this stage, since the
+        # IDs in the output of bcftools merge are not necessarily all distinct.
+        # So it is crucial for this step to be executed on a VCF whose ALTs
+        # still contain SVLEN.
+        #
         function CopyNSamplesToQual() {
             local CHUNK_ID=$1
         
             mv chunk_${CHUNK_ID}.bcf chunk_${CHUNK_ID}_in.bcf
             mv chunk_${CHUNK_ID}.bcf.csi chunk_${CHUNK_ID}_in.bcf.csi
         
-            # Remark: we cannot join annotations just by ID at this stage,
-            # since the IDs in the output of bcftools merge are not necessarily
-            # all distinct.
             ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type z chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.vcf.gz
-            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
+            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf
             rm -f chunk_${CHUNK_ID}_annotations.tsv.gz
             
-            mv chunk_${CHUNK_ID}_in.vcf.gz chunk_${CHUNK_ID}_annotated.vcf.gz
-            mv chunk_${CHUNK_ID}_in.vcf.gz.tbi chunk_${CHUNK_ID}_annotated.vcf.gz.tbi
+            mv chunk_${CHUNK_ID}_in.bcf chunk_${CHUNK_ID}.bcf
+        }
+
+
+        # Removes SVLEN from symbolic ALTs, in order not to interfere with
+        # `truvari collapse`.
+        #
+        function ResetAlts() {
+            local CHUNK_ID=$1
+            
+            date 1>&2
+            ( bcftools view --header-only chunk_${CHUNK_ID}.bcf ; bcftools view --no-header chunk_${CHUNK_ID}.bcf | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
+                if (substr($5,1,1)=="<") $5 = substr($5,1,4) ">"; \
+                printf("%s",$1); \
+                for (i=2; i<=NF; i++) printf("\t%s",$i); \
+                printf("\n"); \
+            }' ) | bcftools view --output-type z --output chunk_${CHUNK_ID}_out.vcf.gz
+            date 1>&2
+            rm -f chunk_${CHUNK_ID}.bcf* ; mv chunk_${CHUNK_ID}_out.vcf.gz chunk_${CHUNK_ID}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t chunk_${CHUNK_ID}.vcf.gz
         }
         
         
@@ -151,15 +152,13 @@ task Impl {
         # 2830920205
         #
         # However, this would also discard e.g. SUPP fields that were copied to
-        # FORMAT upstream, so it is not correct for our setup. It would also
-        # make it impossible e.g. to compare precision/recall after collapse to
-        # precision/recall after cohort re-genotyping.
+        # FORMAT upstream, so it is not correct for our setup.
         #
         function Collapse() {
             local CHUNK_ID=$1
             
-            mv chunk_${CHUNK_ID}_annotated.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
-            mv chunk_${CHUNK_ID}_annotated.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
+            mv chunk_${CHUNK_ID}.vcf.gz chunk_${CHUNK_ID}_in.vcf.gz
+            mv chunk_${CHUNK_ID}.vcf.gz.tbi chunk_${CHUNK_ID}_in.vcf.gz.tbi
             
             # Remark: we do not store `removed.vcf` since it's not needed and
             # it can be much bigger than the collapsed output.
@@ -173,12 +172,11 @@ task Impl {
             ls -laht 1>&2
             rm -f chunk_${CHUNK_ID}_in.vcf ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
                 
-            # Dropping the IDs written by truvari collapse, since they can be
-            # very long on a large cohort and needlessly inflate output size.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t\n' chunk_${CHUNK_ID}_in.bcf | awk -v id=${CHUNK_ID} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
-            tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
-            ${TIME_COMMAND} bcftools annotate --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
-            rm -f chunk_${CHUNK_ID}_in.bcf ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
+            # Setting to `.` every ID written by truvari collapse, since these
+            # can be very long in a large cohort and needlessly inflate output
+            # size. Unique IDs genome-wide will be assigned downstream.
+            ${TIME_COMMAND} bcftools annotate --remove ID --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
+            rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f chunk_${CHUNK_ID}_in.bcf
                 
             mv chunk_${CHUNK_ID}_in.bcf chunk_${CHUNK_ID}_truvari.bcf
             mv chunk_${CHUNK_ID}_in.bcf.csi chunk_${CHUNK_ID}_truvari.bcf.csi
@@ -201,15 +199,15 @@ task Impl {
         fi
         while read -u 3 CHUNK_ID; do
             # Skipping the chunk if it has already been processed
-            TEST=$( gsutil ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
+            TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome_id}/chunk_${CHUNK_ID}.done || echo "0" )
             if [ ${TEST} != "0" ]; then
                 continue
             fi
             
             # Collapsing
             gcloud storage cp ~{remote_indir}/~{chromosome_id}/chunk_${CHUNK_ID}.'bcf*' .
-            ResetAlts ${CHUNK_ID}
             CopyNSamplesToQual ${CHUNK_ID}
+            ResetAlts ${CHUNK_ID}
             Collapse ${CHUNK_ID}
             
             # Uploading
