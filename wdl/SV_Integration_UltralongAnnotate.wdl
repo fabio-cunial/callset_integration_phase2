@@ -283,7 +283,7 @@ END
             rm -f ${SAMPLE_ID}_bins.bed
             ${TIME_COMMAND} xargs --arg-file=${SAMPLE_ID}_list.txt --max-lines=1 --max-procs=${BEDCOV_N_THREADS} ./samtools_bedcov_thread.sh ${MIN_MAPQ} ${INPUT_BAM}
             rm -f ${SAMPLE_ID}_counts.bed
-            while read -u 4 CHUNK; do
+            while read -u 4 CHUNK || [ -n "${CHUNK}" ]; do
                 cat ${CHUNK}_counts.bed >> ${SAMPLE_ID}_counts.bed
             done 4< ${SAMPLE_ID}_list.txt
             rm -f ${SAMPLE_ID}_chunk_* ${SAMPLE_ID}_list.txt 
@@ -384,7 +384,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 5 ID; do
+            while read -u 5 ID || [ -n "${ID}" ]; do
                 local MAPQ_LEFT=$(cat ${ID}_left_mapq.txt)
                 local MAPQ_RIGHT=$(cat ${ID}_right_mapq.txt)
                 local SECONDARY_LEFT=$(cat ${ID}_left_secondary.txt)
@@ -427,7 +427,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 6 ID; do
+            while read -u 6 ID || [ -n "${ID}" ]; do
                 local MAPQ_POINT=$(cat ${ID}_point_mapq.txt)
                 local SECONDARY_POINT=$(cat ${ID}_point_secondary.txt)
                 echo -e "${ID}\t${MAPQ_POINT}\t${SECONDARY_POINT}" >> ${SAMPLE_ID}_counts.tsv
@@ -1314,7 +1314,7 @@ END
         df -h 1>&2
         
         cat ~{chunk_tsv} | tr '\t' ',' > chunk.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             # Skipping the sample if it has already been processed
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )

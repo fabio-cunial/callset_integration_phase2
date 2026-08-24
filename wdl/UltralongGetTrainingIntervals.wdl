@@ -116,7 +116,7 @@ task Impl {
             local TEST
             local SAMPLE_ID
             local DIPCALL_BED
-            while read -u 3 LINE; do
+            while read -u 3 LINE || [ -n "${LINE}" ]; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
                 

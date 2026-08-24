@@ -74,6 +74,8 @@ task Impl {
         
         cat << 'END' > fix_sample.sh
 #!/bin/bash
+set -euxo pipefail
+
 INPUT_VCF_GZ=$1
 
 bcftools reheader --samples-list SAMPLE ${INPUT_VCF_GZ} --output ${INPUT_VCF_GZ}.reheader
@@ -89,7 +91,7 @@ END
         # Simple concatenation, with only exact duplicate removal. In the
         # future we may run truvari collapse to remove approximate duplicates.
         rm -f list.txt
-        while read LINE; do
+        while read LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz' >> list.txt
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz.tbi' >> list.txt

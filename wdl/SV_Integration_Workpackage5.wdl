@@ -243,7 +243,7 @@ task Impl {
                 echo ~{sep="," bi_samples_to_prefer_over_ha} | tr ',' '\n' > bi_samples_to_prefer_over_ha.txt
                 rm -f list.txt
                 local SAMPLE_ID
-                while read -u 3 SAMPLE_ID; do
+                while read -u 3 SAMPLE_ID || [ -n "${SAMPLE_ID}" ]; do
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf" >> list.txt
                     echo "~{remote_indir_bi}/chunk_~{chunk_id}/${SAMPLE_ID}.bcf.csi" >> list.txt
                 done 3< bi_samples_to_prefer_over_ha.txt                
@@ -294,7 +294,7 @@ task Impl {
             # Step 1
             rm -f list.txt
             local SAMPLE_ID
-            while read -u 4 SAMPLE_ID; do
+            while read -u 4 SAMPLE_ID || [ -n "${SAMPLE_ID}" ]; do
                 echo ./input_files/${SAMPLE_ID}.bcf >> list.txt
             done 4< ~{sample_ids}
             split -l ~{n_files_per_merge} -d -a 4 list.txt list_

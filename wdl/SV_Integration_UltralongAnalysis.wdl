@@ -348,7 +348,7 @@ task CanonizeDipcall {
         
         MAX_SV_LENGTH="3000000000"  # Arbitrary
         GetReferenceGaps ~{reference_agp} not_gaps.bed
-        while read ROW; do
+        while read ROW || [ -n "${ROW}" ]; do
             SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
             REMOTE_BED=$( echo ${ROW} | cut -d , -f 2 )
             REMOTE_VCF=$( echo ${ROW} | cut -d , -f 3 )
@@ -488,7 +488,7 @@ task FilterByType {
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
         
-        while read ROW; do
+        while read ROW || [ -n "${ROW}" ]; do
             SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
         
             # Skipping the sample if it has already been filtered
@@ -570,7 +570,7 @@ task FilterByLength {
         else
             SVLEN_MIN=$( echo ~{sv_length_bins} | cut -d , -f ~{index} )
         fi
-        while read ROW; do
+        while read ROW || [ -n "${ROW}" ]; do
             SAMPLE_ID=$( echo ${ROW} | cut -d , -f 1 )
         
             # Skipping the sample if it has already been filtered
@@ -659,7 +659,7 @@ task PrecisionRecallAnalysis {
         elif [ ~{sequence_similarity} -eq 2 ]; then
             TRUVARI_MATCH_FLAGS="--pctseq 0 --pick multi"
         fi
-        while read ROW; do
+        while read ROW || [ -n "${ROW}" ]; do
             SAMPLE_ID=$(echo ${ROW} | cut -d , -f 1)
             DIPCALL_BED_URI=$(echo ${ROW} | cut -d , -f 2)
             

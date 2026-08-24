@@ -91,7 +91,7 @@ task Impl {
         df -h 1>&2
 
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed

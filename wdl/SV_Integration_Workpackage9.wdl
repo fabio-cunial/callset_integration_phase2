@@ -182,7 +182,7 @@ task Impl {
             
             i="0"
             local INTERVAL
-            while read -u 4 INTERVAL; do
+            while read -u 4 INTERVAL || [ -n "${INTERVAL}" ]; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --regions-file ${SAMPLE_ID}.bed --regions-overlap pos --output-type b ${SAMPLE_ID}_kanpig.vcf.gz --output ${SAMPLE_ID}_chunk_${i}.bcf
                 bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_chunk_${i}.bcf
@@ -212,7 +212,7 @@ task Impl {
         ls -lah ./infrequent_bcfs/* 1>&2
         
         # Re-genotyping every sample assigned to this task
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             

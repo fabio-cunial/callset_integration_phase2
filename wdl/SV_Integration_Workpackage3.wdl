@@ -212,7 +212,7 @@ task Impl {
             
             i="0"
             local INTERVAL
-            while read -u 4 INTERVAL; do
+            while read -u 4 INTERVAL || [ -n "${INTERVAL}" ]; do
                 echo ${INTERVAL} | tr ',' '\t' > ${SAMPLE_ID}.bed
                 if [ "~{filter_string}" != "none" ]; then
                     # Remark: we use `targets` rather than `regions` because
@@ -237,7 +237,7 @@ task Impl {
         
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
         N_OUTPUT_CHUNKS=$(wc -l < ~{split_for_bcftools_merge_csv})
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed

@@ -80,7 +80,7 @@ task Impl {
         fi
         
         # Merging
-        while read SAMPLE_ID; do
+        while read SAMPLE_ID || [ -n "${SAMPLE_ID}" ]; do
             echo ${SAMPLE_ID}_bnd.vcf.gz >> list.txt
         done < ~{sample_ids}
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --force-samples --merge none --info-rules - --file-list list.txt --output-type z > merged.vcf.gz

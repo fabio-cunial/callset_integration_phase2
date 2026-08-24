@@ -216,7 +216,7 @@ task Impl {
             local THREAD_ID=$1
             local CHUNK_CSV=$2
             
-            while read LINE; do
+            while read LINE || [ -n "${LINE}" ]; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 LocalizeSample ${SAMPLE_ID} ${LINE}
                 CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed

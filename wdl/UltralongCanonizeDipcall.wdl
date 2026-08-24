@@ -214,7 +214,7 @@ task Impl {
             
             local LINE
             local SAMPLE_ID
-            while read LINE; do
+            while read LINE || [ -n "${LINE}" ]; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 LocalizeSample ${SAMPLE_ID} ${LINE}
                 CanonizeDipcallVcf ${SAMPLE_ID} ${SAMPLE_ID}.vcf.gz ${SAMPLE_ID}.vcf.gz.tbi ~{min_sv_length} ~{standard_chromosomes_bed} not_gaps.bed

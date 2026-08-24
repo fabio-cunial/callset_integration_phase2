@@ -137,9 +137,12 @@ task Impl {
         rm -f pos_ref_alt.tsv
         cat << 'END' > chunk_by_region.sh
 #!/bin/bash
+set -euxo pipefail
+
 INPUT_BCF=$1
 REGION=$2
 CHUNK_ID=$3
+
 bcftools view --regions ${REGION} --regions-overlap pos --output-type b ${INPUT_BCF} --output chunk_${CHUNK_ID}.bcf
 bcftools index -f chunk_${CHUNK_ID}.bcf
 df -h 1>&2

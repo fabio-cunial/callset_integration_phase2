@@ -286,7 +286,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 4 ID; do
+            while read -u 4 ID || [ -n "${ID}" ]; do
                 local MAPQ_LEFT=$(cat ${ID}_left_mapq.txt)
                 local MAPQ_RIGHT=$(cat ${ID}_right_mapq.txt)
                 local SECONDARY_LEFT=$(cat ${ID}_left_secondary.txt)
@@ -329,7 +329,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 4 ID; do
+            while read -u 4 ID || [ -n "${ID}" ]; do
                 local MAPQ_POINT=$(cat ${ID}_point_mapq.txt)
                 local SECONDARY_POINT=$(cat ${ID}_point_secondary.txt)
                 echo -e "${ID}\t${MAPQ_POINT}\t${SECONDARY_POINT}" >> ${SAMPLE_ID}_counts.tsv
@@ -1042,7 +1042,7 @@ END
         df -h 1>&2
         
         # Processing samples
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed

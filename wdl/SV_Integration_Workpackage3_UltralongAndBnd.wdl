@@ -408,7 +408,7 @@ task Impl {
         mv ~{bnd_indel_calibrationScores_30x_hdf5} 30x.bnd.indel.calibrationScores.hdf5 
 
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             
             # Skipping the sample if it has already been processed

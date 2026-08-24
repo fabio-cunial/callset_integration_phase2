@@ -168,7 +168,7 @@ task Impl {
             INSDUP_MODE="1"
         fi
         cat ~{samples_tsv} | tr '\t' ',' > samples.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             DIPCALL_BED=$(echo ${LINE} | cut -d , -f 2)
             

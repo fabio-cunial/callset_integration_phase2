@@ -182,7 +182,7 @@ task Impl {
         # Counting
         SV_TYPES_PRIMARY="DEL INS DUP INV"
         SV_TYPES_SECONDARY="BND SUB UNK"
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             COVERAGE=$(echo ${LINE} | cut -d , -f 2)
 

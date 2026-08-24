@@ -243,7 +243,7 @@ task Impl {
                 if [ -s bi_samples_to_prefer_over_ha.txt ]; then
                     rm -f list.txt
                     local SAMPLE_ID
-                    while read -u 5 SAMPLE_ID; do
+                    while read -u 5 SAMPLE_ID || [ -n "${SAMPLE_ID}" ]; do
                         echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf" >> list.txt
                         echo "~{remote_indir_bi}/${SAMPLE_ID}_"~{suffix}".bcf.csi" >> list.txt
                     done 5< bi_samples_to_prefer_over_ha.txt
@@ -312,7 +312,7 @@ END
 
         LocalizeFiles
         rm -f list.txt
-        while read -u 3 SAMPLE_ID; do
+        while read -u 3 SAMPLE_ID || [ -n "${SAMPLE_ID}" ]; do
             echo ./input_files/${SAMPLE_ID}_~{suffix}.bcf >> list.txt
         done 3< ~{sample_ids}
 
@@ -367,7 +367,7 @@ END
         
         # Step 2: merging all samples over each chromosome.
         # Only chromosomes with some variant are uploaded.
-        while read -u 4 CHROMOSOME; do
+        while read -u 4 CHROMOSOME || [ -n "${CHROMOSOME}" ]; do
             ls ./${CHROMOSOME}/*.bcf | sort -V > list.txt
             ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --file-list list.txt --output-type b --output ./${CHROMOSOME}/merged.bcf
             N_RECORDS=$(bcftools query --format '%ID\n' ./${CHROMOSOME}/merged.bcf | wc -l)

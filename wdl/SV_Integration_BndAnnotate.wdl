@@ -293,7 +293,7 @@ END
             rm -f ${SAMPLE_ID}_bins.wsv
             ${TIME_COMMAND} bcftools query --format '%ID\n' ${INPUT_VCF} | sort | uniq > ${SAMPLE_ID}_variantID_sorted.txt
             rm -f ${SAMPLE_ID}_counts.tsv
-            while read -u 6 ID; do
+            while read -u 6 ID || [ -n "${ID}" ]; do
                 local MAPQ_POINT_0=$(cat ${ID}_0_mapq.txt)
                 local MAPQ_POINT_1=$(cat ${ID}_1_mapq.txt)
                 local MAPQ_POINT_2=$(cat ${ID}_2_mapq.txt)
@@ -876,7 +876,7 @@ END
         df -h 1>&2
         
         cat ~{chunk_tsv} | tr '\t' ',' > chunk.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             # Skipping the sample if it has already been processed
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             TEST=$( gcloud storage ls ~{remote_outdir}/${SAMPLE_ID}.done || echo "0" )

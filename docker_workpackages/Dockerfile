@@ -141,9 +141,9 @@ RUN wget https://github.com/ACEnglish/kanpig/releases/download/v${kanpig_version
     && ./kanpig --help
 
 # Beta-binomial
-COPY ./pyro-kanpig-environment.yml .
-RUN conda env create -f ./pyro-kanpig-environment.yml
-COPY ./genotype-beta-binomial-mixture-with-outliers.py .
+#COPY ./pyro-kanpig-environment.yml .
+#RUN conda env create -f ./pyro-kanpig-environment.yml
+#COPY ./genotype-beta-binomial-mixture-with-outliers.py .
 
 # VCFDIST
 ARG vcfdist_version=2.6.4

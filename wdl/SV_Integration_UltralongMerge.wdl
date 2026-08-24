@@ -75,6 +75,8 @@ task Impl {
         
         cat << 'END' > preprocess_single_sample.sh
 #!/bin/bash
+set -euxo pipefail
+
 DOCKER_DIR=$1
 SVTYPE=$2
 INPUT_VCF_GZ=$3
@@ -117,7 +119,7 @@ END
         # true in one sample and false in another sample (with different feature
         # values in each).
         rm -f list.txt
-        while read LINE; do
+        while read LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz' >> list.txt
             echo ~{remote_indir}/"${SAMPLE_ID}_"~{svtype}~{suffix}'.vcf.gz.tbi' >> list.txt

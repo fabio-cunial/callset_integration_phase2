@@ -226,7 +226,7 @@ task Impl {
             rm -f training_not_gaps_beds.wsv
             local ID="0"
             local ROW
-            while read -u 4 ROW; do
+            while read -u 4 ROW || [ -n "${ROW}" ]; do
                 ID=$(( ${ID} + 1 ))
                 echo "${ROW}" > ${ID}.bed
                 bedtools intersect -a ${ID}.bed -b training_resource_sorted.bed -sorted -g ~{reference_fai} > training_not_gaps_${ID}.bed
@@ -722,12 +722,15 @@ task Impl {
         
         cat << 'END' > truvari_bench.sh
 #!/bin/bash
+set -euxo pipefail
+
 SAMPLE_ID=$1
 INPUT_VCF_GZ=$2
 TRAINING_RESOURCE_VCF_GZ=$3
 INFINITY=$4
 CHUNK_ID=$5
 INCLUDE_BED=$6
+
 truvari bench -b ${TRAINING_RESOURCE_VCF_GZ} -c ${INPUT_VCF_GZ} --includebed ${INCLUDE_BED} --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ${SAMPLE_ID}_truvari_${CHUNK_ID}/
 END
         chmod +x truvari_bench.sh
@@ -762,7 +765,7 @@ END
             
             # Concatenating outputs
             rm -f ${SAMPLE_ID}_outputs.txt
-            while read -u 4 ROW; do
+            while read -u 4 ROW || [ -n "${ROW}" ]; do
                 ID=$(echo ${ROW} | cut -d ' ' -f 1)
                 echo ${SAMPLE_ID}_truvari_${ID}/tp-comp.vcf.gz >> ${SAMPLE_ID}_outputs.txt
             done 4< training_not_gaps_beds.wsv
@@ -784,7 +787,7 @@ END
         
         GetReferenceGaps 
         cat ~{sv_integration_chunk_tsv} | tr '\t' ',' > chunk.csv
-        while read -u 3 LINE; do
+        while read -u 3 LINE || [ -n "${LINE}" ]; do
             SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
             SEX=$(echo ${LINE} | cut -d , -f 2)
             

@@ -115,7 +115,7 @@ task Impl {
             local LINE
             local TEST
             local SAMPLE_ID
-            while read -u 3 LINE; do
+            while read -u 3 LINE || [ -n "${LINE}" ]; do
                 SAMPLE_ID=$(echo ${LINE} | cut -d , -f 1)
                 SVIM_BED=$(echo ${LINE} | cut -d , -f 2)
                 
