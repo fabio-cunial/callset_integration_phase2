@@ -287,12 +287,6 @@ END
         chmod +x chunk_by_chr.sh
 
 
-        # Canonizing BNDs. This is necessary, since the annotation workflow 
-        # upstream just adds features to the existing records, without altering
-        # the set of records.
-        # In the future canonization should be done before annotation, to save
-        # runtime.
-        #
         cat << 'END' > bnd_canonize.sh
 #!/bin/bash
 set -euxo pipefail
@@ -322,7 +316,22 @@ END
             echo ./input_files/${SAMPLE_ID}_~{suffix}.bcf >> list.txt
         done 3< ~{sample_ids}
 
-        # Canonizing BNDs before merging
+        # Canonizing BNDs before merging. This is necessary, since the 
+        # annotation workflow upstream just adds features to the existing 
+        # records, without altering the set of records.
+        #
+        # Remark: canonization should actually be done before annotation, to 
+        # save annotation runtime.
+        #
+        # Remark: this pipeline is still inelegant, since the features of a BND 
+        # are not invariant to symmetry, i.e. it is not guaranteed that a BND 
+        # record and its symmetrical record get the same score (although they 
+        # likely get symmetrical features). Canonization after feature 
+        # annotation and filtering is equivalent to keeping a BND if either of 
+        # its two records is kept; canonization before feature annotation and 
+        # filtering is equivalent to keeping a BND iff its canonical 
+        # representation is kept. We should make BND features invariant to
+        # symmetry.
         if [[ ~{suffix} == *bnd* || ~{suffix} == *BND* ]]; then
             mkdir ./canonize_dir
             ${TIME_COMMAND} xargs --arg-file=list.txt --max-lines=1 --max-procs=${N_THREADS} ./bnd_canonize.sh ~{docker_dir} ${RAM_PER_THREAD_MB} ./canonize_dir
