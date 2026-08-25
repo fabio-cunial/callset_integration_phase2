@@ -63,12 +63,10 @@ task SingleChromosome {
         Int n_cpu = 1
         Int ram_size_gb = 2
         Int disk_size_gb = 10
-        Int preemptible_number = 4
+        Int preemptible_number = 0
     }
     parameter_meta {
     }
-    
-    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -78,60 +76,62 @@ task SingleChromosome {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        
+
+        # Skipping the chromosome if it has already been concatenated
         TEST=$( gcloud storage ls ~{remote_outdir}/~{chromosome}/~{chromosome}.done || echo "0" )
         if [ "${TEST}" != "0" ]; then
-            # Skipping the chromosome if it has already been processed
-            :
-        else
-            # Localizing all chunks
-            gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' > test.txt
-            if grep -q '.bcf' test.txt ; then
-                :
-            else
-                echo "ERROR: ~{chromosome} has no truvari collapse chunks."
-                exit 1
-            fi
-            ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
-            ls chunk_*.bcf | sort -V > chunk_list.txt
-            cat chunk_list.txt
-            df -h 1>&2
-        
-            # Concatenating all chunks
-            N_CHUNKS=$(wc -l < chunk_list.txt)
-            if [ ${N_CHUNKS} -gt 1 ]; then
-                ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b --output out.bcf
-                df -h 1>&2
-                rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-            else
-                CHUNK_FILE=$(head -n 1 chunk_list.txt)
-                mv ${CHUNK_FILE} in.bcf
-                mv ${CHUNK_FILE}.csi in.bcf.csi
-            fi
-            
-            # Enforcing a distinct ID in every record
-            CHR=~{chromosome}
-            CHR=${CHR#chr}
-            ( bcftools view --header-only in.bcf ; bcftools view --no-header in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' ) | bgzip -c > out.vcf.gz
-            rm in.bcf* ; mv out.vcf.gz in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t in.vcf.gz
-
-            # Annotating every record with the number of samples it occurs in.
-            # Note that this is not equal to the QUAL field in input to `truvari
-            # collapse` upstream, so it has to be computed.
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
-            tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
-            echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
-            COLUMNS='CHROM,POS,REF,ALT,~ID,N_DISCOVERY_SAMPLES'
-            ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns ${COLUMNS} --output-type b in.vcf.gz --output out.bcf
-            df -h 1>&2
-            rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
-
-            # Uploading
-            gcloud storage mv in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
-            gcloud storage mv in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
-            touch ~{chromosome}.done
-            gcloud storage mv ~{chromosome}.done ~{remote_outdir}/~{chromosome}/~{chromosome}.done
+            echo "Warning: ~{chromosome} has already been concatenated."
+            echo "~{chromosome}" > out.txt
+            exit 0
         fi
+
+        # Localizing all chunks
+        TEST=$( gcloud storage ls ~{remote_indir}/~{chromosome}/chunk_'*.bcf' || echo "0" )
+        if [ "${TEST}" = "0" ]; then
+            echo "Warning: ~{chromosome} has no truvari collapse chunks."
+            echo "~{chromosome}" > out.txt
+            exit 0
+        fi
+        ${TIME_COMMAND} gcloud storage cp ~{remote_indir}/~{chromosome}/chunk_'*.bcf*' .
+        ls chunk_*.bcf | sort -V > chunk_list.txt
+        cat chunk_list.txt
+        df -h 1>&2
+    
+        # Concatenating all chunks
+        N_CHUNKS=$(wc -l < chunk_list.txt)
+        if [ ${N_CHUNKS} -gt 1 ]; then
+            ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --naive --file-list chunk_list.txt --output-type b --output out.bcf
+            df -h 1>&2
+            rm -rf chunk_* ; mv out.bcf in.bcf
+        else
+            CHUNK_FILE=$(head -n 1 chunk_list.txt)
+            mv ${CHUNK_FILE} in.bcf
+            mv ${CHUNK_FILE}.csi in.bcf.csi
+        fi
+        
+        # Enforcing a distinct ID in every record
+        CHR=~{chromosome}
+        CHR=${CHR#chr}
+        ( bcftools view --header-only in.bcf ; bcftools view --no-header in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' ) | bgzip -c > out.vcf.gz
+        rm in.bcf* ; mv out.vcf.gz in.vcf.gz
+
+        # Annotating every record with the number of samples it occurs in.
+        # Note that this is not equal to the QUAL field in input to `truvari
+        # collapse` upstream, so it has to be recomputed here.
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
+        tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
+        echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
+        COLUMNS='CHROM,POS,REF,ALT,~ID,N_DISCOVERY_SAMPLES'
+        ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns ${COLUMNS} --output-type b in.vcf.gz --output out.bcf
+        df -h 1>&2
+        rm -f in.vcf.gz* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
+
+        # Uploading
+        gcloud storage mv in.bcf ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf
+        gcloud storage mv in.bcf.csi ~{remote_outdir}/~{chromosome}/truvari_collapsed.bcf.csi
+        touch ~{chromosome}.done
+        gcloud storage mv ~{chromosome}.done ~{remote_outdir}/~{chromosome}/~{chromosome}.done
+
         echo "~{chromosome}" > out.txt
     >>>
     
@@ -163,14 +163,12 @@ task AllChromosomes {
         String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 4
-        Int disk_size_gb = 200
-        Int preemptible_number = 4
+        Int disk_size_gb = 100
+        Int preemptible_number = 0
     }
     
     parameter_meta {
     }
-    
-    String docker_dir = "/callset_integration"
     
     command <<<
         set -euxo pipefail
@@ -188,13 +186,13 @@ task AllChromosomes {
         while read -u 3 CHROMOSOME || [ -n "${CHROMOSOME}" ]; do
             TEST=$( gcloud storage ls ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.bcf || echo "0" )
             if [ "${TEST}" = "0" ]; then
-                echo "ERROR: ${CHROMOSOME} has not been truvari collapsed."
-                exit 1
+                echo "Warning: ${CHROMOSOME} has no truvari collapse chunks."
+            else
+                gcloud storage cp ~{remote_outdir}/${CHROMOSOME}/truvari_collapsed.'bcf*' .
+                mv truvari_collapsed.bcf ${CHROMOSOME}_truvari_collapsed.bcf
+                mv truvari_collapsed.bcf.csi ${CHROMOSOME}_truvari_collapsed.bcf.csi
+                echo ${CHROMOSOME}_truvari_collapsed.bcf >> file_list.txt
             fi
-            gcloud storage cp ~{remote_outdir}/${CHROMOSOME}/'*.bcf*' .
-            mv truvari_collapsed.bcf ${CHROMOSOME}_truvari_collapsed.bcf
-            mv truvari_collapsed.bcf.csi ${CHROMOSOME}_truvari_collapsed.bcf.csi
-            echo ${CHROMOSOME}_truvari_collapsed.bcf >> file_list.txt
         done 3< chr_list.txt
         
         # Concatenating
@@ -216,7 +214,7 @@ task AllChromosomes {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: preemptible_number
     }
 }
