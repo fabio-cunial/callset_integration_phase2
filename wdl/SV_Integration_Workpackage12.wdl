@@ -70,11 +70,11 @@ workflow SV_Integration_Workpackage12 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong VCFs:
+# Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong, all calls:
 #
 # TOOL                           CPU     RAM     TIME
 # gcloud storage cp                                3m            // Whole genome
-# BndCanonize 
+# xargs BndCanonize             600%     70M      40m            // Whole genome    
 # bcftools merge level 1        300%    600M      10s            // Whole genome
 # bcftools norm level 1         300%    300M      10s            // Whole genome
 # bcftools merge level 2        200%    3.5G       4m            // Per chr
@@ -111,7 +111,7 @@ task Impl {
         Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 50
-        Int preemptible_number = 4
+        Int preemptible_number = 0
     }
     parameter_meta {
     }

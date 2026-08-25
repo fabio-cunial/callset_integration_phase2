@@ -43,16 +43,17 @@ workflow SV_Integration_Workpackage14 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, a chunk with the whole chr1:
+# Performance on 12'680 samples, 15x, GRCh38, all calls, one chunk with the 
+# whole chr1:
 #
-# TOOL                      CPU     RAM     TIME   OUTPUT VCF
+# TOOL                      CPU     RAM     TIME
 # bcftools view | awk                        20m
 # bcftools query            30%      2G       3m
 # bcftools annotate        200%      5G       5m
 # truvari collapse         100%     27G       2h
 # bcftools sort            100%      3G       2m
 #
-# Peak disk: 17G
+# Peak disk: 10G
 #
 task Impl {
     input {
@@ -66,7 +67,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 2
-        Int ram_size_gb = 16
+        Int ram_size_gb = 32
         Int disk_size_gb = 20
         Int preemptible_number = 3
     }

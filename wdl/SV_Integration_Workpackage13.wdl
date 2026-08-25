@@ -44,11 +44,11 @@ workflow SV_Integration_Workpackage13 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong VCFs:
+# Performance on 12'680 samples, 15x, GRCh38, HDD, ultralong, all calls:
 #
 # TOOL                           CPU     RAM     TIME
-# TruvariDivide2Ultralong
-# xargs bcftools view
+# TruvariDivide2Ultralong        20%    200M       2m
+# xargs bcftools view           100%      2G       5m
 #
 # Peak disk usage (all input files): 10G
 #
@@ -68,10 +68,10 @@ task Impl {
         String remote_outdir
         
         String docker_image
-        Int n_cpu = 4
+        Int n_cpu = 2
         Int ram_size_gb = 4
         Int disk_size_gb = 50
-        Int preemptible_number = 4
+        Int preemptible_number = 0
     }
     parameter_meta {
     }
@@ -113,14 +113,6 @@ END
             exit 0
         fi
         gcloud storage cp ~{remote_indir}/~{chromosome_id}.'bcf*' .
-        
-        # # Removing symbolic INS. This is just a temporary fix and should be
-        # # removed, since we have fixed Workpackage1. The code is still here in
-        # # case we need to run another iteration on the current data.
-        # if [ ~{suffix} = "ultralong" ]; then
-        #     ${TIME_COMMAND} bcftools filter --exclude 'ALT="<INS>"' --output-type b ~{chromosome_id}.bcf --output out.bcf
-        #     rm -f ~{chromosome_id}.bcf* ; mv out.bcf ~{chromosome_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{chromosome_id}.bcf
-        # fi
         
         # Splitting
         N_RECORDS=$(bcftools index --nrecords ~{chromosome_id}.bcf.csi)

@@ -49,12 +49,15 @@ workflow SV_Integration_Workpackage15 {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, chr1, HDD:
+# Performance on 12'680 samples, 15x, GRCh38, chr1, HDD, lenient:
 #
-# TOOL                           CPU     RAM   TIME
-# bcftools concat                
-# bcftools query                
-# bcftools annotate             
+#                                  Ultralong calls              BND calls
+# TOOL                           CPU     RAM   TIME         CPU    RAM   TIME
+# bcftools concat                50%     20M    1s          40%    20M    1s
+# bcftools query                100%     20M    6s         100%    20M    1s
+# bcftools annotate             100%     40M    7s         100%    20M    1s
+#
+# Peak disk:                            <100M                     <10M
 #
 task SingleChromosome {
     input {
@@ -65,7 +68,7 @@ task SingleChromosome {
         String docker_image
         Int n_cpu = 1
         Int ram_size_gb = 2
-        Int disk_size_gb = 10
+        Int disk_size_gb = 5
         Int preemptible_number = 0
     }
     parameter_meta {
@@ -151,10 +154,11 @@ task SingleChromosome {
 }
 
 
-# Performance on 12'680 samples, 15x, GRCh38, HDD:
+# Performance on 12'680 samples, 15x, GRCh38, lenient, HDD:
 #
-# TOOL                           CPU     RAM        TIME
-# concat --naive truvari         
+#                                  Ultralong calls              BND calls
+# TOOL                           CPU     RAM   TIME         CPU    RAM   TIME
+# concat --naive                 50%     20M    1s          80%    20M    1s
 #
 task AllChromosomes {
     input {
@@ -164,9 +168,9 @@ task AllChromosomes {
         Int naive
         
         String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 4
-        Int disk_size_gb = 100
+        Int n_cpu = 1
+        Int ram_size_gb = 2
+        Int disk_size_gb = 5
         Int preemptible_number = 0
     }
     
