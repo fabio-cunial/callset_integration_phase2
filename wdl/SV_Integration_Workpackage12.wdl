@@ -320,8 +320,14 @@ END
         # annotation workflow upstream just adds features to the existing 
         # records, without altering the set of records.
         #
-        # Remark: canonization should actually be done before annotation, to 
-        # save annotation runtime.
+        # Remark: canonization should actually be done before annotation, both
+        # to save annotation runtime and to ensure that the annotated features
+        # are in sync with the BND representation (`BndCanonize.java` 
+        # symmetrizes records but not their INFO fields: if such fields are not
+        # invariant to canonization, they are wrong, and the same applies to
+        # model training). The current pipeline works just because TPs are not
+        # computed using orientation, so the models are trained to recognize
+        # just correct pairs of positions.
         #
         # Remark: this pipeline is still inelegant, since the features of a BND 
         # are not invariant to symmetry, i.e. it is not guaranteed that a BND 
