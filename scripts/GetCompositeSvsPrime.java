@@ -7,11 +7,11 @@ import java.io.*;
  * Finds clusters of nearby SVs on the same sample (not necessarily in phase).
  * Prints a BED file with format: 
  * 
- * CHROM \t START \t END \t C \t (sample1,P1);...;(sampleX,PX)
+ * CHROM \t START \t END \t N \t C \t (sample1,P1);...;(sampleX,PX)
  * 
- * where `C` is a summary of the calls involved in the composite event; 
- * `sampleId` lists all samples with those calls; and `P` is 1 iff `>=minCalls`
- * in that sample lie on the same haplotype.
+ * where `N` is the number of calls involved in the composite event and `C` is a
+ * concise description of them; the last field lists all samples with those
+ * calls, where `PX=1` iff >=minCalls in sampleX lie on the same haplotype.
  * 
  * Remark: this program could be easily made much faster.
  */
@@ -177,11 +177,7 @@ public class GetCompositeSvsPrime {
      * the same sample to be considered part of the same composite event;
      * @param minCalls (>=2) min number of calls in a composite event;
      * @param minSvLength only clusters with at least one call of this length or
-     * longer are printed in output;
-     * @param outputBed format: `CHROM START END C (sampleId,P)`, where 
-     * `C` is a summary of the calls involved in the composite event; 
-     * `sampleId` lists all samples with those calls; and `P` is 1 iff 
-     * `>=minCalls` in that sample lie on the same haplotype.
+     * longer are printed in output.
      */
     private static final void getCompositeSvs(int maxDistance, int minCalls, int minSvLength, BufferedWriter outputBed) throws IOException {
         boolean found;
@@ -243,7 +239,7 @@ public class GetCompositeSvsPrime {
                 path.append(path.length()==0?"":",").append(calls_svtype[callId]).append("_").append(calls_pos[callId]).append("_").append(calls_svlen[callId]);
             }
             if (found) {
-                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+path.toString()+"\t");
+                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+tokens.length+"\t"+path.toString()+"\t");
                 outputBed.write("("+value.get(0)+","+value.get(1)+")");
                 for (i=2; i<value.size(); i+=2) { outputBed.write(";("+value.get(i)+","+value.get(i+1)+")"); }
                 outputBed.newLine();
