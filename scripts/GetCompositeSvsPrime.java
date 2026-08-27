@@ -4,14 +4,20 @@ import java.io.*;
 
 
 /**
- * Finds clusters of nearby SVs on the same sample (not necessarily in phase).
- * Prints a BED file with format: 
+ * Finds clusters of nearby SVs on the same sample (not necessarily in phase)
+ * from the mainSV VCF (i.e. not the ultralong or the BND SV VCFs). Prints a BED
+ * file (not necessarily sorted) with format:
  * 
- * CHROM \t START \t END \t N \t C \t (sample1,P1);...;(sampleX,PX)
+ * CHROM \t START \t END \t N \t T \t N_DEL \t N_INS \t N_DUP \t N_INV \t L \t C \t (sample1,P1);...;(sampleX,PX)
  * 
- * where `N` is the number of calls involved in the composite event and `C` is a
- * concise description of them; the last field lists all samples with those
- * calls, where `PX=1` iff >=minCalls in sampleX lie on the same haplotype.
+ * where:
+ * `N` is the number of calls involved in the composite event;
+ * `T` is the number of distinct SVTYPEs in the composite event;
+ * `N_DEL` is the number of deletions in the composite event;
+ * `L` is the max length of a call in the composite event;
+ * `C` is a concise description of the calls in the composite event;
+ * `(sampleI,PI)` lists every sample with that composite event, where `PI=1` iff 
+ * >=minCalls in sampleI lie on the same haplotype.
  * 
  * Remark: this program could be easily made much faster.
  */
@@ -68,6 +74,7 @@ public class GetCompositeSvsPrime {
         
         final int QUANTUM = 10000;  // Arbitrary
         
+        int i;
         int nRecords, currentFirst, currentLast;
         String str, chrom, currentChrom;
         BufferedReader br;
@@ -98,7 +105,7 @@ public class GetCompositeSvsPrime {
             getInterval(tokens,tmpArray);
             if (currentFirst==-1) { 
                 currentChrom=chrom; currentFirst=tmpArray[0]; currentLast=tmpArray[1];
-                lastCall=0; 
+                for (i=0; i<=lastCall; i++) calls_genotypes[i]=null;
                 calls_genotypes[0] = new String[nSamples];
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
@@ -107,11 +114,12 @@ public class GetCompositeSvsPrime {
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
+                lastCall=0;
             }
             else if (!chrom.equals(currentChrom) || tmpArray[0]>currentLast+MAX_DISTANCE) {
                 getCompositeSvs(MAX_DISTANCE,MIN_CALLS,MIN_SV_LENGTH,bw);
                 currentChrom=chrom; currentFirst=tmpArray[0]; currentLast=tmpArray[1];
-                lastCall=0;
+                for (i=0; i<=lastCall; i++) calls_genotypes[i]=null;
                 calls_genotypes[0] = new String[nSamples];
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
@@ -120,6 +128,7 @@ public class GetCompositeSvsPrime {
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
+                lastCall=0;
             }
             else {
                 if (tmpArray[1]>currentLast) currentLast=tmpArray[1];
@@ -182,7 +191,7 @@ public class GetCompositeSvsPrime {
     private static final void getCompositeSvs(int maxDistance, int minCalls, int minSvLength, BufferedWriter outputBed) throws IOException {
         boolean found;
         int i, j, k;
-        int callId, start, end;
+        int callId, start, end, nDel, nIns, nDup, nInv, nTypes, maxLength;
         String key;
         ArrayList<String> value;
         Iterator<Map.Entry<String,ArrayList<String>>> iterator;
@@ -230,16 +239,22 @@ public class GetCompositeSvsPrime {
             entry=iterator.next();
             key=entry.getKey(); value=entry.getValue();
             tokens=key.split("-"); found=false;
-            start=Integer.MAX_VALUE; end=0; path.delete(0,path.length());
+            start=Integer.MAX_VALUE; end=0; path.delete(0,path.length()); nDel=0; nIns=0; nDup=0; nInv=0; maxLength=0;
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
                 if (calls_svlen[callId]>=minSvLength) found=true;
+                maxLength=Math.max(maxLength,calls_svlen[callId]);
                 start=Math.min(start,calls_start_end[callId][0]);
                 end=Math.max(end,calls_start_end[callId][1]);
+                if (calls_svtype[callId].equals("DEL")) nDel++;
+                else if (calls_svtype[callId].equals("INS")) nIns++;
+                else if (calls_svtype[callId].equals("DUP")) nDup++;
+                else if (calls_svtype[callId].equals("INV")) nInv++;
                 path.append(path.length()==0?"":",").append(calls_svtype[callId]).append("_").append(calls_pos[callId]).append("_").append(calls_svlen[callId]);
             }
             if (found) {
-                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+tokens.length+"\t"+path.toString()+"\t");
+                nTypes=(nDel>0?1:0)+(nIns>0?1:0)+(nDup>0?1:0)+(nInv>0?1:0);
+                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+tokens.length+"\t"+nTypes+"\t"+nDel+"\t"+nIns+"\t"+nDup+"\t"+nInv+"\t"+maxLength+"\t"+path.toString()+"\t");
                 outputBed.write("("+value.get(0)+","+value.get(1)+")");
                 for (i=2; i<value.size(); i+=2) { outputBed.write(";("+value.get(i)+","+value.get(i+1)+")"); }
                 outputBed.newLine();

@@ -137,6 +137,11 @@ task Impl {
         
         bcftools index --nrecords ~{cohort_tbi}
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvsPrime ~{cohort_vcf_gz} ~{max_distance} ~{min_calls} ~{min_sv_length} out.bed
+
+        # Sorting by: nCalls > nTypes > maxLength
+        ${TIME_COMMAND} sort -k4,4nr -k5,5nr -k10,10nr out.bed > out_sorted.bed
+        mv out_sorted.bed out.bed
+        
         ls -laht
     >>>
     
