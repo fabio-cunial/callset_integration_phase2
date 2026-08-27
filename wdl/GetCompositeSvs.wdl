@@ -83,7 +83,7 @@ task ExcludeTRs {
         ${TIME_COMMAND} bedtools complement -i sorted_slop.bed -L -g ~{reference_fai} > complement.bed
         
         # Subsetting the VCF
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --targets-file complement.bed --targets-overlap pos --output-type z ~{cohort_bcf} > filtered.vcf.gz
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --targets-file complement.bed --targets-overlap pos --output-type z ~{cohort_bcf} --output filtered.vcf.gz
         tabix -f filtered.vcf.gz
     >>>
     
@@ -117,8 +117,8 @@ task Impl {
         Int min_sv_length
 
         String docker_image
-        Int n_cores = 2
-        Int mem_gb = 8
+        Int n_cpu = 2
+        Int ram_size_gb = 8
     }
     parameter_meta {
     }
@@ -133,7 +133,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_GB=$(( ~{mem_gb} - 2 ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         
         bcftools index --nrecords ~{cohort_tbi}
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvsPrime ~{cohort_vcf_gz} ~{max_distance} ~{min_calls} ~{min_sv_length} out.bed
@@ -145,8 +145,8 @@ task Impl {
     }
     runtime {
         docker: docker_image
-        cpu: n_cores
-        memory: mem_gb + "GB"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
