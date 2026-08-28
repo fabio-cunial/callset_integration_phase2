@@ -43,6 +43,7 @@ public class GetOverlappingSvsUltralongAndMain {
         final String OUTPUT_BED = args[6];
 
         final int CAPACITY = 100;  // Arbitrary
+        final double SCALING_FACTOR = 1.2;  // Arbitrary
         
         boolean hasDel, hasIns, hasDup, hasInv, samplesLoaded;
         int i, j;
@@ -90,9 +91,9 @@ public class GetOverlappingSvsUltralongAndMain {
                 }
                 lastContained++;
                 if (lastContained==contained_tokens.length) {
-                    String[][] contained_tokens_new = new String[contained_tokens.length*2][];
-                    String[] contained_svtype_new = new String[contained_tokens.length*2];
-                    int[] contained_svlen_new = new int[contained_tokens.length*2];
+                    String[][] contained_tokens_new = new String[(int)(contained_tokens.length*SCALING_FACTOR)][];
+                    String[] contained_svtype_new = new String[(int)(contained_tokens.length*SCALING_FACTOR)];
+                    int[] contained_svlen_new = new int[(int)(contained_tokens.length*SCALING_FACTOR)];
                     System.arraycopy(contained_tokens,0,contained_tokens_new,0,contained_tokens.length);
                     System.arraycopy(contained_svtype,0,contained_svtype_new,0,contained_svtype.length);
                     System.arraycopy(contained_svlen,0,contained_svlen_new,0,contained_svlen.length);
@@ -115,7 +116,6 @@ public class GetOverlappingSvsUltralongAndMain {
             if (maxLength<CONTAINED_MIN_SV_LENGTH) { containerId++; str1=br1.readLine(); continue; }
 
             // Checking containment in every sample
-            contained2samples.clear();
             for (j=0; j<nSamples; j++) {
                 if (!isPresent(container_tokens[3+j])) continue;
                 nContained=0; maxLength=0; key.delete(0,key.length());
@@ -167,6 +167,8 @@ public class GetOverlappingSvsUltralongAndMain {
             }
 
             // Next iteration
+            for (i=0; i<=lastContained; i++) { contained_tokens[i]=null; contained_svtype[i]=null; }
+            contained2samples.clear();
             containerId++;
             str1=br1.readLine();
         }
