@@ -700,5 +700,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_Workpackage3_UltralongAndBnd.wdl
   testParameterFiles:
-
+- name: GetContainedSvsUltralongAndMain
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetContainedSvsUltralongAndMain.wdl
+  testParameterFiles:
 

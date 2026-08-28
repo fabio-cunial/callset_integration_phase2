@@ -5,7 +5,6 @@ version 1.0
 workflow GetContainedSvsUltralongAndMain {
     input {
         File ultralong_bcf
-        File ultralong_csi
         File main_bcf
         File main_csi
 
@@ -20,7 +19,6 @@ workflow GetContainedSvsUltralongAndMain {
     call Impl {
         input:
             ultralong_bcf = ultralong_bcf,
-            ultralong_csi = ultralong_csi,
             main_bcf = main_bcf,
             main_csi = main_csi,
             min_calls = min_calls,
@@ -37,7 +35,6 @@ workflow GetContainedSvsUltralongAndMain {
 task Impl {
     input {
         File ultralong_bcf
-        File ultralong_csi
         File main_bcf
         File main_csi
 
@@ -61,57 +58,77 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        RAM_PER_THREAD_MB=$(( (~{ram_size_gb} * 1024 - 500) / ${N_THREADS} ))
 
 
 
 
         # ----------------------- Steps of the pipeline ------------------------
 
-cat << 'END' > analyze_interval.sh
+cat << 'END' > process_chunk.sh
 #!/bin/bash
-set -euo pipefail
+set -euxo pipefail
 
 CONTAINER_SVTYPE=$1
-ID=$2
-CONTAINER_ROW=$3
+CHUNK_ID=$2
+CHUNK_FILE=$3
+RAM_PER_THREAD_MB=$4
 
-CHROM=$(echo ${CONTAINER_ROW} | cut -d , -f 1)
-START=$(echo ${CONTAINER_ROW} | cut -d , -f 2)
-END=$(echo ${CONTAINER_ROW} | cut -d , -f 3)
+# Creating contained VCFs for every container call
+CALL_ID="0"
+while read -u 3 CONTAINER_ROW; do
+    CHROM=$(echo ${CONTAINER_ROW} | cut -d , -f 1)
+    START=$(echo ${CONTAINER_ROW} | cut -d , -f 2)
+    END=$(echo ${CONTAINER_ROW} | cut -d , -f 3)
+    echo -e "${CHROM}\t${START}\t${END}" > ${CHUNK_ID}_${CALL_ID}.bed
+    (cat header.tsv ; bcftools view --no-header --regions-file ${CHUNK_ID}_${CALL_ID}.bed --regions-overlap variant --output-type v ~{main_bcf}) > ${CHUNK_ID}_${CALL_ID}.vcf
+    rm -f ${CHUNK_ID}_${CALL_ID}.bed
+    CALL_ID=$(( ${CALL_ID} + 1 ))
+done 3< ${CHUNK_FILE}
 
-echo -e "${CHROM}\t${START}\t${END}" > ${ID}.bed
-bcftools view --regions-file ${ID}.bed --regions-overlap variant --output-type v ~{main_bcf} --output ${ID}.vcf
-rm -f ${ID}.bed
-N_CONTAINED_RECORDS=$( grep -c -v '^#' ${ID}.vcf || true )
-if [ ${N_CONTAINED_RECORDS} -ge ~{min_calls} ]; then
-    java -cp ~{docker_dir} GetContainedSvsUltralongAndMain ${ID}.vcf ${N_CONTAINED_RECORDS} ${CONTAINER_SVTYPE} ~{min_calls} ~{min_sv_length} ${ID}_counts.bed ${CONTAINER_ROW}
-fi
-rm -f ${ID}.vcf
+# Processing all container calls and contained VCFs
+java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M GetContainedSvsUltralongAndMain ${CONTAINER_SVTYPE} ~{min_calls} ~{min_sv_length} ${CHUNK_ID} ${CHUNK_FILE} . ${CHUNK_ID}_counts.bed
+rm -f ${CHUNK_ID}_*.vcf
 END
-        chmod +x analyze_interval.sh
+        chmod +x process_chunk.sh
 
 
+        # Processes every ultralong call of a given interval type, considering
+        # it as a container and looking up contained calls in the main VCF.
+        #
         function GetContainedSvs() {
             local SVTYPE=$1
 
             date 1>&2
             if [ ${SVTYPE} = "INSDUP" ]; then
-                (bcftools view --header-only ~{ultralong_bcf} ; bcftools view --no-header --include 'SVTYPE="INS"' ~{ultralong_bcf} | { grep INSDUP || true; }) | bcftools query --format '%CHROM,%INSDUP_POS,%INSDUP_SVLEN,[%GT,]\n' | awk 'BEGIN { FS=","; OFS=","; i=0; } { $3=$2+$3; printf("%d %s\n",i++,$0); }' > ${SVTYPE}_intervals.wsv
+                (bcftools view --header-only ~{ultralong_bcf} ; bcftools view --no-header --include 'SVTYPE="INS"' ~{ultralong_bcf} | { grep INSDUP || true; }) | bcftools query --format '%CHROM,%INSDUP_POS,%INSDUP_SVLEN,[%GT,]\n' | awk 'BEGIN { FS=","; OFS=","; } { $3 = $2 + ($3 < 0 ? -$3 : $3); printf("%s\n",$0); }' > ${SVTYPE}_intervals.wsv
             else
-                bcftools query --format '%CHROM,%POS,%SVLEN,[%GT,]\n' --include 'SVTYPE="'${SVTYPE}'"' ~{ultralong_bcf} | awk 'BEGIN { FS=","; OFS=","; i=0; } { $3=$2+$3; printf("%d %s\n",i++,$0); }' > ${SVTYPE}_intervals.wsv
+                bcftools query --format '%CHROM,%POS,%SVLEN,[%GT,]\n' --include 'SVTYPE="'${SVTYPE}'"' ~{ultralong_bcf} | awk 'BEGIN { FS=","; OFS=","; } { $3 = $2 + ($3 < 0 ? -$3 : $3); printf("%s\n",$0); }' > ${SVTYPE}_intervals.wsv
             fi
             if [ ! -s ${SVTYPE}_intervals.wsv ]; then
                 touch ${SVTYPE}_out.bed
                 return
             fi
-            date 1>&2
-            ${TIME_COMMAND} xargs --arg-file=${SVTYPE}_intervals.wsv --max-lines=1 --max-procs=${N_THREADS} ./analyze_interval.sh ${SVTYPE}
+            N_INTERVALS=$(wc -l < ${SVTYPE}_intervals.wsv)
+            N_INTERVALS_PER_THREAD=$(( ( ${N_INTERVALS} + ${N_THREADS} - 1 ) / ${N_THREADS} ))
+            split -d -a 2 -l ${N_INTERVALS_PER_THREAD} ${SVTYPE}_intervals.wsv ${SVTYPE}_chunk_
             rm -f ${SVTYPE}_intervals.wsv
-            find . -maxdepth 1 -name '*_counts.bed' -exec cat {} + > ${SVTYPE}_out.bed
-            find . -maxdepth 1 -name '*_counts.bed' -delete
+            local PIDS=()
+            for CHUNK_FILE in ${SVTYPE}_chunk_*; do
+                ID=$(basename ${CHUNK_FILE} | cut -d _ -f 3)
+                ./process_chunk.sh ${SVTYPE} ${ID} ${CHUNK_FILE} ${RAM_PER_THREAD_MB} &
+                PIDS+=($!)
+            done
+            for P in "${PIDS[@]}"; do wait ${P}; done
+            rm -f ${SVTYPE}_chunk_*
+            cat *_counts.bed > ${SVTYPE}_out.bed
+            rm -f *_counts.bed
         }
 
 
+        # Processes every ultralong call of INS type, considering it as 
+        # contained and looking up container calls in the main VCF.
+        #
         function GetContainerSvs() {
             # To be implemented...
             :
@@ -121,6 +138,8 @@ END
 
 
         # ---------------------------- Main program ----------------------------
+        
+        bcftools view --header-only ~{main_bcf} | tail -n 1 > header.tsv
 
         # Intervals
         GetContainedSvs DEL

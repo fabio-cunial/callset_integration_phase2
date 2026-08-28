@@ -110,7 +110,7 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
-                calls_svlen[0]=Integer.parseInt(getInfoField(tokens[7],"SVLEN"));
+                calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
@@ -124,7 +124,7 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
-                calls_svlen[0]=Integer.parseInt(getInfoField(tokens[7],"SVLEN"));
+                calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
@@ -154,7 +154,7 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[lastCall],0,nSamples);
                 calls_start_end[lastCall][0]=tmpArray[0];
                 calls_start_end[lastCall][1]=tmpArray[1];
-                calls_svlen[lastCall]=Integer.parseInt(getInfoField(tokens[7],"SVLEN"));
+                calls_svlen[lastCall]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[lastCall]=getInfoField(tokens[7],"SVTYPE");
                 calls_pos[lastCall]=Integer.parseInt(tokens[1]);
             }
