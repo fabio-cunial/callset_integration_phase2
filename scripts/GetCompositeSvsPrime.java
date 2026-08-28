@@ -5,10 +5,9 @@ import java.io.*;
 
 /**
  * Finds clusters of nearby SVs on the same sample (not necessarily in phase)
- * from the main SV VCF (not the ultralong or the BND SV VCFs). Prints a BED
- * file (not necessarily sorted) with format:
+ * from the main SV VCF. Prints a BED file (not necessarily sorted) with format:
  * 
- * CHROM \t START \t END \t N \t T \t N_DEL \t N_INS \t N_DUP \t N_INV \t L \t C \t (sample1,P1);...;(sampleX,PX)
+ * CHROM \t START \t END \t N \t T \t N_DEL \t N_INS \t N_DUP \t N_INV \t N_BND \t L \t C \t (sample1,P1);...;(sampleX,PX)
  * 
  * where:
  * `N` is the number of calls involved in the composite event;
@@ -18,6 +17,9 @@ import java.io.*;
  * `C` is a concise description of the calls in the composite event;
  * `(sampleI,PI)` lists every sample with that composite event, where `PI=1` iff 
  * >=minCalls in sampleI lie on the same haplotype.
+ * 
+ * Remark: the program can be used on the ultralong VCF, on the BND VCF, and
+ * even on the bcftools concat of ultralong and BND VCF.
  * 
  * Remark: this program could be easily made much faster.
  */
@@ -102,7 +104,7 @@ public class GetCompositeSvsPrime {
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records...");
             tokens=str.split("\t");
             chrom=tokens[0];
-            getInterval(tokens,tmpArray);
+            if (!getInterval(tokens,tmpArray)) { str=br.readLine(); continue; }
             if (currentFirst==-1) { 
                 currentChrom=chrom; currentFirst=tmpArray[0]; currentLast=tmpArray[1];
                 for (i=0; i<=lastCall; i++) calls_genotypes[i]=null;
@@ -110,8 +112,9 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
-                calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
+                if (calls_svtype[0].equals("BND")) calls_svlen[0]=calls_start_end[0][1]-calls_start_end[0][0];
+                else calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
                 lastCall=0;
@@ -124,8 +127,9 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[0],0,nSamples);
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
-                calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
+                if (calls_svtype[0].equals("BND")) calls_svlen[0]=calls_start_end[0][1]-calls_start_end[0][0];
+                else calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
                 lastCall=0;
@@ -154,8 +158,9 @@ public class GetCompositeSvsPrime {
                 System.arraycopy(tokens,9,calls_genotypes[lastCall],0,nSamples);
                 calls_start_end[lastCall][0]=tmpArray[0];
                 calls_start_end[lastCall][1]=tmpArray[1];
-                calls_svlen[lastCall]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_svtype[lastCall]=getInfoField(tokens[7],"SVTYPE");
+                if (calls_svtype[lastCall].equals("BND")) calls_svlen[lastCall]=calls_start_end[lastCall][1]-calls_start_end[lastCall][0];
+                else calls_svlen[lastCall]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[lastCall]=Integer.parseInt(tokens[1]);
             }
             str=br.readLine();
@@ -191,7 +196,7 @@ public class GetCompositeSvsPrime {
     private static final void getCompositeSvs(int maxDistance, int minCalls, int minSvLength, BufferedWriter outputBed) throws IOException {
         boolean found;
         int i, j, k;
-        int callId, start, end, nDel, nIns, nDup, nInv, nTypes, maxLength;
+        int callId, start, end, nDel, nIns, nDup, nInv, nBnd, nTypes, maxLength;
         String key;
         ArrayList<String> value;
         Iterator<Map.Entry<String,ArrayList<String>>> iterator;
@@ -239,7 +244,7 @@ public class GetCompositeSvsPrime {
             entry=iterator.next();
             key=entry.getKey(); value=entry.getValue();
             tokens=key.split("-"); found=false;
-            start=Integer.MAX_VALUE; end=0; path.delete(0,path.length()); nDel=0; nIns=0; nDup=0; nInv=0; maxLength=0;
+            start=Integer.MAX_VALUE; end=0; path.delete(0,path.length()); nDel=0; nIns=0; nDup=0; nInv=0; nBnd=0; maxLength=0;
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
                 if (calls_svlen[callId]>=minSvLength) found=true;
@@ -250,11 +255,12 @@ public class GetCompositeSvsPrime {
                 else if (calls_svtype[callId].equals("INS")) nIns++;
                 else if (calls_svtype[callId].equals("DUP")) nDup++;
                 else if (calls_svtype[callId].equals("INV")) nInv++;
+                else if (calls_svtype[callId].equals("BND")) nBnd++;
                 path.append(path.length()==0?"":",").append(calls_svtype[callId]).append("_").append(calls_pos[callId]).append("_").append(calls_svlen[callId]);
             }
             if (found) {
-                nTypes=(nDel>0?1:0)+(nIns>0?1:0)+(nDup>0?1:0)+(nInv>0?1:0);
-                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+tokens.length+"\t"+nTypes+"\t"+nDel+"\t"+nIns+"\t"+nDup+"\t"+nInv+"\t"+maxLength+"\t"+path.toString()+"\t");
+                nTypes=(nDel>0?1:0)+(nIns>0?1:0)+(nDup>0?1:0)+(nInv>0?1:0)+(nBnd>0?1:0);
+                outputBed.write(calls_chrom+"\t"+start+"\t"+end+"\t"+tokens.length+"\t"+nTypes+"\t"+nDel+"\t"+nIns+"\t"+nDup+"\t"+nInv+"\t"+nBnd+"\t"+maxLength+"\t"+path.toString()+"\t");
                 outputBed.write("("+value.get(0)+","+value.get(1)+")");
                 for (i=2; i<value.size(); i+=2) { outputBed.write(";("+value.get(i)+","+value.get(i+1)+")"); }
                 outputBed.newLine();
@@ -337,21 +343,80 @@ public class GetCompositeSvsPrime {
     
     
     /**
-     * @param out [start,end], 0-based, inclusive.
+     * @param out [start,end], 0-based, inclusive;
+     * @return FALSE iff the call should be skipped because it is not intra-
+     * chromosomal.
      */
-    private static final void getInterval(String[] call, int[] out) {        
-        int from, to, pos, svlen;
-        String svtype;
+    private static final boolean getInterval(String[] call, int[] out) {        
+        int from, to, pos, svlen, altPos;
+        String svtype, altChr;
 
         pos=Integer.parseInt(call[1]);
-        from=pos;  // Zero-based, inclusive.
         svtype=getInfoField(call[7],"SVTYPE");
-        if (svtype.equals("INS")) to=pos+1;
+        if (svtype.equals("INS")) {
+            from=pos-1;  // Zero-based, inclusive.
+            to=pos;  // Zero-based, inclusive.
+        }
+        else if (svtype.equals("BND")) {
+            altChr=bndGetAltChr(call[4]);
+            if (!altChr.equals(call[0])) return false;
+            altPos=bndGetAltPos(call[4]);
+            if (altPos<pos) {
+                System.err.println("ERROR: BND with altPos<POS: "+altPos+" < "+pos+". Has the BND VCF been canonized?");
+                System.exit(1);
+            }
+            from=pos-1;  // Zero-based, inclusive.
+            to=altPos-1;  // Zero-based, inclusive.
+        }
         else {
+            from=pos;  // Zero-based, inclusive.
             svlen=Integer.parseInt(getInfoField(call[7],"SVLEN"));
             to=pos+svlen-1;  // Zero-based, inclusive.
         }
         out[0]=from; out[1]=to;
+        return true;
+    }
+
+
+    private static String bndGetAltChr(String alt) {
+        int p, q, r;
+
+        p=alt.indexOf('['); q=alt.indexOf(']'); 
+        if (p>=0) {
+            r=alt.indexOf(':',p+1);
+            return alt.substring(p+1,r);
+        }
+        else if (q>=0) {
+            r=alt.indexOf(':',q+1);
+            return alt.substring(q+1,r);
+        }
+        else {
+            System.err.println("ERROR: unrecognized ALT: "+alt);
+            System.exit(1);
+        }
+        return null;
+    }
+
+
+    private static int bndGetAltPos(String alt) {
+        int p, q, r;
+
+        p=alt.indexOf('['); q=alt.indexOf(']'); 
+        if (p>=0) {
+            r=alt.indexOf(':',p+1);
+            p=alt.indexOf('[',r+1);
+            return Integer.parseInt(alt.substring(r+1,p));
+        }
+        else if (q>=0) {
+            r=alt.indexOf(':',q+1);
+            q=alt.indexOf(']',r+1);
+            return Integer.parseInt(alt.substring(r+1,q));
+        }
+        else {
+            System.err.println("ERROR: unrecognized ALT: "+alt);
+            System.exit(1);
+        }
+        return -1;
     }
     
     

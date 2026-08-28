@@ -34,7 +34,7 @@ workflow GetOverlappingSvsUltralongAndMain {
 
 
 # COMMAND                               CPU%        RAM         TIME
-# GetOverlappingSvsUltralongAndMain     100%       2.2G           5m
+# GetOverlappingSvsUltralongAndMain     100%         4G           5m
 # sort
 #
 task Impl {
@@ -62,7 +62,7 @@ task Impl {
         TIME_COMMAND="/usr/bin/time --verbose"
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         RAM_PER_THREAD_MB=$(( (~{ram_size_gb} * 1024 - 500) / ${N_THREADS} ))
 
 
