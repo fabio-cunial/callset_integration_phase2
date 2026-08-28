@@ -700,9 +700,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_Workpackage3_UltralongAndBnd.wdl
   testParameterFiles:
-- name: GetContainedSvsUltralongAndMain
+- name: GetOverlappingSvsUltralongAndMain
   subclass: wdl
   publish: True
-  primaryDescriptorPath: /wdl/GetContainedSvsUltralongAndMain.wdl
+  primaryDescriptorPath: /wdl/GetOverlappingSvsUltralongAndMain.wdl
   testParameterFiles:
 

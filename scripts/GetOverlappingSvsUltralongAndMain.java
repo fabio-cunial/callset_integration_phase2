@@ -3,8 +3,8 @@ import java.io.*;
 
 
 /**
- * Finds ultralong interval calls that contain or overlap calls in the main SV 
- * VCF. Prints a BED file (not necessarily sorted) with format:
+ * Finds ultralong interval calls that overlap calls in the main SV VCF. Prints
+ * a BED file (not necessarily sorted) with format:
  * 
  * container_CHROM \t container_START \t container_END \t container_SVTYPE \t N \t D \t T \t L \t C \t sample1,...,sampleX
  * 
@@ -19,9 +19,11 @@ import java.io.*;
  * 
  * Remark: this program could be easily made much faster.
  */
-public class GetContainedSvsUltralongAndMain {
+public class GetOverlappingSvsUltralongAndMain {
     
     /**
+     * WARNING: the program deletes every file it reads.
+     * 
      * @param args 
      * 1: >=1; only contained sets with >=this number of calls in the main VCF
      *    are reported;
@@ -104,6 +106,7 @@ public class GetContainedSvsUltralongAndMain {
                 str2=br2.readLine();
             }
             br2.close();
+            new File(CONTAINED_VCFS_DIR+"/"+CONTAINER_CHUNK_ID+"_"+containerId+".vcf").delete();
 
             // Early exit
             if (lastContained+1<CONTAINED_MIN_CALLS) { containerId++; str1=br1.readLine(); continue; }
@@ -157,7 +160,7 @@ public class GetContainedSvsUltralongAndMain {
                 }
                 nContainedTypes=(hasDel?1:0)+(hasIns?1:0)+(hasDup?1:0)+(hasInv?1:0);
                 bw.write(prefix);
-                bw.write(tokens.length+"\t"+String.format("%.3g",((double)tokens.length)/containerLength)+"\t"+nContainedTypes+"\t"+maxLength+"\t"+description.toString()+"\t");
+                bw.write(tokens.length+"\t"+(((double)tokens.length)/containerLength)+"\t"+nContainedTypes+"\t"+maxLength+"\t"+description.toString()+"\t");
                 bw.write(value.get(0));
                 for (i=1; i<value.size(); i++) bw.write(","+value.get(i));
                 bw.newLine();
