@@ -68,7 +68,7 @@ task Impl {
 
 cat << 'END' > process_chunk.sh
 #!/bin/bash
-set -euo pipefail
+set -euxo pipefail
 
 CONTAINER_SVTYPE=$1
 CHUNK_ID=$2
