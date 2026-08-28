@@ -79,13 +79,14 @@ RAM_PER_THREAD_MB=$4
 CALL_ID="0"
 while IFS=, read -u 3 CHROM START END REST; do
     echo -e "${CHROM}\t${START}\t${END}" > ${CHUNK_ID}_${CALL_ID}.bed
-    (cat header.tsv ; bcftools view --no-header --regions-file ${CHUNK_ID}_${CALL_ID}.bed --regions-overlap variant --output-type v ~{main_bcf}) > ${CHUNK_ID}_${CALL_ID}.vcf
+    cat header.tsv > ${CHUNK_ID}_${CALL_ID}.vcf
+    /usr/bin/time --verbose bcftools view --no-header --regions-file ${CHUNK_ID}_${CALL_ID}.bed --regions-overlap variant --output-type v ~{main_bcf}) >> ${CHUNK_ID}_${CALL_ID}.vcf
     rm -f ${CHUNK_ID}_${CALL_ID}.bed
     CALL_ID=$(( ${CALL_ID} + 1 ))
 done 3< ${CHUNK_FILE}
 
 # Processing all container calls and contained VCFs
-java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M GetOverlappingSvsUltralongAndMain ${CONTAINER_SVTYPE} ~{min_calls} ~{min_sv_length} ${CHUNK_ID} ${CHUNK_FILE} . ${CHUNK_ID}_counts.bed
+/usr/bin/time --verbose java -cp ~{docker_dir} -Xmx${RAM_PER_THREAD_MB}M GetOverlappingSvsUltralongAndMain ${CONTAINER_SVTYPE} ~{min_calls} ~{min_sv_length} ${CHUNK_ID} ${CHUNK_FILE} . ${CHUNK_ID}_counts.bed
 rm -f ${CHUNK_ID}_*.vcf
 END
         chmod +x process_chunk.sh
