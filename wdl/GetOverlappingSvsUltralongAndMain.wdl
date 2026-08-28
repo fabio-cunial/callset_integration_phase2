@@ -45,7 +45,7 @@ task Impl {
         String docker_image
         Int n_cpu = 4
         Int ram_size_gb = 8
-        Int disk_size_gb = 100
+        Int disk_size_gb = 1000
     }
     parameter_meta {
     }
@@ -76,11 +76,15 @@ CHUNK_FILE=$3
 RAM_PER_THREAD_MB=$4
 
 # Creating contained VCFs for every container call
-CALL_ID="0"
+N_CALLS=$(wc -l < ${CHUNK_FILE})
+CALL_ID="0"; QUANTUM="100"
 while IFS=, read -u 3 CHROM START END REST; do
+    if [ $(( ${CALL_ID} % ${QUANTUM} )) -eq 0 ]; then
+        df -h 1>&2
+    fi
     echo -e "${CHROM}\t${START}\t${END}" > ${CHUNK_ID}_${CALL_ID}.bed
     cat header.tsv > ${CHUNK_ID}_${CALL_ID}.vcf
-    /usr/bin/time --verbose bcftools view --no-header --regions-file ${CHUNK_ID}_${CALL_ID}.bed --regions-overlap variant --output-type v ~{main_bcf} >> ${CHUNK_ID}_${CALL_ID}.vcf
+    bcftools view --no-header --regions-file ${CHUNK_ID}_${CALL_ID}.bed --regions-overlap variant --output-type v ~{main_bcf} >> ${CHUNK_ID}_${CALL_ID}.vcf
     rm -f ${CHUNK_ID}_${CALL_ID}.bed
     CALL_ID=$(( ${CALL_ID} + 1 ))
 done 3< ${CHUNK_FILE}
