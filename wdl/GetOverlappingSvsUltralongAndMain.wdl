@@ -33,6 +33,10 @@ workflow GetOverlappingSvsUltralongAndMain {
 }
 
 
+# COMMAND                               CPU%        RAM         TIME
+# GetOverlappingSvsUltralongAndMain     100%       2.2G           5m
+# sort
+#
 task Impl {
     input {
         File ultralong_bcf
@@ -44,7 +48,7 @@ task Impl {
         
         String docker_image
         Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int ram_size_gb = 16
         Int disk_size_gb = 1000
     }
     parameter_meta {
@@ -146,7 +150,7 @@ END
 
         # Sorting by decreasing density
         cat DEL_out.bed INSDUP_out.bed DUP_out.bed INV_out.bed | sort -k6,6gr > out_intervals.bed
-        sort -k5,5nr INS_out.bed > out_ins.bed
+        ${TIME_COMMAND} sort -k5,5nr INS_out.bed > out_ins.bed
     >>>
     
     output {
