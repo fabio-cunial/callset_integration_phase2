@@ -5,7 +5,7 @@ import java.io.*;
 
 /**
  * Finds clusters of nearby SVs on the same sample (not necessarily in phase)
- * from the mainSV VCF (i.e. not the ultralong or the BND SV VCFs). Prints a BED
+ * from the main SV VCF (not the ultralong or the BND SV VCFs). Prints a BED
  * file (not necessarily sorted) with format:
  * 
  * CHROM \t START \t END \t N \t T \t N_DEL \t N_INS \t N_DUP \t N_INV \t L \t C \t (sample1,P1);...;(sampleX,PX)
