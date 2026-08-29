@@ -53,9 +53,9 @@ public class GetOverlappingSvsUltralongAndMain {
         StringBuilder description = new StringBuilder();
         BufferedReader br1, br2;
         BufferedWriter bw;
-        int[] contained_svlen;
+        int[] contained_pos, contained_svlen;
         String[] tokens, samples, container_tokens, contained_svtype;
-        String[][] contained_tokens;
+        byte[][] contained_gts;  // 00, 01, 10, 11
         ArrayList<String> value;
         HashMap<String,ArrayList<String>> contained2samples;
         Iterator<Map.Entry<String,ArrayList<String>>> iterator;
@@ -63,9 +63,10 @@ public class GetOverlappingSvsUltralongAndMain {
 
         // Allocating reused data structures
         samples=null;
-        contained_tokens = new String[CAPACITY][];
+        contained_gts = new byte[CAPACITY][];
         contained_svtype = new String[CAPACITY];
         contained_svlen = new int[CAPACITY];
+        contained_pos = new int[CAPACITY];
         contained2samples = new HashMap<String,ArrayList<String>>();
         
         bw = new BufferedWriter(new FileWriter(OUTPUT_BED));
@@ -90,20 +91,26 @@ public class GetOverlappingSvsUltralongAndMain {
                     str2=br2.readLine(); continue;
                 }
                 lastContained++;
-                if (lastContained==contained_tokens.length) {
-                    String[][] contained_tokens_new = new String[(int)(contained_tokens.length*SCALING_FACTOR)][];
-                    String[] contained_svtype_new = new String[(int)(contained_tokens.length*SCALING_FACTOR)];
-                    int[] contained_svlen_new = new int[(int)(contained_tokens.length*SCALING_FACTOR)];
-                    System.arraycopy(contained_tokens,0,contained_tokens_new,0,contained_tokens.length);
+                if (lastContained==contained_gts.length) {
+                    byte[][] contained_gts_new = new byte[(int)(contained_gts.length*SCALING_FACTOR)][];
+                    String[] contained_svtype_new = new String[(int)(contained_gts.length*SCALING_FACTOR)];
+                    int[] contained_svlen_new = new int[(int)(contained_gts.length*SCALING_FACTOR)];
+                    int[] contained_pos_new = new int[(int)(contained_gts.length*SCALING_FACTOR)];
+                    System.arraycopy(contained_gts,0,contained_gts_new,0,contained_gts.length);
                     System.arraycopy(contained_svtype,0,contained_svtype_new,0,contained_svtype.length);
                     System.arraycopy(contained_svlen,0,contained_svlen_new,0,contained_svlen.length);
-                    contained_tokens=contained_tokens_new;
+                    System.arraycopy(contained_pos,0,contained_pos_new,0,contained_pos.length);
+                    contained_gts=contained_gts_new;
                     contained_svtype=contained_svtype_new;
                     contained_svlen=contained_svlen_new;
+                    contained_pos=contained_pos_new;
                 }
-                contained_tokens[lastContained]=str2.split("\t");
-                contained_svtype[lastContained]=getInfoField(contained_tokens[lastContained][7],"SVTYPE");
-                contained_svlen[lastContained]=Math.abs(Integer.parseInt(getInfoField(contained_tokens[lastContained][7],"SVLEN")));
+                tokens=str2.split("\t");
+                if (contained_gts[lastContained]==null) contained_gts[lastContained] = new byte[nSamples];
+                for (j=0; j<nSamples; j++) contained_gts[lastContained][j]=gt2byte(tokens[9+j]);
+                contained_svtype[lastContained]=getInfoField(tokens[7],"SVTYPE");
+                contained_svlen[lastContained]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
+                contained_pos[lastContained]=Integer.parseInt(tokens[1]);
                 str2=br2.readLine();
             }
             br2.close();
@@ -120,7 +127,7 @@ public class GetOverlappingSvsUltralongAndMain {
                 if (!isPresent(container_tokens[3+j])) continue;
                 nContained=0; maxLength=0; key.delete(0,key.length());
                 for (i=0; i<=lastContained; i++) {
-                    if (isPresent(contained_tokens[i][9+j])) { 
+                    if (contained_gts[i][j]!=0) { 
                         nContained++;
                         maxLength=Math.max(maxLength,contained_svlen[i]);
                         if (key.length()==0) key.append(i+"");
@@ -155,7 +162,7 @@ public class GetOverlappingSvsUltralongAndMain {
                     if (contained_svtype[callId].equals("DUP")) hasDup=true;
                     if (contained_svtype[callId].equals("INV")) hasInv=true;
                     if (description.length()>0) description.append(",");
-                    description.append(contained_svtype[callId]).append("_").append(contained_tokens[callId][1]).append("_").append(contained_svlen[callId]);
+                    description.append(contained_svtype[callId]).append("_").append(contained_pos[callId]).append("_").append(contained_svlen[callId]);
                     maxLength=Math.max(maxLength,contained_svlen[callId]);
                 }
                 nContainedTypes=(hasDel?1:0)+(hasIns?1:0)+(hasDup?1:0)+(hasInv?1:0);
@@ -167,7 +174,6 @@ public class GetOverlappingSvsUltralongAndMain {
             }
 
             // Next iteration
-            for (i=0; i<=lastContained; i++) { contained_tokens[i]=null; contained_svtype[i]=null; }
             contained2samples.clear();
             containerId++;
             str1=br1.readLine();
@@ -180,6 +186,13 @@ public class GetOverlappingSvsUltralongAndMain {
         if (gt.charAt(0)=='1') return true;
         if (gt.length()<3 || (gt.charAt(1)!='|' && gt.charAt(1)!='/')) return false;
         return gt.charAt(2)=='1';
+    }
+
+
+    private static final byte gt2byte(String gt) {
+        final int left = gt.charAt(0)=='1'?1:0;
+        final int right = (gt.length()<3 || (gt.charAt(1)!='|' && gt.charAt(1)!='/')) ? 0 : (gt.charAt(2)=='1'?2:0);
+        return (byte)(left|right);
     }
 
 
