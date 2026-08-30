@@ -114,7 +114,7 @@ task Impl {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        EFFECTIVE_RAM_MB=$(( ~{ram_size_gb} - 500 ))
+        EFFECTIVE_RAM_MB=$(( ~{ram_size_gb}*1024 - 500 ))
         
         bcftools index --nrecords ~{cohort_tbi}
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M GetCompositeSvsPrime ~{cohort_vcf_gz} ~{max_distance} 2 1 out.bed
