@@ -65,14 +65,20 @@ public class GetCompositeSvsPrime {
     /**
      * @param args 
      * 0: a sorted inter-sample VCF;
-     * 3: only clusters with at least one call >=this length are considered.
+     * 1: treat intra-chromosomal BNDs as intervals (0) or as isolated 
+     *    breakpoints (1); in the first (resp. second) case, the VCF is assumed
+     *    to contain only one BND record (resp. two symmetrical BND records) per
+     *    event; inter-chromosomal BNDs are always assumed to be represented as
+     *    pairs of symmetrical records;
+     * 4: only clusters with at least one call >=this length are considered.
      */
     public static void main(String[] args) throws IOException {
         final String COHORT_VCF_GZ = args[0];
-        final int MAX_DISTANCE = Integer.parseInt(args[1]);
-        final int MIN_CALLS = Integer.parseInt(args[2]);
-        final int MIN_SV_LENGTH = Integer.parseInt(args[3]);
-        final String OUTPUT_BED = args[4];
+        final int BND_MODE = Integer.parseInt(args[1]);
+        final int MAX_DISTANCE = Integer.parseInt(args[2]);
+        final int MIN_CALLS = Integer.parseInt(args[3]);
+        final int MIN_SV_LENGTH = Integer.parseInt(args[4]);
+        final String OUTPUT_BED = args[5];
         
         final int QUANTUM = 10000;  // Arbitrary
         
@@ -104,7 +110,7 @@ public class GetCompositeSvsPrime {
             if (nRecords%QUANTUM==0) System.err.println("Processed "+nRecords+" records...");
             tokens=str.split("\t");
             chrom=tokens[0];
-            if (!getInterval(tokens,tmpArray)) { str=br.readLine(); continue; }
+            getInterval(tokens,BND_MODE,tmpArray);
             if (currentFirst==-1) { 
                 currentChrom=chrom; currentFirst=tmpArray[0]; currentLast=tmpArray[1];
                 for (i=0; i<=lastCall; i++) calls_genotypes[i]=null;
@@ -113,7 +119,7 @@ public class GetCompositeSvsPrime {
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
-                if (calls_svtype[0].equals("BND")) calls_svlen[0]=calls_start_end[0][1]-calls_start_end[0][0];
+                if (calls_svtype[0].equals("BND")) calls_svlen[0]=BND_MODE==0?calls_start_end[0][1]-calls_start_end[0][0]:Integer.MAX_VALUE;
                 else calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
@@ -128,7 +134,7 @@ public class GetCompositeSvsPrime {
                 calls_start_end[0][0]=tmpArray[0];
                 calls_start_end[0][1]=tmpArray[1];
                 calls_svtype[0]=getInfoField(tokens[7],"SVTYPE");
-                if (calls_svtype[0].equals("BND")) calls_svlen[0]=calls_start_end[0][1]-calls_start_end[0][0];
+                if (calls_svtype[0].equals("BND")) calls_svlen[0]=BND_MODE==0?calls_start_end[0][1]-calls_start_end[0][0]:Integer.MAX_VALUE;
                 else calls_svlen[0]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[0]=Integer.parseInt(tokens[1]);
                 calls_chrom=chrom;
@@ -159,7 +165,7 @@ public class GetCompositeSvsPrime {
                 calls_start_end[lastCall][0]=tmpArray[0];
                 calls_start_end[lastCall][1]=tmpArray[1];
                 calls_svtype[lastCall]=getInfoField(tokens[7],"SVTYPE");
-                if (calls_svtype[lastCall].equals("BND")) calls_svlen[lastCall]=calls_start_end[lastCall][1]-calls_start_end[lastCall][0];
+                if (calls_svtype[lastCall].equals("BND")) calls_svlen[lastCall]=BND_MODE==0?calls_start_end[lastCall][1]-calls_start_end[lastCall][0]:Integer.MAX_VALUE;
                 else calls_svlen[lastCall]=Math.abs(Integer.parseInt(getInfoField(tokens[7],"SVLEN")));
                 calls_pos[lastCall]=Integer.parseInt(tokens[1]);
             }
@@ -248,7 +254,7 @@ public class GetCompositeSvsPrime {
             for (i=0; i<tokens.length; i++) {
                 callId=Integer.parseInt(tokens[i]);
                 if (calls_svlen[callId]>=minSvLength) found=true;
-                maxLength=Math.max(maxLength,calls_svlen[callId]);
+                if (calls_svlen[callId]!=Integer.MAX_VALUE) maxLength=Math.max(maxLength,calls_svlen[callId]);
                 start=Math.min(start,calls_start_end[callId][0]);
                 end=Math.max(end,calls_start_end[callId][1]);
                 if (calls_svtype[callId].equals("DEL")) nDel++;
@@ -256,7 +262,7 @@ public class GetCompositeSvsPrime {
                 else if (calls_svtype[callId].equals("DUP")) nDup++;
                 else if (calls_svtype[callId].equals("INV")) nInv++;
                 else if (calls_svtype[callId].equals("BND")) nBnd++;
-                path.append(path.length()==0?"":",").append(calls_svtype[callId]).append("_").append(calls_pos[callId]).append("_").append(calls_svlen[callId]);
+                path.append(path.length()==0?"":",").append(calls_svtype[callId]).append("_").append(calls_pos[callId]).append("_").append(calls_svlen[callId]!=Integer.MAX_VALUE?calls_svlen[callId]:"NA");
             }
             if (found) {
                 nTypes=(nDel>0?1:0)+(nIns>0?1:0)+(nDup>0?1:0)+(nInv>0?1:0)+(nBnd>0?1:0);
@@ -343,11 +349,9 @@ public class GetCompositeSvsPrime {
     
     
     /**
-     * @param out [start,end], 0-based, inclusive;
-     * @return FALSE iff the call should be skipped because it is not intra-
-     * chromosomal.
+     * @param out [start,end], 0-based, inclusive.
      */
-    private static final boolean getInterval(String[] call, int[] out) {        
+    private static final void getInterval(String[] call, int bndMode, int[] out) {        
         int from, to, pos, svlen, altPos;
         String svtype, altChr;
 
@@ -359,14 +363,19 @@ public class GetCompositeSvsPrime {
         }
         else if (svtype.equals("BND")) {
             altChr=bndGetAltChr(call[4]);
-            if (!altChr.equals(call[0])) return false;
-            altPos=bndGetAltPos(call[4]);
-            if (altPos<pos) {
-                System.err.println("ERROR: BND with altPos<POS: "+altPos+" < "+pos+". Has the BND VCF been canonized?");
-                System.exit(1);
+            if (bndMode==0 && altChr.equals(call[0])) {
+                altPos=bndGetAltPos(call[4]);
+                if (altPos<pos) {
+                    System.err.println("ERROR: BND with altPos<POS: "+altPos+" < "+pos+". Has the BND VCF been canonized?");
+                    System.exit(1);
+                }
+                from=pos-1;  // Zero-based, inclusive.
+                to=altPos-1;  // Zero-based, inclusive.
             }
-            from=pos-1;  // Zero-based, inclusive.
-            to=altPos-1;  // Zero-based, inclusive.
+            else {
+                from=pos-1;  // Zero-based, inclusive.
+                to=pos+1;  // Zero-based, inclusive.
+            }
         }
         else {
             from=pos;  // Zero-based, inclusive.
@@ -374,7 +383,6 @@ public class GetCompositeSvsPrime {
             to=pos+svlen-1;  // Zero-based, inclusive.
         }
         out[0]=from; out[1]=to;
-        return true;
     }
 
 

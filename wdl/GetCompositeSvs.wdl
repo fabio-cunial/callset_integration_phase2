@@ -136,7 +136,7 @@ task Impl {
         EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 2 ))
         
         bcftools index --nrecords ~{cohort_tbi}
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvsPrime ~{cohort_vcf_gz} ~{max_distance} ~{min_calls} ~{min_sv_length} out.bed
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_GB}G GetCompositeSvsPrime ~{cohort_vcf_gz} 0 ~{max_distance} ~{min_calls} ~{min_sv_length} out.bed
 
         # Sorting by: nCalls > nTypes > maxLength
         ${TIME_COMMAND} sort -k4,4nr -k5,5nr -k11,11nr out.bed > out_sorted.bed
