@@ -705,4 +705,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetOverlappingSvsUltralongAndMain.wdl
   testParameterFiles:
+- name: GetCompositeSvsBndUltralong
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetCompositeSvsBndUltralong.wdl
+  testParameterFiles:
 

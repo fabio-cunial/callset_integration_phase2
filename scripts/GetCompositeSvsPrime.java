@@ -370,7 +370,7 @@ public class GetCompositeSvsPrime {
         }
         else {
             from=pos;  // Zero-based, inclusive.
-            svlen=Integer.parseInt(getInfoField(call[7],"SVLEN"));
+            svlen=Math.abs(Integer.parseInt(getInfoField(call[7],"SVLEN")));
             to=pos+svlen-1;  // Zero-based, inclusive.
         }
         out[0]=from; out[1]=to;
