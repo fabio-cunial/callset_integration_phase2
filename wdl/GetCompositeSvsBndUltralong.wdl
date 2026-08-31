@@ -44,8 +44,8 @@ workflow GetCompositeSvsBndUltralong {
 # Creates a symmetrized duplicate of every BND record in the BND VCF and merges
 # it with the ultralong VCF.
 #
-# COMMAND           CPU     RAM     TIME
-# bcftools concat   
+# COMMAND               CPU     RAM     TIME
+# bcftools concat       200%    50M     30s
 #
 task Concat {
     input {
@@ -54,8 +54,8 @@ task Concat {
         File ultralong_csi
         
         String docker_image
-        Int n_cpu = 4
-        Int ram_size_gb = 8
+        Int n_cpu = 2
+        Int ram_size_gb = 4
     }
     parameter_meta {
     }
@@ -100,7 +100,7 @@ task Concat {
 
 
 # COMMAND                       CPU     RAM     TIME
-# GetCompositeSvsPrime   
+# GetCompositeSvsPrime          100%    6G      1m
 #
 task Impl {
     input {
@@ -112,7 +112,7 @@ task Impl {
         Int max_distance
 
         String docker_image
-        Int n_cpu = 2
+        Int n_cpu = 1
         Int ram_size_gb = 8
     }
     parameter_meta {
