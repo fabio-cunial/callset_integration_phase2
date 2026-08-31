@@ -710,4 +710,10 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetCompositeSvsBndUltralong.wdl
   testParameterFiles:
+- name: GetCompositeSvsBnd
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/GetCompositeSvsBnd.wdl
+  testParameterFiles:
+
 

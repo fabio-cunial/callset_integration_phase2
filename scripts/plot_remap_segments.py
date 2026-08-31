@@ -118,6 +118,15 @@ SOURCE_THRESHOLD_FRACTION = 0.3
 # Default cuts of the tree into flat clusters, one per metric.
 EDIT_THRESHOLD = 0.30
 PROFILE_THRESHOLD = 0.12
+# The two orientations, wherever they are drawn as two series. Checked for
+# colorblind separation against each other and for contrast against white.
+FORWARD_COLOR = "#2a78d6"
+REVERSE_COLOR = "#eb6834"
+# Range of the inset of the panel of the lengths of the alignments, in bp. The
+# panel itself spans the whole range, where a handful of very long alignments
+# compress everything else into the leftmost bins; the inset is that left part,
+# re-binned over its own range.
+INSET_MAX_LENGTH = 10000
 
 
 TIMINGS = []
@@ -1490,18 +1499,122 @@ def draw_length_heatmap(figure, ax, lengths, counts, cap, bins, max_length):
     figure.colorbar(image, ax=ax, label="Calls", shrink=0.85)
 
 
+def alignment_alt_lengths(records):
+    """
+    Length in ALT of every alignment of every record, one entry per alignment
+    rather than one per call: the other panels say how ALT is partitioned, this
+    one says how long the pieces of the partition are. Returns the lengths of
+    the forward alignments and those of the reverse-complemented ones,
+    separately.
+    """
+    out = {"+": [], "-": []}
+    for record in records:
+        for segment in record["segments"]:
+            out.setdefault(segment[3], []).append(segment[5] - segment[4] + 1)
+    return (
+        np.array(out["+"], dtype=np.float64),
+        np.array(out["-"], dtype=np.float64),
+    )
+
+
+def step_histograms(ax, forward_lengths, reverse_lengths, edges, linewidth):
+    """
+    The two orientations as two outlines over the same bins, so that their
+    heights can be compared bin by bin. Outlines rather than filled bars: two
+    translucent fills would overlap into a third color that reads as a third
+    series.
+    """
+    for lengths, color, label in (
+        (forward_lengths, FORWARD_COLOR, "FWD"),
+        (reverse_lengths, REVERSE_COLOR, "RC"),
+    ):
+        if lengths.size == 0:  # No entry in the legend for an empty series.
+            continue
+        ax.hist(
+            lengths,
+            bins=edges,
+            histtype="step",
+            linewidth=linewidth,
+            color=color,
+            label=label,
+        )
+
+
+def draw_alignment_length_histogram(ax, forward_lengths, reverse_lengths, bins):
+    """
+    Distribution of the length in ALT of a single alignment, one histogram per
+    orientation. The lengths are binned linearly; only the counts are on a log
+    axis, since the bulk would otherwise hide the whole tail.
+
+    An inset repeats the two histograms over [0,INSET_MAX_LENGTH], with the
+    same number of bins over that shorter range: on the full range a few very
+    long alignments stretch the axis and squeeze the bulk of the distribution
+    into its first bins.
+    """
+    both = np.concatenate([forward_lengths, reverse_lengths])
+    if both.size == 0:
+        ax.set_axis_off()
+        return
+    low, high = float(both.min()), float(both.max())
+    if high - low < 1e-9:  # Every alignment of the same length.
+        low, high = low - 0.5, high + 0.5
+    step_histograms(ax, forward_lengths, reverse_lengths, np.linspace(low, high, bins + 1), 1.4)
+    ax.set_yscale("log")
+    ax.set_xlabel("ALT length of an alignment (bp)")
+    ax.set_ylabel("Alignments (log scale)")
+    ax.set_xlim(low, high)
+    # The legend moves out of the way of the inset, into the corner that the
+    # decay of the distribution leaves empty.
+    ax.legend(frameon=False, fontsize=8, loc="lower left")
+    bare_axes(ax)
+
+    # Flush with the top-right corner of the panel: width and height first,
+    # then the origin that puts the far corner at (1,1).
+    width, height = 0.58, 0.55
+    inset = ax.inset_axes([1.0 - width, 1.0 - height, width, height])
+    step_histograms(
+        inset,
+        forward_lengths,
+        reverse_lengths,
+        np.linspace(0.0, float(INSET_MAX_LENGTH), bins + 1),
+        1.0,
+    )
+    inset.set_yscale("log")
+    inset.set_xlim(0.0, float(INSET_MAX_LENGTH))
+    # The caption goes inside: a title would sit above the top spine, outside
+    # the panel that the inset is flush with.
+    inset.text(
+        0.02,
+        0.97,
+        "0-%d bp, %d bins" % (INSET_MAX_LENGTH, bins),
+        transform=inset.transAxes,
+        ha="left",
+        va="top",
+        fontsize=7,
+    )
+    inset.tick_params(labelsize=6)
+    # An opaque, fully framed box: without it the curves of the inset and
+    # those of the panel underneath read as one tangle.
+    inset.set_facecolor("white")
+    for side in ("top", "right", "bottom", "left"):
+        inset.spines[side].set_visible(True)
+        inset.spines[side].set_color("0.6")
+        inset.spines[side].set_linewidth(0.8)
+
+
 def draw_summary(path, records, args):
     """
-    Five marginal summaries of the whole cohort, in one figure: how much of
+    Six marginal summaries of the whole cohort, in one figure: how much of
     ALT the alignments cover, the number of alignments per orientation, the
     fraction of ALT covered per orientation, the number of alignments against
-    ALT length, and how much of ALT is inverted by length rather than by
-    count.
+    ALT length, how much of ALT is inverted by length rather than by count,
+    and the ALT length of a single alignment, per orientation.
     """
     fractions = np.array([covered_fraction(record) for record in records])
     inverted = np.array([reverse_fraction(record) for record in records])
     lengths = np.array([record["alt_length"] for record in records])
     covered = np.array([orientation_fractions(record) for record in records])
+    forward_lengths, reverse_lengths = alignment_alt_lengths(records)
     forward, reverse = orientation_counts(records)
     counts = forward + reverse
 
@@ -1519,8 +1632,6 @@ def draw_summary(path, records, args):
         dpi=args.dpi,
         layout="constrained",
     )
-    axes[2, 1].set_axis_off()  # Five panels in six slots.
-
     axes[0, 0].hist(fractions, bins=args.summary_bins, range=(0.0, 1.0), color="0.35")
     axes[0, 0].set_yscale("log")  # The bulk would otherwise hide the whole tail.
     axes[0, 0].set_xlabel("Fraction of ALT covered by alignments")
@@ -1545,15 +1656,41 @@ def draw_summary(path, records, args):
     axes[2, 0].set_xlim(0.0, 1.0)
     bare_axes(axes[2, 0])
 
+    draw_alignment_length_histogram(
+        axes[2, 1], forward_lengths, reverse_lengths, args.summary_bins
+    )
+
     figure.savefig(path, dpi=args.dpi, bbox_inches="tight")
     plt.close(figure)
     report_summary(
-        records, fractions, inverted, lengths, logs, forward, reverse, counts, covered, path
+        records,
+        fractions,
+        inverted,
+        lengths,
+        logs,
+        forward,
+        reverse,
+        counts,
+        covered,
+        forward_lengths,
+        reverse_lengths,
+        path,
     )
 
 
 def report_summary(
-    records, fractions, inverted, lengths, logs, forward, reverse, counts, covered, path
+    records,
+    fractions,
+    inverted,
+    lengths,
+    logs,
+    forward,
+    reverse,
+    counts,
+    covered,
+    forward_lengths,
+    reverse_lengths,
+    path,
 ):
     """
     The headline numbers behind the four panels.
@@ -1618,6 +1755,24 @@ def report_summary(
         ),
         file=sys.stderr,
     )
+    for lengths_of_strand, name in ((forward_lengths, "FWD"), (reverse_lengths, "RC")):
+        if lengths_of_strand.size == 0:
+            continue
+        print(
+            "  %d %s alignments, ALT length median %d bp, mean %.1f bp, min %d, max %d; "
+            "shorter than 50 bp %.1f%%, longer than 1 kbp %.1f%%"
+            % (
+                lengths_of_strand.size,
+                name,
+                np.median(lengths_of_strand),
+                lengths_of_strand.mean(),
+                lengths_of_strand.min(),
+                lengths_of_strand.max(),
+                100 * (lengths_of_strand < 50).mean(),
+                100 * (lengths_of_strand > 1000).mean(),
+            ),
+            file=sys.stderr,
+        )
     print("Saved the summary of %d calls to %s" % (total, path), file=sys.stderr)
 
 
@@ -1732,11 +1887,12 @@ def main():
         "--summary",
         default=None,
         metavar="FILE",
-        help="Also writes to FILE a figure with five marginal summaries of the cohort: the "
+        help="Also writes to FILE a figure with six marginal summaries of the cohort: the "
         "fraction of ALT covered by alignments, a heatmap of the number of forward against "
         "reverse-complement alignments, a heatmap of the fraction of ALT that each "
-        "orientation covers, a heatmap of the number of alignments against ALT length, and "
-        "the fraction of ALT that is reverse-complemented, by length.",
+        "orientation covers, a heatmap of the number of alignments against ALT length, "
+        "the fraction of ALT that is reverse-complemented, by length, and the distribution "
+        "of the ALT length of a single alignment, one histogram per orientation.",
     )
     parser.add_argument(
         "--source",
