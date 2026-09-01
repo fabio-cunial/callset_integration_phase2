@@ -33,9 +33,12 @@ workflow SubsetVcfToGivenSamples {
 }
 
 
-# TASK                                  CPU%       RAM     TIME
-# bcftools view --samples-file
-# bcftools +fill-tags
+# Performance on the main VCF (13GB) on a 4-cores HDD:
+#
+# TASK                                      CPU%       RAM     TIME
+# bcftools view --samples-file              200%       500M    1h40m
+# bcftools +fill-tags | bcftools view                          1h
+# bcftools index                            130%       30M     15m
 #
 task Impl {
     input {
@@ -63,8 +66,7 @@ task Impl {
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
 
         # Subsetting
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file ~{samples_file} --output-type b ~{input_bcf} --output subset_to_samples_step1.bcf
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} subset_to_samples_step1.bcf
+        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --samples-file ~{samples_file} --output-type b1 --write-index=csi ~{input_bcf} --output subset_to_samples_step1.bcf
         date 1>&2
         bcftools +fill-tags --threads ${N_THREADS} --output-type u subset_to_samples_step1.bcf -- --tags AC | bcftools view --threads ${N_THREADS} --min-ac 1 --output-type b --output subset_to_samples_step2.bcf
         date 1>&2
@@ -87,7 +89,7 @@ task Impl {
         docker: docker_image
         cpu: n_cpu
         memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
+        disks: "local-disk " + disk_size_gb + " SSD"
         preemptible: 0
     }
 }
