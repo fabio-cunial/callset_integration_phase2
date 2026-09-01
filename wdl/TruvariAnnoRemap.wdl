@@ -9,7 +9,7 @@ workflow TruvariAnnoRemap {
         File ref_fa
         File ref_fai
 
-        Float cov_threshold
+        Float cov_threshold = 0.8
 
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
@@ -32,6 +32,8 @@ workflow TruvariAnnoRemap {
 # TOOL                                                CPU     RAM     TIME
 # truvari anno remap                                  300%    20G     15m
 #
+# Remark: the reference index should be computed only once and provided as 
+# input.
 # Remark: RAM can reach >64GB in some cases.
 #
 task Impl {
@@ -45,9 +47,9 @@ task Impl {
         Float cov_threshold
 
         String docker_image
-        Int n_cpu = 8
+        Int n_cpu = 4
         Int mem_gb = 32
-        Int preemptible_number = 0
+        Int preemptible_number = 2
     }
 
     Int disk_size_gb = 10*( ceil(size(chunk_vcf_gz,"GB")) )
