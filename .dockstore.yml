@@ -725,5 +725,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/UltralongCreateRemapChunks.wdl
   testParameterFiles:
-
+- name: TruvariAnnoRemap 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/TruvariAnnoRemap.wdl
+  testParameterFiles:
 

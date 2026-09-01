@@ -28,8 +28,9 @@ workflow UltralongCreateRemapChunks {
 }
 
 
-# COMMAND                       CPU     RAM     TIME
-#   
+# COMMAND                               CPU     RAM     TIME
+# bcftools view --drop-genotypes        170%    50M     7s
+# chunk creation                                        8s     
 #
 task Impl {
     input {
