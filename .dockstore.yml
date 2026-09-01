@@ -720,4 +720,10 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SubsetVcfToGivenSamples.wdl
   testParameterFiles:
+- name: UltralongCreateRemapChunks 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/UltralongCreateRemapChunks.wdl
+  testParameterFiles:
+
 
