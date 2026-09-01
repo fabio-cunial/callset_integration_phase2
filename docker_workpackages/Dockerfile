@@ -157,6 +157,7 @@ RUN wget https://github.com/TimD1/vcfdist/archive/refs/tags/v${vcfdist_version}.
     && vcfdist --help
 
 # AD HOC SCRIPTS
+RUN pip install matplotlib
 COPY *.java .
 RUN javac *.java
-COPY *.r .
+COPY *.r *.py .
