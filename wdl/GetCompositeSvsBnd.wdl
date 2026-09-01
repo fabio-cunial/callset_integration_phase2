@@ -10,7 +10,7 @@ workflow GetCompositeSvsBnd {
 
         Int cluster_max_distance = 10000
         Int circos_max_distance = 1000
-        Int circos_top_n_samples = 5
+        Int circos_top_n_samples = 10
 
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }

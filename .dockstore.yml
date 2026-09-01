@@ -715,5 +715,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/GetCompositeSvsBnd.wdl
   testParameterFiles:
-
+- name: SubsetVcfToGivenSamples
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SubsetVcfToGivenSamples.wdl
+  testParameterFiles:
 
