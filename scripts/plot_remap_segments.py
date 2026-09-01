@@ -46,6 +46,14 @@ and differ in length by orders of magnitude. Two measures are available:
       Mean per-bin disagreement between the two rows, rasterized along ALT.
       See `record_profiles()` and `profile_distance_matrix()`.
 
+`--sequences` is a different picture of the same data, one point per alignment
+instead of one point per call: the piece of ALT that every alignment explains
+is taken as a sequence (from the INS_ALT annotation, when the ALT column is
+symbolic), alignments that cover approximately the same interval of the
+reference are collapsed into one representative, and the representatives are
+projected to 2D by MDS on their pairwise edit distances. See
+`alignment_sequences()`, `collapse_alignments()` and `draw_sequences()`.
+
 Usage:
     python plot_remap_segments.py <input_dir> [-o out.png]
 """
@@ -118,6 +126,17 @@ SOURCE_THRESHOLD_FRACTION = 0.3
 # Default cuts of the tree into flat clusters, one per metric.
 EDIT_THRESHOLD = 0.30
 PROFILE_THRESHOLD = 0.12
+# Where the tree of --sequences is cut into flat clusters, one per metric. On
+# the normalized edit distance the cut reads as a fraction of the longer
+# sequence; on containment, as a fraction of the k-mers of the shorter one; on
+# Jaccard, as a fraction of their union, which is why it has to sit higher.
+SEQUENCE_THRESHOLD = 0.25
+CONTAINMENT_THRESHOLD = 0.5
+JACCARD_THRESHOLD = 0.8
+# Under the default --seq-norm unit, two sequences sharing no k-mer are
+# orthogonal and sit at exactly sqrt(2)/2 = 0.707, so the cut has to be just
+# below that: the measure separates the related from the unrelated by little.
+COMPOSITION_THRESHOLD = 0.65
 # The two orientations, wherever they are drawn as two series. Checked for
 # colorblind separation against each other and for contrast against white.
 FORWARD_COLOR = "#2a78d6"
@@ -194,9 +213,11 @@ def parse_segments(segments):
     return out
 
 
-def load_records(path):
+def load_records(path, keep_alt=False):
     """
     Returns a list of dictionaries, one per INS record with remap annotations.
+    The inserted sequence itself is kept only when `keep_alt` is set: it is the
+    bulkiest field of a record by far, and only `--sequences` needs it.
     """
     out = []
     with open_vcf(path) as vcf:
@@ -217,15 +238,18 @@ def load_records(path):
                 continue
             if not segments:
                 continue
-            # The ALT sequence length, used to normalize every track to the same
-            # width. Falls back to the rightmost aligned ALT position for
-            # symbolic ALTs.
+            # The inserted sequence: the ALT column, or the INS_ALT annotation
+            # when the ALT column is symbolic, which is where the callers that
+            # keep the record small put the sequence.
             alt = tokens[4]
-            if SEQUENCE_RE.match(alt) is not None:
-                alt_length = len(alt)
-            else:
-                alt_length = max(segment[5] for segment in segments)
-            alt_length = max(alt_length, max(segment[5] for segment in segments))
+            if SEQUENCE_RE.match(alt) is None:
+                alt = info.get("INS_ALT", "")
+                if SEQUENCE_RE.match(alt) is None:
+                    alt = ""
+            # The length of that sequence normalizes every track to the same
+            # width. With neither ALT nor INS_ALT it falls back to the
+            # rightmost aligned ALT position.
+            alt_length = max(len(alt), max(segment[5] for segment in segments))
             out.append(
                 {
                     "file": os.path.basename(path),
@@ -236,6 +260,7 @@ def load_records(path):
                     "ori": info.get("remap_ori", ""),
                     "segments": segments,
                     "alt_length": alt_length,
+                    "alt": alt if keep_alt else None,
                 }
             )
     return out
@@ -677,12 +702,16 @@ def condensed_distances(distances):
     return out
 
 
-def cluster_records(distances, args, wants_order=True):
+def cluster_records(distances, args, wants_order=True, threshold=None):
     """
     Returns (order,labels,tree): the row order to draw, the flat cluster label
-    of every record, and the tree these come from.
+    of every record, and the tree these come from. `threshold` overrides
+    `--cluster-threshold`, for the callers whose distance is not the one that
+    option is expressed in.
     """
     n = distances.shape[0]
+    if threshold is None:
+        threshold = args.cluster_threshold
     # The leaf ordering only decides the order of the rows of an image, so
     # there is nothing to gain from it when no image needs it. It is cubic and
     # single-threaded, and dominates everything else past a few thousand keys,
@@ -704,15 +733,13 @@ def cluster_records(distances, args, wants_order=True):
         if args.n_clusters > 0:
             labels = fcluster(tree, min(args.n_clusters, n), criterion="maxclust")
         else:
-            labels = fcluster(tree, args.cluster_threshold, criterion="distance")
+            labels = fcluster(tree, threshold, criterion="distance")
     else:
         tree = average_linkage(distances)
         order = greedy_leaf_order(tree, distances)
         if args.n_clusters > 0:
             k = min(args.n_clusters, n)
             threshold = tree[n - 1 - k, 2] if k < n else -1.0
-        else:
-            threshold = args.cluster_threshold
         labels = cut_tree(tree, threshold)
     # Relabels clusters top to bottom, so that colors run in drawing order.
     remap, out = {}, np.zeros(n, dtype=int)
@@ -1788,7 +1815,14 @@ def report_timings():
 def draw_scatter(path, coordinates, counts, labels, palette, clustered, args, pairs=((0, 1),)):
     """
     Writes the projection: one point per distinct key, colored by flat
-    cluster, with an area proportional to the number of records it stands for.
+    cluster, with an area proportional to the SQUARE ROOT of the number of
+    records it stands for, so its diameter grows as the fourth root of that
+    number. The scale is deliberately compressed - a hundredfold key is drawn
+    three times wider, not ten - which keeps a handful of very deep keys from
+    swamping the figure, at the cost of the eye under-reading them. Use
+    `counts` in place of `np.sqrt(counts)` below for an area that is
+    proportional to the count itself.
+
     One panel per pair of axes of `pairs`, side by side in one figure.
     """
     figure, axes = plt.subplots(
@@ -1823,6 +1857,607 @@ def draw_scatter(path, coordinates, counts, labels, palette, clustered, args, pa
     figure.savefig(path, dpi=args.dpi, bbox_inches="tight")
     plt.close(figure)
     print("Saved %d points to %s" % (len(counts), path), file=sys.stderr)
+
+
+# -------------------------- Alignment sequences -----------------------------
+
+COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
+
+# Two bits per base, for the k-mers of `kmer_codes()`. Everything that is not
+# an unambiguous base maps to KMER_INVALID, and the windows that contain one
+# are dropped.
+KMER_INVALID = 255
+KMER_LOOKUP = np.full(256, KMER_INVALID, dtype=np.uint8)
+for _code, _base in enumerate("ACGT"):
+    KMER_LOOKUP[ord(_base)] = _code
+    KMER_LOOKUP[ord(_base.lower())] = _code
+
+
+def reverse_complement(sequence):
+    return sequence.translate(COMPLEMENT)[::-1]
+
+
+def alignment_sequences(records, min_length):
+    """
+    The piece of ALT that every alignment of every record explains, as a
+    sequence. An alignment covers `q<qstart>-<qend>` of ALT, so the sequence is
+    that substring; reverse-complemented alignments are flipped, so that every
+    sequence is written in the orientation of the reference and two alignments
+    of the same locus in opposite orientations compare as the same sequence
+    rather than as two unrelated ones.
+
+    Records with a symbolic ALT and no INS_ALT annotation have no sequence to
+    cut, and alignments shorter than `min_length` are dropped: the normalized
+    edit distance between two very short strings is dominated by a handful of
+    bases.
+
+    The result is one flat list over the whole cohort, not one list per record:
+    the alignments of every call are pooled, so that `collapse_alignments()`
+    can group the ones that hit the same interval of the reference wherever
+    they come from. `chrom` is the chromosome of the alignment, which remap is
+    free to place away from the call's own.
+
+    Returns (alignments,missing,short): a list of dictionaries with the index
+    of the call the alignment comes from, the reference interval, the
+    orientation and the sequence, plus the number of records and of alignments
+    that were left out.
+    """
+    out, missing, short = [], 0, 0
+    for index, record in enumerate(records):
+        alt = record.get("alt")
+        if not alt:
+            missing += 1
+            continue
+        for chrom, ref_start, ref_end, ori, alt_start, alt_end in record["segments"]:
+            sequence = alt[alt_start - 1 : alt_end]
+            if len(sequence) < min_length:
+                short += 1
+                continue
+            out.append(
+                {
+                    "record": index,
+                    "chrom": chrom,
+                    "ref_start": ref_start,
+                    "ref_end": ref_end,
+                    "ori": ori,
+                    "sequence": reverse_complement(sequence) if ori == "-" else sequence,
+                }
+            )
+    return out, missing, short
+
+
+def collapse_alignments(alignments, min_overlap):
+    """
+    Groups the alignments that cover approximately the same interval of the
+    reference. Two intervals belong together when the length of their
+    intersection is at least `min_overlap` times the length of the longer one,
+    which is the same as asking that each of the two be covered by that
+    fraction of itself.
+
+    Greedy leader clustering over the alignments sorted by reference position:
+    every alignment joins the open group whose interval it overlaps the most,
+    and opens a new group when no open group qualifies. A group keeps the
+    interval of the alignment that opened it, so that the target does not drift
+    as members join, and a group whose interval ends before the current
+    alignment starts can no longer be reached and is closed. The cost is
+    therefore linear in the number of alignments, times the number of groups
+    open at one position, instead of quadratic as a full clustering of the
+    intervals would be.
+
+    The whole cohort is sorted and grouped at once, and the call an alignment
+    comes from plays no part in any of it: a group is a set of alignments of
+    one interval of the reference, drawn from as many calls as happen to hit
+    it, which is exactly what makes one point of the figure stand for a
+    sequence that the cohort repeats rather than for a call.
+
+    Returns a list of groups, each a list of indices into `alignments`.
+    """
+    order = sorted(
+        range(len(alignments)),
+        key=lambda index: (
+            alignments[index]["chrom"],
+            alignments[index]["ref_start"],
+            alignments[index]["ref_end"],
+        ),
+    )
+    groups, starts, ends = [], [], []
+    chrom, open_groups = None, []
+    for index in order:
+        alignment = alignments[index]
+        if alignment["chrom"] != chrom:  # Groups never span two chromosomes.
+            chrom, open_groups = alignment["chrom"], []
+        start, end = alignment["ref_start"], alignment["ref_end"]
+        open_groups = [group for group in open_groups if ends[group] > start]
+        best, best_overlap = None, min_overlap
+        for group in open_groups:
+            intersection = min(ends[group], end) - max(starts[group], start)
+            longer = max(ends[group] - starts[group], end - start, 1)
+            overlap = intersection / longer
+            if overlap >= best_overlap:
+                best, best_overlap = group, overlap
+        if best is None:
+            groups.append([index])
+            starts.append(start)
+            ends.append(end)
+            open_groups.append(len(groups) - 1)
+        else:
+            groups[best].append(index)
+    return groups
+
+
+def group_representative(group, alignments):
+    """
+    The member of a group whose sequence has the median length: the group is a
+    set of alignments of the same interval of the reference, so its members
+    differ mostly by how far their breakpoints wander, and the median avoids
+    standing for all of them with one of the two extremes.
+    """
+    ordered = sorted(group, key=lambda index: len(alignments[index]["sequence"]))
+    return ordered[len(ordered) // 2]
+
+
+def kmer_counts(sequence, k):
+    """
+    The distinct k-mers of one sequence and how many times each occurs, as
+    (codes,counts) with the codes sorted. A k-mer is packed into a uint64 as
+    two bits per base. Windows containing anything other than an A, C, G or T
+    are dropped. k-mers are not canonicalized: the sequences reach here already
+    written in the orientation of the reference, by `alignment_sequences()`.
+
+    Fits k up to 31, which is the whole useful range: a k-mer has to be short
+    enough to survive the divergence between two copies of a repeat, and 31 is
+    already far past that.
+    """
+    codes = np.frombuffer(sequence.encode(), dtype=np.uint8)
+    values = KMER_LOOKUP[codes]
+    valid = values != KMER_INVALID
+    windows = len(values) - k + 1
+    if windows <= 0:
+        return np.empty(0, dtype=np.uint64), np.empty(0, dtype=np.int64)
+    values = np.where(valid, values, 0).astype(np.uint64)
+    out = np.zeros(windows, dtype=np.uint64)
+    inside = np.ones(windows, dtype=bool)
+    for offset in range(k):  # k passes over the sequence, each vectorized.
+        out = (out << np.uint64(2)) | values[offset : offset + windows]
+        inside &= valid[offset : offset + windows]
+    return np.unique(out[inside], return_counts=True)
+
+
+def composition_scale(values, sizes, norm):
+    """
+    Rescales the k-mer counts of every sequence in place, for
+    `kmer_distance_matrix()` with measure="composition". `values` is the
+    concatenation of the counts of every sequence, `sizes` how many entries
+    each one owns.
+
+      norm="unit"       counts / their Euclidean norm, so that the vectors lie
+                        on the unit sphere and the Euclidean distance becomes
+                        a monotone function of the cosine between them. Two
+                        sequences that share no k-mer are orthogonal, so they
+                        are at sqrt(2) whatever their lengths: the scale of the
+                        distance means the same thing everywhere.
+      norm="frequency"  counts / (number of k-mers of the sequence), the usual
+                        composition vector: the entries are the probability of
+                        each k-mer. The entries no longer grow with the length,
+                        but the norm of the vector shrinks with it - a sequence
+                        of L distinct k-mers has squared norm 1/L - so two
+                        unrelated long sequences come out several times closer
+                        than two unrelated short ones, and read as a cluster of
+                        the long ones. This is why "unit" is the default.
+      norm="none"       the raw counts.
+
+    Returns the squared norm of every row, which is what the Gram-matrix form
+    of the Euclidean distance needs.
+    """
+    squared = np.add.reduceat(values ** 2, np.concatenate([[0], np.cumsum(sizes)[:-1]]))
+    squared[sizes == 0] = 0.0  # reduceat repeats the previous group when empty.
+    if norm == "none":
+        return squared
+    if norm == "unit":
+        divisor = np.sqrt(squared)
+    else:
+        totals = np.add.reduceat(values, np.concatenate([[0], np.cumsum(sizes)[:-1]]))
+        totals[sizes == 0] = 0.0
+        divisor = totals
+    divisor = np.maximum(divisor, 1e-12)
+    values /= np.repeat(divisor, sizes)
+    return squared / divisor ** 2
+
+
+def kmer_distance_matrix(sequences, k, threads, measure, norm="frequency"):
+    """
+    Matrix of the distances between the k-mer profiles of `sequences`. K(X) is
+    the set of the distinct k-mers of X, and c(X) the vector that holds, for
+    every k-mer, how many times it occurs in X. Three ways of comparing them:
+
+      measure="containment"
+          d(A,B) = 1 - |K(A) & K(B)| / min(|K(A)|,|K(B)|)
+
+          Dividing by the smaller of the two sets is what makes the measure see
+          a partial copy: a 300 bp piece of a repeat is contained in a 3000 bp
+          piece of the same repeat, so the two are close, where the edit
+          distance has to align them end to end and charges the 2700 bases of
+          difference in length.
+
+      measure="jaccard"
+          d(A,B) = 1 - |K(A) & K(B)| / |K(A) | K(B)|
+
+          The union puts the difference in length back into the denominator: a
+          short piece inside a long one has Jaccard at most |K(A)|/|K(B)|, so
+          two pieces of one repeat that differ tenfold in length are at
+          distance 0.9 however perfectly one sits inside the other.
+
+      measure="composition"
+          d(A,B) = || c(A) - c(B) ||, over the k-mers of both
+
+          The Euclidean distance between the two count vectors, one dimension
+          per distinct k-mer, rescaled by `norm` first.
+
+          `norm` is not a detail here, it decides what the measure is about.
+          With "none" the entries of c(X) sum to the number of k-mers of X, so
+          the distance grows like the square root of the longer sequence and
+          the length gradient comes back in full. "frequency" and "unit" divide
+          that out, but they divide out the copy number with it: a tandem array
+          of twenty copies and one of four copies have exactly the same k-mer
+          distribution, so they are at distance 0 once normalized, and only the
+          raw counts tell them apart. Length and copy number are the same
+          signal, and no choice of `norm` keeps one without the other. See
+          `composition_scale()`.
+
+    Containment is not a metric: a short sequence can be contained in two long
+    ones that share nothing, so the triangle inequality can fail, and classical
+    MDS answers with negative eigenvalues, which `explained_variance()` already
+    discounts. Jaccard and composition are proper metrics.
+
+    A sequence shorter than k has no k-mer at all. Under containment and
+    jaccard it is put at distance 1 from everything, and counted on stderr;
+    under composition its vector is the origin, which is already the right
+    answer and is left alone.
+
+    Every sequence is a row of one sparse matrix over the k-mers that occur
+    anywhere, so every inner product is one sparse product, computed by blocks
+    of rows to bound the memory. Only what is done with the inner products
+    differs between the three measures.
+    """
+    try:
+        from scipy.sparse import csr_matrix
+    except ImportError:
+        sys.exit("--seq-metric %s needs scipy: pip install scipy" % measure)
+    if not 1 <= k <= 31:
+        sys.exit("--seq-k must be between 1 and 31, got %d" % k)
+
+    per_sequence = [kmer_counts(sequence, k) for sequence in sequences]
+    sizes = np.array([len(codes) for codes, _ in per_sequence], dtype=np.int64)
+    empty = sizes == 0
+    if empty.any():
+        print(
+            "  %d sequence(s) are shorter than k=%d and have no k-mer: %s (lower --seq-k, "
+            "or raise --min-seq-length)"
+            % (
+                int(empty.sum()),
+                k,
+                "their vector is the origin"
+                if measure == "composition"
+                else "they are put at distance 1 from everything",
+            ),
+            file=sys.stderr,
+        )
+    # One column per k-mer that occurs anywhere, so that a row is the profile
+    # of its sequence over that shared set of columns.
+    every = (
+        np.concatenate([codes for codes, _ in per_sequence])
+        if len(per_sequence)
+        else np.empty(0, np.uint64)
+    )
+    columns = np.unique(every)
+    indices = np.searchsorted(columns, every)
+    indptr = np.concatenate([[0], np.cumsum(sizes)])
+    if measure == "composition":
+        values = np.concatenate(
+            [counts for _, counts in per_sequence]
+            if len(per_sequence)
+            else [np.empty(0, np.int64)]
+        ).astype(np.float32)
+        norms = composition_scale(values, sizes, norm)
+    else:  # Only the sets matter: every entry is an indicator.
+        values = np.ones(len(indices), dtype=np.float32)
+        norms = None
+    matrix = csr_matrix(
+        (values, indices, indptr), shape=(len(sequences), len(columns))
+    )
+    print(
+        "  %d distinct %d-mers over %d sequences, %d nonzeros%s"
+        % (
+            len(columns),
+            k,
+            len(sequences),
+            len(indices),
+            ", %s-normalized counts" % norm if measure == "composition" else "",
+        ),
+        file=sys.stderr,
+    )
+
+    n = len(sequences)
+    transposed = matrix.T.tocsc()
+    counts = np.maximum(sizes, 1).astype(np.float32)
+    bounded = measure != "composition" or norm != "none"
+    # Largest distance the measure can reach, so that the result stays in [0,1]
+    # and --seq-threshold means the same kind of thing everywhere. Unit vectors
+    # are at most 2 apart, frequency vectors (which sum to 1) at most sqrt(2),
+    # and raw counts have no bound at all.
+    ceiling = {"unit": 2.0, "frequency": np.sqrt(2.0)}.get(norm, 1.0)
+    out = np.empty((n, n), dtype=np.float32)
+
+    def work(start, stop):
+        block = (matrix[start:stop] @ transposed).toarray()
+        if measure == "composition":  # ||a-b||^2 = ||a||^2 + ||b||^2 - 2 a.b
+            block *= -2.0
+            block += norms[start:stop, None]
+            block += norms[None, :]
+            np.maximum(block, 0.0, out=block)
+            np.sqrt(block, out=block)
+            if bounded:
+                block /= ceiling
+            out[start:stop] = block
+            return
+        if measure == "jaccard":  # |A|+|B|-|A&B| is |A|B|, by inclusion-exclusion.
+            denominator = counts[start:stop, None] + counts[None, :] - block
+        else:
+            denominator = np.minimum(counts[start:stop, None], counts[None, :])
+        block /= np.maximum(denominator, 1.0)
+        out[start:stop] = 1.0 - block
+
+    parallel_chunks(n, KEY_CHUNK, work, threads)
+    if empty.any() and measure != "composition":  # No k-mer, no evidence of anything shared.
+        out[empty, :] = 1.0
+        out[:, empty] = 1.0
+    out = (out + out.T) / 2  # Guards against asymmetry from rounding.
+    if bounded:
+        np.clip(out, 0.0, 1.0, out=out)
+    np.fill_diagonal(out, 0.0)
+    return out
+
+
+def sequence_distance_matrix(sequences, threads, cutoff):
+    """
+    Matrix of the edit distances between every pair of `sequences`, each
+    divided by the length of the longer of the two, so that the result lies in
+    [0,1] and does not grow with the length of the sequences.
+
+    rapidfuzz runs the bit-parallel Myers algorithm in C++, on `threads`
+    threads, over the whole matrix at once. There is no fallback: on sequences
+    of hundreds or thousands of bases the pure-python dynamic program of
+    `edit_distance()` is several orders of magnitude too slow.
+
+    With `cutoff` in (0,1], a pair whose normalized distance exceeds it is not
+    computed exactly and is reported as 1. This is what makes long sequences
+    affordable, since the algorithm can then restrict itself to a band, but it
+    also flattens every large distance to the same value: use it when the
+    structure of interest is local, and leave it off to keep the matrix exact.
+    """
+    if not HAS_RAPIDFUZZ:
+        sys.exit("--sequences needs rapidfuzz: pip install rapidfuzz")
+    options = {"score_cutoff": cutoff} if cutoff > 0 else {}
+    return rapidfuzz_process.cdist(
+        sequences,
+        sequences,
+        scorer=rapidfuzz_levenshtein.normalized_distance,
+        dtype=np.float32,
+        workers=threads,
+        **options,
+    )
+
+
+def length_gradient_report(distances, lengths, sample):
+    """
+    Warns about the two ways the projection can be a picture of something other
+    than the sequences.
+
+    A gradient of length. The edit distance between two sequences of lengths
+    L1<=L2 is at least L2-L1, and between two unrelated sequences it saturates
+    at roughly half the shorter one on top of that, so once every pair is
+    unrelated the normalized distance is very nearly 1-c*L1/L2: a function of
+    the length ratio alone. That is a one-dimensional quantity, and MDS draws a
+    one-dimensional structure as a single curve, ordered by length, whatever
+    the sequences are. A cloud that is one long arc, together with a
+    correlation here close to -1, is that and not a family of related
+    sequences.
+
+    A saturated matrix. When most pairs share nothing, every one of them sits
+    at exactly the largest distance the measure can reach, and the cloud is a
+    regular simplex: N equidistant points need N-1 dimensions, and 2 can hold
+    only 3 of them. MDS then has no faithful answer and settles for pushing the
+    points outward along a few directions, which is drawn as a star with
+    spokes.
+
+    What survives of such a figure is worth being precise about, because it is
+    not nothing and it is not everything. Which points share a spoke can be
+    exactly right: with three groups in the data, whose centres 2D can place
+    equidistantly, every measure here recovers them. The number of spokes and
+    the position along one cannot be trusted at all: mutually unrelated
+    sequences, with no groups whatsoever, still come out as a four-spoked star,
+    and with six real groups the spokes number eight and mix them. Past three
+    groups, read the clusters, which are computed from the whole matrix, rather
+    than the picture, which is not.
+
+    Estimated on `sample` points at most, since it is quadratic.
+    """
+    n = distances.shape[0]
+    if n < 3:
+        return
+    taken = np.unique(np.linspace(0, n - 1, min(sample, n)).astype(int))
+    reduced = distances[np.ix_(taken, taken)].astype(np.float64)
+    upper = np.triu_indices_from(reduced, k=1)
+    pairs = reduced[upper]
+    sizes = lengths[taken].astype(np.float64)
+    ratio = (np.minimum(sizes[:, None], sizes[None, :])
+             / np.maximum(sizes[:, None], sizes[None, :]))[upper]
+    print(
+        "  distances: median %.3f, %.1f%% above 0.5 (unrelated sequences saturate there)"
+        % (np.median(pairs), 100 * (pairs > 0.5).mean()),
+        file=sys.stderr,
+    )
+    # Everything piled onto the largest value the measure reaches.
+    ceiling = pairs.max()
+    at_ceiling = (pairs > ceiling - 0.01 * max(ceiling, 1e-9)).mean()
+    if at_ceiling > 0.8:
+        print(
+            "  NOTE: %.1f%% of the pairs are at the largest distance the measure reaches "
+            "(%.3f), so they share nothing and the matrix is nearly one constant. Equidistant "
+            "points need one dimension each and 2D holds only 3, so the projection comes out "
+            "as a star: which points share a spoke can still be right, but the NUMBER of "
+            "spokes and the position along one are artifacts (unrelated sequences with no "
+            "groups at all also make a star). Trust the clusters, which use the whole "
+            "matrix, over the figure. Lower --seq-k, or use --seq-metric containment, which "
+            "keeps partial copies off the ceiling."
+            % (100 * at_ceiling, ceiling),
+            file=sys.stderr,
+        )
+    if pairs.std() == 0 or ratio.std() == 0:
+        return
+    correlation = float(np.corrcoef(pairs, ratio)[0, 1])
+    print(
+        "  correlation(distance, length ratio) = %+.3f" % correlation, file=sys.stderr
+    )
+    if correlation < -0.8:
+        print(
+            "  WARNING: the distance is almost a function of the length ratio alone, so the "
+            "representatives share no sequence and the projection is a gradient of length, "
+            "which MDS draws as one long arc. Lower --seq-overlap to pool more alignments "
+            "per point, or restrict the length range with --min-seq-length.",
+            file=sys.stderr,
+        )
+
+
+def draw_sequences(path, records, args, palette):
+    """
+    One point per distinct interval of the reference that the alignments cover,
+    placed by MDS on the distances between the sequences themselves, in the
+    color of its flat cluster and with an area proportional to the square root
+    of the number of alignments it stands for. See `draw_scatter()` for why the
+    area is on that scale and not on the count itself.
+
+    Where the tracks and `--source` compare the architecture of the calls, this
+    compares the sequence they insert: two points that coincide are two pieces
+    of ALT that are the same sequence, wherever in the cohort, and a cluster is
+    a family of variants of one inserted sequence.
+    """
+    threads = thread_count(args.threads)
+    alignments, missing, short = alignment_sequences(records, args.min_seq_length)
+    if missing:
+        print(
+            "  %d record(s) have a symbolic ALT and no INS_ALT: no sequence to cut" % missing,
+            file=sys.stderr,
+        )
+    if short:
+        print(
+            "  %d alignment(s) shorter than %d bp are left out"
+            % (short, args.min_seq_length),
+            file=sys.stderr,
+        )
+    if len(alignments) < 3:
+        print(
+            "Only %d alignment sequence(s): nothing to project" % len(alignments),
+            file=sys.stderr,
+        )
+        return
+
+    groups = collapse_alignments(alignments, args.seq_overlap)
+    sizes = np.array([len(group) for group in groups])
+    representatives = [group_representative(group, alignments) for group in groups]
+    # How many distinct calls a group draws from. The collapse is over the
+    # whole cohort at once, so a group that pools several calls is the normal
+    # case; were it per call instead, every group would report exactly one, and
+    # the number of groups could not fall below the number of alignments of the
+    # busiest call.
+    callers = np.array([len({alignments[member]["record"] for member in group}) for group in groups])
+    print(
+        "%d alignment sequences from %d calls collapse into %d reference intervals at %g "
+        "reciprocal overlap: largest group %d alignments from %d calls, %.1f%% of the groups "
+        "pool more than one call, %.1f%% are a single alignment"
+        % (
+            len(alignments),
+            len({alignment["record"] for alignment in alignments}),
+            len(groups),
+            args.seq_overlap,
+            sizes.max(),
+            callers[sizes.argmax()],
+            100 * (callers > 1).mean(),
+            100 * (sizes == 1).mean(),
+        ),
+        file=sys.stderr,
+    )
+
+    # A uniform sample of the groups, when the matrix has to be bounded: it is
+    # the only choice that leaves the picture a picture of the whole cohort.
+    # Keeping the largest groups instead would drop every rare sequence, which
+    # is most of what there is to see, and would silently redraw the figure as
+    # one of the common sequences alone.
+    taken = np.arange(len(groups))
+    if 0 < args.max_sequences < len(groups):
+        sample = np.random.default_rng(args.seed).choice(
+            len(groups), size=args.max_sequences, replace=False
+        )
+        taken = np.sort(sample)  # Back into reference order.
+        dropped = sizes.sum() - sizes[taken].sum()
+        print(
+            "  a random sample of %d of the %d groups (seed %d): %d group(s), %d "
+            "alignment(s), are not in the figure (raise --max-sequences to include them)"
+            % (
+                args.max_sequences,
+                len(groups),
+                args.seed,
+                len(groups) - len(taken),
+                dropped,
+            ),
+            file=sys.stderr,
+        )
+    sequences = [alignments[representatives[group]]["sequence"] for group in taken]
+    counts = sizes[taken]
+    lengths = np.array([len(sequence) for sequence in sequences])
+    print(
+        "  %d pairwise %s distances over sequences of median %d bp, max %d bp, on %d "
+        "thread(s)%s"
+        % (
+            len(sequences) * (len(sequences) - 1) // 2,
+            "edit"
+            if args.seq_metric == "levenshtein"
+            else "%d-mer %s" % (args.seq_k, args.seq_metric),
+            np.median(lengths),
+            lengths.max(),
+            threads,
+            "" if args.seq_metric != "levenshtein" or args.seq_cutoff <= 0
+            else " (distances above %g are not computed exactly, and are reported as 1)"
+            % args.seq_cutoff,
+        ),
+        file=sys.stderr,
+    )
+    if args.seq_metric == "levenshtein":
+        distances = sequence_distance_matrix(sequences, threads, args.seq_cutoff)
+    else:
+        distances = kmer_distance_matrix(
+            sequences, args.seq_k, threads, args.seq_metric, args.seq_norm
+        )
+    length_gradient_report(distances, lengths, args.stress_sample)
+
+    clustered = (not args.no_cluster) and len(sequences) >= 3
+    if clustered:
+        _, labels, _ = cluster_records(distances, args, False, args.seq_threshold)
+        cluster_sizes = np.bincount(labels)[1:]
+        print(
+            "  %d clusters of sequences at distance %g, sizes %s"
+            % (
+                len(cluster_sizes),
+                args.seq_threshold,
+                " ".join(str(size) for size in cluster_sizes[:200]),
+            ),
+            file=sys.stderr,
+        )
+    else:
+        labels = np.ones(len(sequences), dtype=int)
+    coordinates = embed_records(distances, args)
+    pairs = ((0, 1), (2, 3)) if args.embed == "pca" else ((0, 1),)
+    draw_scatter(path, coordinates, counts, labels, palette, clustered, args, pairs)
 
 
 def main():
@@ -1928,6 +2563,116 @@ def main():
         default=4.0,
         help="Probability at which the color of --source saturates, in multiples of the "
         "uniform distribution (1 is a flat distribution over the whole interval).",
+    )
+    parser.add_argument(
+        "--sequences",
+        default=None,
+        metavar="FILE",
+        help="Also writes to FILE a 2D MDS projection of the sequences of the alignments "
+        "themselves, one point per interval of the reference: the piece of the inserted "
+        "sequence that every alignment explains is taken as a sequence (reverse-complemented "
+        "when the alignment is, and read from the INS_ALT annotation when the ALT column is "
+        "symbolic), alignments covering approximately the same interval of the reference are "
+        "collapsed into a single representative, and the representatives are projected by "
+        "the edit distance between them, normalized by the longer of the two.",
+    )
+    parser.add_argument(
+        "--seq-overlap",
+        type=float,
+        default=0.9,
+        help="Reciprocal overlap above which two alignments cover approximately the same "
+        "interval of the reference, and are collapsed into one representative, for "
+        "--sequences.",
+    )
+    parser.add_argument(
+        "--min-seq-length",
+        type=int,
+        default=50,
+        help="Alignments whose ALT interval is shorter than this are left out of "
+        "--sequences: the normalized edit distance between two very short sequences is "
+        "decided by a handful of bases.",
+    )
+    parser.add_argument(
+        "--max-sequences",
+        type=int,
+        default=3000,
+        help="Largest number of representatives --sequences projects; above it a uniform "
+        "random sample of the groups is drawn, and what was dropped is reported (0 = no "
+        "limit). The matrix of the edit distances is quadratic in this number and linear in "
+        "the square of the length of the sequences.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Seed of the random sample of --max-sequences, so that a figure can be "
+        "reproduced; change it to see another sample of the same data.",
+    )
+    parser.add_argument(
+        "--seq-cutoff",
+        type=float,
+        default=0.0,
+        help="Normalized distance above which a pair of --sequences is not computed exactly "
+        "and is reported as 1 (0 = every distance exact). Restricts the alignment to a band, "
+        "which is what makes long sequences affordable, at the cost of flattening every "
+        "large distance to the same value.",
+    )
+    parser.add_argument(
+        "--seq-metric",
+        default="levenshtein",
+        choices=("levenshtein", "containment", "jaccard", "composition"),
+        help="Distance between two sequences, for --sequences: the edit distance divided by "
+        "the longer of the two (default); one minus the fraction of the k-mers of the "
+        "shorter sequence that the longer one also has (containment); one minus the Jaccard "
+        "similarity of the two k-mer sets, the intersection over the union; or the "
+        "Euclidean distance between the two k-mer count vectors, one dimension per distinct "
+        "k-mer (composition, rescaled by --seq-norm). Only containment sees a short piece "
+        "inside a long one, the others having the difference in length in the denominator; "
+        "and only composition with --seq-norm none sees a tandem array as different from a "
+        "single copy, since normalizing the length away normalizes the copy number with it.",
+    )
+    parser.add_argument(
+        "--seq-norm",
+        default="unit",
+        choices=("unit", "frequency", "none"),
+        help="How the k-mer counts of --seq-metric composition are rescaled before the "
+        "Euclidean distance: divided by their Euclidean norm, which makes the distance a "
+        "monotone function of the cosine and puts every unrelated pair at 0.707 whatever "
+        "its length (default); divided by their total, so that a vector is the distribution "
+        "of the k-mers of its sequence, which leaves the SCALE of the distance depending on "
+        "the length (two unrelated long sequences come out several times closer than two "
+        "unrelated short ones, which reads as a cluster of the long ones); or left as raw "
+        "counts, which "
+        "is the literal count vector, and the only choice that distinguishes a tandem array "
+        "from a single copy, but which puts the whole length gradient back with it, since "
+        "the entries then grow with the sequence. Raw distances are not bounded by 1, so "
+        "--seq-threshold has to be set by hand there.",
+    )
+    parser.add_argument(
+        "--seq-k",
+        type=int,
+        default=15,
+        help="Length of the k-mers of --seq-metric containment, jaccard and composition, "
+        "between 1 and 31. Small "
+        "enough that a k-mer survives the divergence between two copies of a repeat "
+        "(a k-mer of a pair 2%% divergent survives with probability 0.98^k), large enough "
+        "that it does not occur by chance (4^k must stay well above the length of a "
+        "sequence).",
+    )
+    parser.add_argument(
+        "--seq-threshold",
+        type=float,
+        default=None,
+        help="Distance at which the tree of --sequences is cut into flat clusters. Defaults "
+        "to %g for --seq-metric levenshtein, %g for containment, %g for jaccard and %g for "
+        "composition. --cluster-threshold does not apply there: it is on the distance "
+        "between the architectures of the calls, not between sequences."
+        % (
+            SEQUENCE_THRESHOLD,
+            CONTAINMENT_THRESHOLD,
+            JACCARD_THRESHOLD,
+            COMPOSITION_THRESHOLD,
+        ),
     )
     parser.add_argument(
         "--summary-bins",
@@ -2056,6 +2801,12 @@ def main():
     args = parser.parse_args()
     if args.cluster_threshold is None:
         args.cluster_threshold = EDIT_THRESHOLD if args.metric == "edit" else PROFILE_THRESHOLD
+    if args.seq_threshold is None:
+        args.seq_threshold = {
+            "containment": CONTAINMENT_THRESHOLD,
+            "jaccard": JACCARD_THRESHOLD,
+            "composition": COMPOSITION_THRESHOLD,
+        }.get(args.seq_metric, SEQUENCE_THRESHOLD)
 
     files = sorted(
         set(glob.glob(os.path.join(args.input_dir, "*.vcf")))
@@ -2068,7 +2819,7 @@ def main():
     records = []
     with phase("parse"):
         for path in files:
-            found = load_records(path)
+            found = load_records(path, args.sequences is not None)
             print(
                 "%s: %d annotated records" % (os.path.basename(path), len(found)),
                 file=sys.stderr,
@@ -2091,6 +2842,9 @@ def main():
     if args.source:
         with phase("source"):
             draw_source(args.source, records, args, palette)
+    if args.sequences:
+        with phase("sequences"):
+            draw_sequences(args.sequences, records, args, palette)
 
     # The clustering serves the order of the rows and the colors of the
     # scatter plot; with neither figure asked for, the whole distance matrix
