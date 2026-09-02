@@ -46,6 +46,16 @@ and differ in length by orders of magnitude. Two measures are available:
       Mean per-bin disagreement between the two rows, rasterized along ALT.
       See `record_profiles()` and `profile_distance_matrix()`.
 
+`--cdawg` draws the compact directed acyclic word graph of the strings that
+`--metric edit` compares: the set of re-coded records is a set of strings over
+the alphabet of the reference intervals, and the CDAWG is the smallest
+automaton whose paths out of the source spell their substrings, and whose paths
+from the source to the sink spell their suffixes. Every node of a CDAWG is a
+maximal repeat, so every node is a run of consecutive alignments and gaps that
+several calls share exactly and that is not part of a longer shared run - the
+largest units of architecture the cohort repeats - and every node is labelled
+with its own. See `SuffixAutomaton`, `compact_automaton()` and `draw_cdawg()`.
+
 `--sequences` is a different picture of the same data, one point per alignment
 instead of one point per call: the piece of ALT that every alignment explains
 is taken as a sequence (from the INS_ALT annotation, when the ALT column is
@@ -65,6 +75,7 @@ import os
 import re
 import sys
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
@@ -74,8 +85,8 @@ matplotlib.use("Agg")  # Save to disk without displaying.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
-from matplotlib.patches import Polygon, Rectangle
+from matplotlib.colors import LogNorm, to_hex
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle
 
 try:
     from scipy.cluster.hierarchy import fcluster, leaves_list, linkage, optimal_leaf_ordering
@@ -2460,6 +2471,887 @@ def draw_sequences(path, records, args, palette):
     draw_scatter(path, coordinates, counts, labels, palette, clustered, args, pairs)
 
 
+# ---------------------------------- CDAWG -----------------------------------
+
+def string_terminator(index):
+    """
+    The character that closes the `index`-th re-coded string. One distinct
+    terminator per string, negative so that it cannot collide with a character
+    of `record_tokens()`, which are all non-negative.
+
+    The terminators are what make the CDAWG of a SET of strings well defined.
+    They keep a suffix of one string from being read as a suffix of another,
+    and they make right-maximality visible at the end of a string too: a
+    substring that always ends the string it occurs in is followed by a
+    different terminator in every one of them, so it branches, which is exactly
+    the condition under which it is a maximal repeat of the set.
+    """
+    return -(index + 1)
+
+
+class SuffixAutomaton:
+    """
+    Generalized suffix automaton (DAWG) over an integer alphabet, built by
+    inserting one string at a time, in Blumer's on-line construction.
+
+    A state is an equivalence class of substrings that occur at exactly the
+    same set of positions of the input (their `endpos`); `length[v]` is the
+    length of the longest substring of the class, which is also the only one
+    that is LEFT-maximal, since a shorter member of the class is a suffix of it
+    that occurs nowhere else and can therefore only be preceded by the same
+    character; and `link[v]` is the class of its longest proper suffix that
+    does occur elsewhere. `occurrence[v]` is one (string,end) pair of the
+    endpos, which is all that is needed to read the longest substring back off
+    the input.
+
+    Three statistics are accumulated while the strings are inserted and are
+    then pushed up the suffix links, from the longest state to the shortest,
+    since the endpos of a state is the union of the endpos of its children:
+    how many times the substrings of the class occur, weighted by how many
+    records each string stands for (`counts`), in how many distinct strings
+    they occur (`strings`), and how many records those strings stand for
+    (`records`). See `propagate()` for how the last two are counted without
+    holding one set of strings per state.
+    """
+
+    def __init__(self, weights):
+        # How many records every string stands for, so that a repeat can be
+        # reported in records and not only in distinct strings.
+        self.weights = weights
+        self.transitions = [{}]
+        self.link = [-1]
+        self.length = [0]
+        self.occurrence = [(0, 0)]
+        self.counts = [0]
+        self.strings = [0]
+        self.records = [0]
+        # Only while the statistics are being accumulated: the set of strings
+        # whose positions were marked at a state, and the records behind them.
+        self.members = [None]
+        self.totals = [0]
+
+    def state(self, length, link, occurrence, transitions):
+        self.transitions.append(transitions)
+        self.link.append(link)
+        self.length.append(length)
+        self.occurrence.append(occurrence)
+        self.counts.append(0)
+        self.strings.append(0)
+        self.records.append(0)
+        self.members.append(None)
+        self.totals.append(0)
+        return len(self.length) - 1
+
+    def clone(self, source, length):
+        """
+        Splits `source` into the part of its class that is at most `length`
+        long, which the clone takes over, and the rest, which stays. Both have
+        the same endpos so far, hence the same occurrence.
+        """
+        return self.state(
+            length, self.link[source], self.occurrence[source], dict(self.transitions[source])
+        )
+
+    def redirect(self, state, token, source, clone):
+        """
+        Sends to `clone` every transition on `token` that pointed at `source`
+        and that comes from a suffix of the current position, which are exactly
+        the ones reachable by following the suffix links up from `state`.
+        """
+        while state != -1 and self.transitions[state].get(token) == source:
+            self.transitions[state][token] = clone
+            state = self.link[state]
+        self.link[source] = clone
+
+    def extend(self, last, token, index, end):
+        """
+        Appends `token` to the string that ends at `last`, and returns the
+        state of the extended string. `(index,end)` is where that string ends
+        in the input.
+
+        The first branch is what a generalized automaton needs and a
+        single-string one does not: the extended string may already be in the
+        automaton, put there by an earlier string, in which case no state is
+        created and at most a class has to be split.
+        """
+        existing = self.transitions[last].get(token)
+        if existing is not None:
+            if self.length[existing] == self.length[last] + 1:
+                return existing
+            clone = self.clone(existing, self.length[last] + 1)
+            self.redirect(last, token, existing, clone)
+            return clone
+        current = self.state(self.length[last] + 1, -1, (index, end), {})
+        state = last
+        while state != -1 and token not in self.transitions[state]:
+            self.transitions[state][token] = current
+            state = self.link[state]
+        if state == -1:
+            self.link[current] = 0
+        else:
+            target = self.transitions[state][token]
+            if self.length[state] + 1 == self.length[target]:
+                self.link[current] = target
+            else:
+                clone = self.clone(target, self.length[state] + 1)
+                self.redirect(state, token, target, clone)
+                self.link[current] = clone
+        return current
+
+    def add_string(self, index, tokens):
+        last, weight = 0, self.weights[index]
+        for position, token in enumerate(tokens):
+            last = self.extend(last, token, index, position + 1)
+            self.counts[last] += weight
+            bag = self.members[last]
+            if bag is None:
+                self.members[last] = {index}
+                self.totals[last] = weight
+            elif index not in bag:
+                bag.add(index)
+                self.totals[last] += weight
+
+    def by_decreasing_length(self):
+        """
+        The states sorted by decreasing length, by counting sort: the lengths
+        are bounded by the longest string, which is a handful of characters
+        here, so this is linear where a comparison sort is not. Since a state
+        is always longer than its suffix link, this is also a topological order
+        of the tree of the links, children first.
+        """
+        counts = [0] * (max(self.length) + 2)
+        for length in self.length:
+            counts[length + 1] += 1
+        for length in range(1, len(counts)):
+            counts[length] += counts[length - 1]
+        out = [0] * len(self.length)
+        for state, length in enumerate(self.length):
+            out[counts[length]] = state
+            counts[length] += 1
+        out.reverse()
+        return out
+
+    def propagate(self):
+        """
+        Turns the per-position statistics into per-class ones, by folding every
+        state into its suffix link, longest state first: a state and its link
+        differ only in that the link also occurs where the state does not, so
+        the endpos of a state is the union of the endpos of the states that
+        link to it, plus the positions marked at the state itself.
+
+        The occurrence counts are a plain sum. The number of distinct strings
+        is not - the same string can reach a state through several children,
+        and would be counted twice - so it needs the sets themselves, which are
+        merged small into large: an element then changes set at most a
+        logarithmic number of times, and since a set is handed over to the
+        parent and dropped as soon as its own state is done, no element is ever
+        held twice. Holding one set per state, or one bitmask of the strings,
+        would need a table quadratic in the input, which at tens of thousands
+        of strings is out of the question.
+        """
+        for state in self.by_decreasing_length():
+            bag, total = self.members[state], self.totals[state]
+            if bag is None:
+                bag, total = set(), 0
+            self.strings[state], self.records[state] = len(bag), total
+            self.members[state] = None  # Nothing below can reach this state again.
+            parent = self.link[state]
+            if parent < 0:
+                continue
+            self.counts[parent] += self.counts[state]
+            above = self.members[parent]
+            if above is None:
+                self.members[parent], self.totals[parent] = bag, total
+                continue
+            if len(above) < len(bag):  # The smaller of the two is the one poured.
+                above, bag = bag, above
+                self.totals[parent] = total
+            for index in bag:
+                if index not in above:
+                    above.add(index)
+                    self.totals[parent] += self.weights[index]
+            self.members[parent] = above
+
+
+# The single node that all the ends of the strings are drawn as.
+CDAWG_SINK = -1
+
+
+def compact_automaton(automaton):
+    """
+    Compacts the DAWG into the CDAWG: the nodes are the source, the states with
+    two or more outgoing transitions, and the states with none, and every
+    maximal chain of one-transition states in between becomes a single edge
+    labelled by the string it spells.
+
+    That leaves precisely the maximal repeats. A state that branches is
+    right-maximal, since its substrings are followed by more than one
+    character, and the longest substring of a state is left-maximal, as
+    `SuffixAutomaton` explains; the states that are dropped are the ones that
+    are not right-maximal, and the surviving substring of a state that stays is
+    its longest one. The states with no transition at all are the ends of the
+    strings, one per string thanks to the terminators, and they are merged into
+    a single sink.
+
+    Returns (nodes,edges,sinks): the states that stay, plus CDAWG_SINK; the
+    edges as (from,to,label,weight), where `weight` is how often the edge is
+    traversed; and the states that were merged into the sink.
+    """
+    transitions = automaton.transitions
+    sinks = {state for state in range(len(transitions)) if not transitions[state]}
+    explicit = {state for state in range(len(transitions)) if len(transitions[state]) != 1}
+    explicit.add(0)
+    edges = []
+    for source in sorted(explicit):
+        for token, first in sorted(transitions[source].items()):
+            label, target = [token], first
+            while target not in explicit:  # One transition, so no choice.
+                (next_token, next_target), = transitions[target].items()
+                label.append(next_token)
+                target = next_target
+            # Every state of the chain has the endpos of its successor shifted
+            # by one, so they all occur equally often, and the count of the
+            # last one is the number of times the edge is traversed.
+            edges.append(
+                (
+                    source,
+                    CDAWG_SINK if target in sinks else target,
+                    tuple(label),
+                    automaton.counts[target],
+                )
+            )
+    nodes = sorted(explicit - sinks) + [CDAWG_SINK]
+    return nodes, edges, sinks
+
+
+def induced_by_strings(automaton, strings, nodes, edges, sinks):
+    """
+    Restricts the CDAWG to the subgraph its whole strings trace: every node and
+    every edge on the path that some complete string follows from the source to
+    the sink, and nothing else.
+
+    The nodes this keeps are exactly the maximal repeats that START a string,
+    and the reason it is that and not "the repeats the strings contain" is
+    worth being explicit about, since a repeat shared by many strings is one
+    single node of the graph however many strings hold it - that is what the
+    merging by end positions does - and it is tempting to conclude that the
+    paths of those strings all run through it. They do not. The path a string
+    traces visits, after k characters, the state that holds its own first k
+    characters, and so its prefixes and nothing else; an occurrence of a repeat
+    in the MIDDLE of a string is in the automaton, but the node of that repeat
+    is reached from the source by reading the repeat itself, which is the path
+    of a suffix of the string, not of the string.
+
+    That the labels come out exactly the prefixes then needs one observation.
+    Reading a prefix p of a string from the source lands on the state whose
+    class holds p, and p is always the longest string of that class: a longer
+    member x would have the same end positions, so it would have to end where p
+    ends in that string, at position |p|, while being longer than p, and it
+    would have to start before the string does. So the node is p itself and not
+    some left-extension of it. Conversely a maximal repeat that is a prefix of
+    a string is a node the path of that string passes through, at step |p|.
+
+    Nothing is lost of what a path means, and something is gained. A path of
+    the full CDAWG spells a suffix of a string, since that is what the
+    underlying automaton recognizes; a path of this subgraph spells a whole
+    string, and there is exactly one path per string. That is the same argument
+    once more: the word spelled on reaching a node is that node's own maximal
+    repeat, so leaving one string's path and joining another's can only
+    continue a string that shares the prefix already spelled, and the path
+    still ends on a string of the set. Paths and strings correspond one to one,
+    which was checked on every input here - 75 paths for 75 strings, 18480 for
+    18480.
+
+    What IS lost is the maximal repeats that never begin a string, which are
+    most of them - two thirds of the nodes of a real cohort - and this is not a
+    uniform thinning of the graph but a bias towards the way calls start. The
+    most widely shared repeat of a cohort is usually not a prefix of anything:
+    on the synthetic set here the top of the list is `16-20`, one node, in 196
+    of 300 calls, and it goes, along with `~1` (131 calls) and `8-12'` (93),
+    because no call BEGINS with the third alignment of an architecture. Three
+    of eighteen characters begin a call there, which is also why the source
+    has 93 outgoing edges in the full graph and a handful here.
+
+    So the two graphs answer two different questions, and neither is the other
+    drawn smaller: the full one for which units of architecture the cohort
+    repeats, wherever they sit, and this one for what the calls look like from
+    beginning to end and where they start to differ.
+
+    And what comes out is no longer a DAG at all - it is a tree, the compact
+    trie of the strings. Every node has at most one predecessor, and the number
+    of edges is the number of nodes minus the number of roots, on every input
+    tried and on 500 random ones. The reason is the observation above: a node
+    IS the prefix it is labelled with, so two distinct prefixes are never the
+    same node, and the node before p on any string's path is the longest
+    node-prefix strictly inside p, which p determines by itself, whichever
+    string one arrived along. All the merging that makes a CDAWG a DAG happens
+    on the nodes that are reachable only as a proper suffix, and those are
+    exactly the ones dropped here.
+
+    Precisely, this is the compact trie of the string set without its root,
+    which is the source, and without its leaves, which were the edges into the
+    sink, subdivided at the prefixes that are right-maximal on account of
+    occurrences somewhere else in the data rather than because they branch as a
+    prefix - `b` is one, given the strings `ab` and `b`, since it is followed
+    by a different terminator in each. Those extra nodes always have at most
+    one edge out, so they cut a trie edge in two instead of branching it: 34
+    trie nodes and 1 of them on the synthetic cohort, 3244 and 10577 on 20000
+    random strings over a large alphabet, where short prefixes recur mid-string
+    everywhere. Nothing here is beyond what building a trie of the strings
+    directly would give, apart from those subdivisions and the counts the
+    automaton carries.
+
+    The source and the sink are dropped with them, and so is every edge that
+    touches either. Both are artificial: the source is the empty string and the
+    sink is not a string at all, they are only the two ends every string is
+    threaded through, and once the graph is the one the whole strings trace
+    they say nothing that is not already said by the fact that a node is in the
+    graph. What is left is the maximal repeats that start a call, and how each
+    one extends another. A node that a string reaches directly from the source
+    and leaves directly for the sink stays, with no edge on it: it is a repeat
+    that is a whole string, and dropping it would be dropping a call.
+    """
+    explicit = {node for node in nodes if node != CDAWG_SINK} | sinks
+    traced = set()
+    for string in strings:
+        state, previous, label = 0, 0, []
+        for token in string:
+            label.append(token)
+            state = automaton.transitions[state][token]
+            if state in explicit:
+                target = CDAWG_SINK if state in sinks else state
+                traced.add((previous, target, tuple(label)))
+                previous, label = target, []
+    kept = [edge for edge in edges if edge[:3] in traced]
+    # Every traced node but the source is the target of a traced edge, so this
+    # is all of them; the two ends are then taken back out.
+    visited = {target for _, target, _, _ in kept} - {CDAWG_SINK}
+    kept = [edge for edge in kept if edge[0] != 0 and edge[1] != CDAWG_SINK]
+    return [node for node in nodes if node in visited], kept
+
+
+def token_symbol(token, n_ref_splits):
+    """
+    One character of `record_tokens()`, written out: `i-j` for an alignment of
+    the reference interval between the i-th and the j-th splitpoint of
+    `remap_coords`, primed when the alignment is reverse-complemented, and `~n`
+    for a gap of n chunks of ALT.
+    """
+    if token < 0:
+        return "$%d" % (-token - 1)
+    is_gap, first, second, strand = decode_token(token, n_ref_splits)
+    if is_gap:
+        return "~%d" % first
+    return "%d-%d%s" % (first, second, "'" if strand else "")
+
+
+def token_string(tokens, n_ref_splits, per_line, max_lines):
+    """
+    A string of characters, as lines of at most `per_line` symbols each, cut
+    off after `max_lines`. Long maximal repeats would otherwise make a box
+    wider than the whole figure.
+    """
+    symbols = [token_symbol(token, n_ref_splits) for token in tokens]
+    if not symbols:
+        return ["(empty)"]
+    lines = [
+        " ".join(symbols[start : start + per_line])
+        for start in range(0, len(symbols), per_line)
+    ]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] += " ..."
+    return lines
+
+
+def maximal_repeat(automaton, strings, state):
+    """
+    The longest substring of the class of `state`, read off the input at the
+    one occurrence the automaton kept. This is the maximal repeat the node
+    stands for.
+    """
+    index, end = automaton.occurrence[state]
+    return strings[index][end - automaton.length[state] : end]
+
+
+def cdawg_strings(records, args):
+    """
+    The re-coded strings the CDAWG is built on: the string of `record_tokens()`
+    of every record, deduplicated, with the number of records behind each.
+    Deduplicating is free and is worth doing on its own: an identical string
+    adds nothing to the automaton but is walked through it all the same, and on
+    a real cohort most records share their string with another.
+
+    With `--cdawg-max-strings`, only the most frequent that many are kept, and
+    what was left out is reported. The construction does not need the limit -
+    it is linear in the total length, and tens of thousands of strings take
+    seconds - but the figure does: past a few hundred nodes no label in it can
+    be read at its natural size.
+    """
+    counts = {}
+    for record in records:
+        tokens = record_tokens(record, args.ref_splits, args.alt_chunks)
+        if tokens:  # A record whose alignments quantize to nothing.
+            counts[tokens] = counts.get(tokens, 0) + 1
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    if 0 < args.cdawg_max_strings < len(ordered):
+        dropped = sum(weight for _, weight in ordered[args.cdawg_max_strings :])
+        print(
+            "  the %d most frequent of the %d distinct strings: %d string(s), %d record(s), "
+            "are not in the graph (raise --cdawg-max-strings to include them)"
+            % (
+                args.cdawg_max_strings,
+                len(ordered),
+                len(ordered) - args.cdawg_max_strings,
+                dropped,
+            ),
+            file=sys.stderr,
+        )
+        ordered = ordered[: args.cdawg_max_strings]
+    return [tokens for tokens, _ in ordered], [weight for _, weight in ordered]
+
+
+def layered_layout(nodes, edges, sizes, sweeps, hgap, vgap, aspect):
+    """
+    Sugiyama-style layout of the graph, in inches. An edge of the CDAWG always
+    goes from a shorter string to a longer one, so the graph is acyclic and a
+    node can be put on the layer of the longest path that reaches it; the
+    source is then alone on the first layer and the sink alone on the last.
+
+    Inside a layer the nodes are ordered by the barycenter heuristic - a node
+    is moved to the average position of its neighbours in the layer above, then
+    of those in the layer below, a few times - which is the cheapest way to
+    take most of the crossings out. `sizes` gives the (width,height) of every
+    box, and the boxes of a layer are laid out side by side with `hgap` between
+    them, the layers `vgap` apart.
+
+    A layer is then broken into as many rows as it takes to keep the figure
+    near `aspect` wide for its height. This is not cosmetic: the layers of a
+    CDAWG are as few as the longest string is long, a handful here, while a
+    layer holds as many maximal repeats as the cohort has, so laid out in one
+    row each the figure comes out hundreds of times wider than tall and every
+    label in it is a pixel high. The width that balances the two is the
+    positive root of w^2 - a*h*L*w - a*h*T, where T is the total width of the
+    boxes, L the number of layers and h the height of a row: a layer then takes
+    T/w+1 rows on average, and a*h*(T/w+L) is the height that w has to be `a`
+    times larger than.
+
+    Returns ({node: (x,y)} of the centre of every box, {layer: [nodes]}).
+    """
+    outgoing = {node: [] for node in nodes}
+    incoming = {node: [] for node in nodes}
+    for source, target, _, _ in edges:
+        outgoing[source].append(target)
+        incoming[target].append(source)
+
+    remaining = {node: len(incoming[node]) for node in nodes}
+    queue = deque(node for node in nodes if remaining[node] == 0)
+    layer, order = {node: 0 for node in nodes}, []
+    while queue:
+        node = queue.popleft()
+        order.append(node)
+        for target in outgoing[node]:
+            layer[target] = max(layer[target], layer[node] + 1)
+            remaining[target] -= 1
+            if remaining[target] == 0:
+                queue.append(target)
+
+    layers = {}
+    for node in order:
+        layers.setdefault(layer[node], []).append(node)
+    # Position of a node inside its layer, normalized to (0,1) so that layers
+    # of very different sizes can be averaged against each other. Kept up to
+    # date one layer at a time, rather than recomputed, so that a sweep costs
+    # what the graph costs and not that times the number of layers.
+    position = {}
+    for row in layers.values():
+        for index, node in enumerate(row):
+            position[node] = (index + 0.5) / len(row)
+    for _ in range(sweeps):
+        for down in (True, False):
+            neighbours = incoming if down else outgoing
+            for key in sorted(layers, reverse=not down):
+                row = layers[key]
+                row.sort(
+                    key=lambda node: (
+                        sum(position[other] for other in neighbours[node])
+                        / len(neighbours[node])
+                        if neighbours[node]
+                        else position[node]
+                    )
+                )
+                for index, node in enumerate(row):
+                    position[node] = (index + 0.5) / len(row)
+
+    total = sum(sizes[node][0] + hgap for node in nodes)
+    height = max(sizes[node][1] for node in nodes) + vgap
+    span = aspect * height * len(layers)
+    target = max(
+        (span + np.sqrt(span ** 2 + 4 * aspect * height * total)) / 2,
+        max(sizes[node][0] for node in nodes),
+    )
+
+    positions, y = {}, 0.0
+    for key in sorted(layers):
+        rows, row, width = [], [], 0.0
+        for node in layers[key]:
+            if row and width + sizes[node][0] + hgap > target:
+                rows.append(row)
+                row, width = [], 0.0
+            row.append(node)
+            width += sizes[node][0] + hgap
+        rows.append(row)
+        for row in rows:
+            tallest = max(sizes[node][1] for node in row)
+            width = sum(sizes[node][0] for node in row) + hgap * (len(row) - 1)
+            x = -width / 2
+            for node in row:
+                positions[node] = (x + sizes[node][0] / 2, y - tallest / 2)
+                x += sizes[node][0] + hgap
+            # The rows of one layer sit closer together than two layers do, so
+            # that a wrapped layer still reads as one band.
+            y -= tallest + 0.4 * vgap
+        y -= 0.6 * vgap
+    return positions, layers
+
+
+def text_box_size(lines, fontsize, padding):
+    """
+    Size of a box of text, in inches, from the number of characters alone:
+    matplotlib can only measure a string once a renderer exists, and the layout
+    has to know the sizes before the figure is created. The constants below are
+    for a monospaced font, which is what the boxes are drawn in, so the
+    estimate is exact up to the padding.
+    """
+    width = max(len(line) for line in lines) * 0.60 * fontsize / 72.0
+    height = len(lines) * 1.35 * fontsize / 72.0
+    return width + 2 * padding, height + 2 * padding
+
+
+def write_cdawg_dot(path, nodes, edges, labels, colors, args):
+    """
+    Writes the graph in the DOT language, for graphviz to lay out and draw
+    instead of this script. Writing it costs nothing whatever the size, and
+    `dot` ranks by network simplex and orders by a real crossing minimization,
+    where `layered_layout()` ranks by longest path and orders by barycenter
+    sweeps, so on a small graph it is both quicker and better drawn.
+
+    It does not stay that way, and the two reasons it does not are the reason
+    the figure of `draw_cdawg()` exists at all.
+
+    Graphviz does not break a rank into rows, and on this shape of graph that
+    is what decides whether anything can be read: a CDAWG has only as many
+    ranks as the longest string is long, while a rank holds as many maximal
+    repeats as the cohort has. A graph of 1400 nodes comes out of `dot` 224000
+    by 400 points, an aspect ratio of 555 to 1, which no raster can hold - the
+    PNG is clamped at 32767 pixels wide and the graph becomes a 59-pixel strip.
+    At 31000 nodes the strip is 2 pixels tall. Only SVG, or `unflatten -l`
+    first, gets a picture out of it at all.
+
+    And the crossing minimization is superlinear where everything here is not.
+    Measured on this machine, `dot -Tpng` against this function: 1.5s against
+    3.6s at 214 nodes and 1500 edges, 2.7s against 29s at 1400 nodes and 12000
+    edges, then 15.4 HOURS against 11 minutes at 31000 nodes and 177000 edges.
+    The crossover is somewhere in the low thousands of nodes; past it, graphviz
+    is not an option, and `--cdawg-max-strings` is the only thing that helps.
+    """
+    out = [
+        "digraph cdawg {",
+        "  graph [rankdir=TB];",
+        '  node [shape=box, style="rounded,filled", fontname="Courier", fontsize=%g];'
+        % args.cdawg_font,
+        '  edge [color="#8c8c8c"];',
+    ]
+    name = {node: ("sink" if node == CDAWG_SINK else "n%d" % node) for node in nodes}
+    heaviest = max((weight for _, _, _, weight in edges), default=1)
+    for node in nodes:
+        out.append(
+            '  %s [label="%s", fillcolor="%s"];'
+            % (name[node], "\\n".join(labels[node]), to_hex(colors[node]))
+        )
+    for source, target, label, weight in edges:
+        visible = [token for token in label if token >= 0]  # Terminators are noise.
+        attributes = ["penwidth=%.2f" % (0.4 + 1.6 * np.sqrt(weight / heaviest))]
+        if args.cdawg_edge_labels and visible:
+            attributes.append(
+                'label="%s", fontname="Courier", fontsize=%g'
+                % (
+                    " ".join(token_symbol(token, args.ref_splits) for token in visible),
+                    args.cdawg_font * 0.8,
+                )
+            )
+        out.append("  %s -> %s [%s];" % (name[source], name[target], ", ".join(attributes)))
+    out.append("}")
+    with open(path, "w") as handle:
+        handle.write("\n".join(out) + "\n")
+    print(
+        "Wrote %d nodes and %d edges to %s: `dot -Tsvg %s -o cdawg.svg` draws it (SVG rather "
+        "than PNG, since dot lays a CDAWG out far wider than a raster can hold)"
+        % (len(nodes), len(edges), path, path),
+        file=sys.stderr,
+    )
+
+
+def draw_cdawg(path, records, args):
+    """
+    Draws the CDAWG of the re-coded strings: every record is the string of
+    `record_tokens()` over the alphabet of the reference intervals its
+    alignments induce, and the compact directed acyclic word graph of that set
+    of strings is the smallest automaton whose paths out of the source spell
+    their substrings, and whose paths from the source to the sink spell their
+    suffixes. The source therefore has one outgoing edge per character that
+    starts a suffix, which is every character that occurs at all, and every
+    string is read along the path that leaves the source on its own first
+    character.
+
+    What the picture is for is that every node of a CDAWG is a maximal repeat:
+    a substring that occurs more than once, that cannot be extended to the
+    right without losing an occurrence, and that cannot be extended to the left
+    without losing one either. Here a substring is a run of consecutive
+    alignments and gaps, so a node is a piece of architecture that several
+    calls share exactly, and that is not merely part of a longer shared piece -
+    the largest units the cohort repeats. Every node is labelled with its own
+    maximal repeat, with how many records it occurs in and how many times in
+    total; an edge is labelled with the string that has to be appended to get
+    from one maximal repeat to the next, and is drawn the thicker the more
+    often it is traversed.
+    """
+    strings, weights = cdawg_strings(records, args)
+    if not strings:
+        print("No re-coded string to build a CDAWG on", file=sys.stderr)
+        return
+    alphabet = {token for string in strings for token in string}
+    print(
+        "CDAWG of %d distinct strings (%d records) over %d characters, lengths %d to %d"
+        % (
+            len(strings),
+            sum(weights),
+            len(alphabet),
+            min(len(string) for string in strings),
+            max(len(string) for string in strings),
+        ),
+        file=sys.stderr,
+    )
+
+    terminated = [
+        tuple(string) + (string_terminator(index),) for index, string in enumerate(strings)
+    ]
+    automaton = SuffixAutomaton(weights)
+    for index, string in enumerate(terminated):
+        automaton.add_string(index, string)
+    automaton.propagate()
+    nodes, edges, sinks = compact_automaton(automaton)
+    print(
+        "  %d states of the automaton compact into %d nodes (%d maximal repeats, plus the "
+        "source and the sink) and %d edges"
+        % (len(automaton.length), len(nodes), len(nodes) - 2, len(edges)),
+        file=sys.stderr,
+    )
+    if args.cdawg_prefixes:
+        kept_nodes, kept_edges = induced_by_strings(
+            automaton, terminated, nodes, edges, sinks
+        )
+        print(
+            "  restricted to what the whole strings trace, without the source and the sink: "
+            "%d nodes (%.1f%%) and %d edges (%.1f%%)"
+            % (
+                len(kept_nodes),
+                100.0 * len(kept_nodes) / len(nodes),
+                len(kept_edges),
+                100.0 * len(kept_edges) / max(len(edges), 1),
+            ),
+            file=sys.stderr,
+        )
+        nodes, edges = kept_nodes, kept_edges
+        if not nodes:
+            print(
+                "  nothing left to draw: no maximal repeat starts a string, so the whole "
+                "graph was the source, the sink and the edges between them",
+                file=sys.stderr,
+            )
+            return
+    if 0 < args.cdawg_max_nodes < len(nodes):
+        print(
+            "  more than --cdawg-max-nodes (%d) nodes: nothing is drawn, since no label of "
+            "the figure would be readable. Lower --cdawg-max-strings, or coarsen the "
+            "alphabet with --ref-splits and --alt-chunks, or raise --cdawg-max-nodes."
+            % args.cdawg_max_nodes,
+            file=sys.stderr,
+        )
+        return
+    if len(nodes) > 2000:
+        # Building the graph is linear and takes seconds on any input; drawing
+        # it is neither, and this is the only warning before a long wait.
+        print(
+            "  %d nodes and %d edges are two matplotlib artists each: the figure will take "
+            "minutes and will be very large. --cdawg-max-strings bounds it."
+            % (len(nodes), len(edges)),
+            file=sys.stderr,
+        )
+
+    # A node is labelled with its maximal repeat and with nothing else: the
+    # graph is there to be read as a set of strings, and a box that also
+    # carried its length and its counts would be several times wider than the
+    # string in it, which is what decides how large the whole figure is. How
+    # often a repeat occurs is in the color of the box, and in what is written
+    # on stderr below.
+    repeats, labels, calls = {}, {}, {}
+    for node in nodes:
+        if node == CDAWG_SINK:  # Not a repeat: every string ends here.
+            repeats[node] = ()
+            calls[node] = sum(weights)
+            labels[node] = ["$"]
+            continue
+        repeats[node] = maximal_repeat(automaton, terminated, node)
+        calls[node] = automaton.records[node]
+        labels[node] = (
+            [u"ε"]  # The source is the empty string.
+            if node == 0
+            else token_string(
+                repeats[node], args.ref_splits, args.cdawg_wrap, args.cdawg_max_lines
+            )
+        )
+    # A node is colored by the number of calls its maximal repeat occurs in,
+    # which is the whole reason for looking at the graph: a deeply shared
+    # architecture and a repeat found twice look otherwise the same.
+    cmap = plt.get_cmap(args.cdawg_cmap)
+    norm = LogNorm(vmin=1, vmax=max(max(calls[node] for node in nodes), 2))
+    colors = {
+        node: "0.85" if node in (0, CDAWG_SINK) else cmap(norm(calls[node]))
+        for node in nodes
+    }
+    if args.cdawg_dot:
+        write_cdawg_dot(args.cdawg_dot, nodes, edges, labels, colors, args)
+
+    ranked = sorted(
+        (node for node in nodes if node not in (0, CDAWG_SINK)),
+        key=lambda node: (-calls[node], -automaton.length[node]),
+    )
+    for node in ranked[: args.cdawg_top]:
+        print(
+            "  %d calls, %d occurrences: %s"
+            % (
+                calls[node],
+                automaton.counts[node],
+                " ".join(token_symbol(token, args.ref_splits) for token in repeats[node]),
+            ),
+            file=sys.stderr,
+        )
+    if path is None:  # --cdawg-dot alone: graphviz does the rest.
+        return
+
+    sizes = {
+        node: text_box_size(labels[node], args.cdawg_font, args.cdawg_padding)
+        for node in nodes
+    }
+    positions, layers = layered_layout(
+        nodes,
+        edges,
+        sizes,
+        args.cdawg_sweeps,
+        args.cdawg_hgap,
+        args.cdawg_vgap,
+        args.cdawg_aspect,
+    )
+
+    # The figure is exactly as large as the layout, in inches, so that the
+    # sizes computed above are the sizes drawn.
+    left = min(positions[node][0] - sizes[node][0] / 2 for node in nodes)
+    right = max(positions[node][0] + sizes[node][0] / 2 for node in nodes)
+    bottom = min(positions[node][1] - sizes[node][1] / 2 for node in nodes)
+    top = max(positions[node][1] + sizes[node][1] / 2 for node in nodes)
+    margin = 0.3
+    width, height = right - left + 2 * margin, top - bottom + 2 * margin
+    dpi = args.dpi
+    if max(width, height) * dpi > 30000:  # Past what matplotlib can rasterize.
+        dpi = max(int(30000 / max(width, height)), 30)
+        print("  %.0f inches wide: the figure is written at %d dpi" % (width, dpi), file=sys.stderr)
+    figure = plt.figure(figsize=(width, height), dpi=dpi)
+    ax = figure.add_axes([0, 0, 1, 1])
+    ax.set_xlim(left - margin, right + margin)
+    ax.set_ylim(bottom - margin, top + margin)
+    ax.set_aspect("equal")
+    ax.set_axis_off()
+
+    heaviest = max((weight for _, _, _, weight in edges), default=1)
+    for source, target, label, weight in edges:
+        x_source, y_source = positions[source]
+        x_target, y_target = positions[target]
+        start = (x_source, y_source - sizes[source][1] / 2)
+        end = (x_target, y_target + sizes[target][1] / 2)
+        ax.add_patch(
+            FancyArrowPatch(
+                start,
+                end,
+                arrowstyle="-|>",
+                mutation_scale=7,
+                shrinkA=0,
+                shrinkB=0,
+                linewidth=0.4 + 1.6 * np.sqrt(weight / heaviest),
+                color="0.55",
+                connectionstyle="arc3,rad=0.05",
+                zorder=1,
+            )
+        )
+        if args.cdawg_edge_labels and label:
+            visible = [token for token in label if token >= 0]  # Terminators are noise.
+            if not visible:
+                continue
+            ax.text(
+                (start[0] + end[0]) / 2,
+                (start[1] + end[1]) / 2,
+                " ".join(token_symbol(token, args.ref_splits) for token in visible),
+                fontsize=args.cdawg_font * 0.8,
+                family="monospace",
+                ha="center",
+                va="center",
+                color="0.25",
+                zorder=2,
+                bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.85),
+            )
+
+    for node in nodes:
+        x, y = positions[node]
+        box_width, box_height = sizes[node]
+        special = node in (0, CDAWG_SINK)
+        color = colors[node]
+        ax.add_patch(
+            FancyBboxPatch(
+                (x - box_width / 2, y - box_height / 2),
+                box_width,
+                box_height,
+                boxstyle="round,pad=0,rounding_size=%g" % (0.3 * box_height),
+                facecolor=color,
+                edgecolor="0.25",
+                linewidth=0.8,
+                zorder=3,
+            )
+        )
+        # Dark boxes need light text, and the colormaps that are worth using
+        # here are dark at the top of their range.
+        luminance = 1.0 if special else sum(color[:3]) / 3
+        ax.text(
+            x,
+            y,
+            "\n".join(labels[node]),
+            fontsize=args.cdawg_font,
+            family="monospace",
+            ha="center",
+            va="center",
+            color="black" if luminance > 0.5 else "white",
+            linespacing=1.35,
+            zorder=4,
+        )
+
+    figure.savefig(path, dpi=dpi)
+    plt.close(figure)
+    print(
+        "Saved a CDAWG of %d nodes, %d edges and %d layers to %s"
+        % (len(nodes), len(edges), len(layers), path),
+        file=sys.stderr,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Plots truvari anno remap alignments of every VCF in a directory."
@@ -2675,6 +3567,132 @@ def main():
         ),
     )
     parser.add_argument(
+        "--cdawg",
+        default=None,
+        metavar="FILE",
+        help="Also writes to FILE the compact directed acyclic word graph of the re-coded "
+        "strings: every record is encoded as the string of its alignments and gaps over the "
+        "alphabet of the reference intervals of --metric edit (see --ref-splits and "
+        "--alt-chunks), and the CDAWG of that set of strings - the smallest automaton whose "
+        "paths spell their substrings, and whose paths to the sink spell their suffixes - is "
+        "drawn, one box per node. "
+        "Every node of a CDAWG is a maximal repeat, so every box is a run of consecutive "
+        "alignments and gaps that several calls share exactly and that is not part of a "
+        "longer shared run; a box is labelled with that run, with how many calls it occurs "
+        "in and how many times in total, and is colored by the former. An edge is labelled "
+        "with what has to be appended to get from one maximal repeat to the next, and is "
+        "drawn the thicker the more often it is traversed.",
+    )
+    parser.add_argument(
+        "--cdawg-prefixes",
+        action="store_true",
+        help="Draws only the subgraph of --cdawg that the WHOLE strings trace: every node "
+        "and edge on the path some complete string follows from the source to the sink, and "
+        "then neither of those two artificial ends nor any edge touching them. Its nodes "
+        "are exactly the maximal repeats that start a call's string, and the paths it is cut "
+        "from are exactly those strings, one each, where the paths of the full graph are all "
+        "their suffixes. Much simpler - on a real cohort a third of the nodes and a fifth of "
+        "the edges - but not the same picture drawn smaller: a repeat shared by many calls "
+        "is a single node whether or not it starts any of them, so the most widely shared "
+        "repeats are usually the ones this drops (196 of 300 calls, for the commonest one of "
+        "the test cohort). What is left is not even a DAG any more but a tree - the compact "
+        "trie of the strings, without its root and its leaves - since prefixes never merge "
+        "and all of a CDAWG's merging is on the nodes this drops. Use it to see what the "
+        "calls look like end to end and where they start to differ, and the full graph to "
+        "see which units of architecture the cohort repeats.",
+    )
+    parser.add_argument(
+        "--cdawg-dot",
+        default=None,
+        metavar="FILE",
+        help="Writes the same graph to FILE in the DOT language, for graphviz to draw "
+        "instead: `dot -Tsvg FILE -o cdawg.svg`. Writing it costs nothing whatever the size, "
+        "and on a graph of a few hundred nodes graphviz is both faster than --cdawg and "
+        "better laid out. It does not scale, though: graphviz never breaks a rank into rows, "
+        "so it lays a CDAWG out hundreds of times wider than tall (SVG and not PNG for that "
+        "reason), and its crossing minimization took 15 hours on a graph of 31000 nodes that "
+        "--cdawg draws in 11 minutes. Can be given on its own, without --cdawg.",
+    )
+    parser.add_argument(
+        "--cdawg-max-strings",
+        type=int,
+        default=0,
+        help="Builds --cdawg on the most frequent that many distinct strings only, and "
+        "reports what was left out (0 = every string). The construction is linear in the "
+        "total length and does not need the limit; the figure does, past a few hundred "
+        "nodes.",
+    )
+    parser.add_argument(
+        "--cdawg-max-nodes",
+        type=int,
+        default=0,
+        help="Refuses to draw --cdawg above this many nodes, rather than write a figure in "
+        "which nothing can be read (0 = no limit).",
+    )
+    parser.add_argument(
+        "--cdawg-edge-labels",
+        action="store_true",
+        help="Writes on every edge of --cdawg the string that has to be appended to get from "
+        "one maximal repeat to the next.",
+    )
+    parser.add_argument(
+        "--cdawg-top",
+        type=int,
+        default=10,
+        help="Maximal repeats of --cdawg printed on stderr, the ones occurring in the most "
+        "calls first.",
+    )
+    parser.add_argument(
+        "--cdawg-wrap",
+        type=int,
+        default=6,
+        help="Characters per line inside a box of --cdawg.",
+    )
+    parser.add_argument(
+        "--cdawg-max-lines",
+        type=int,
+        default=4,
+        help="Lines of a box of --cdawg, above which the maximal repeat is cut off.",
+    )
+    parser.add_argument(
+        "--cdawg-font", type=float, default=6.0, help="Font size inside a box of --cdawg."
+    )
+    parser.add_argument(
+        "--cdawg-padding",
+        type=float,
+        default=0.06,
+        help="Padding of a box of --cdawg, in inches.",
+    )
+    parser.add_argument(
+        "--cdawg-hgap",
+        type=float,
+        default=0.22,
+        help="Space between two boxes of the same layer of --cdawg, in inches.",
+    )
+    parser.add_argument(
+        "--cdawg-vgap",
+        type=float,
+        default=0.55,
+        help="Space between two layers of --cdawg, in inches.",
+    )
+    parser.add_argument(
+        "--cdawg-sweeps",
+        type=int,
+        default=4,
+        help="Barycenter sweeps that order the nodes inside the layers of --cdawg, which is "
+        "what takes the crossings out of it.",
+    )
+    parser.add_argument(
+        "--cdawg-aspect",
+        type=float,
+        default=1.6,
+        help="Width over height --cdawg aims for. A layer holds as many maximal repeats as "
+        "the cohort has and there are only as many layers as the longest string is long, so "
+        "one row per layer would be a figure hundreds of times wider than tall; a layer is "
+        "broken into as many rows as it takes to reach this ratio instead.",
+    )
+    parser.add_argument("--cdawg-cmap", default="viridis", help="Colormap of --cdawg.")
+    parser.add_argument(
         "--summary-bins",
         type=int,
         default=50,
@@ -2845,6 +3863,9 @@ def main():
     if args.sequences:
         with phase("sequences"):
             draw_sequences(args.sequences, records, args, palette)
+    if args.cdawg or args.cdawg_dot:
+        with phase("cdawg"):
+            draw_cdawg(args.cdawg, records, args)
 
     # The clustering serves the order of the rows and the colors of the
     # scatter plot; with neither figure asked for, the whole distance matrix
