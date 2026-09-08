@@ -8,7 +8,7 @@ Continental groups!!!! Filter before everything else.
 
 
 # Building a sparse matrix with just the necessary information and with integers
-# instead of sample strings.
+# {0,1,2} instead of GTs.
 bcftools view --header-only ${INPUT_BCF} | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
 bcftools query --format '%POS\t%REF\t%ALT[\t%SAMPLE=%GT]\n' --include 'GT="alt"' ${INPUT_BCF} | awk -F'\t' -v OFS='\t' '{
     svlen=length($3)-length($2)
