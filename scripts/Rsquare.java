@@ -8,8 +8,8 @@ import java.io.*;
  * the long.
  * 
  * Remark: both the short and the long categories include INS, DEL and 
- * replacements. Every short that affects bases within the max distance and does
- * not overlap the long contributes to the long's R^2.
+ * replacements. Every short that affects bases within the max distance and that
+ * does not overlap the long contributes to the long's R^2.
  * 
  * Remark: for speed, the program works on a small TSV projection of the
  * original VCF, where every record comes from the same chromosome, samples are 
@@ -31,7 +31,6 @@ public class Rsquare {
      */
     private static final int CAPACITY = 100;  // Arbitrary
     private static final double RESIZE_FACTOR = 1.5;  // Arbitrary
-    private static final int FIRST_SAMPLE_INDEX = 4;
 
     /**
      * Format of each row:
@@ -47,6 +46,7 @@ public class Rsquare {
     private static int[] activeLongLast, activeShortLast;
     private static int firstActiveLong, firstActiveShort, lastActiveLong, lastActiveShort;
     private static int totalNSamples;
+    private static final int FIRST_SAMPLE_INDEX = 4;  // First index of a sample in the `active*` tables.
 
     /**
      * Format of each row: 
@@ -292,7 +292,7 @@ public class Rsquare {
         while (true) {
             if (firstActiveLong==lastActiveLong) lastReached=true;
             if (activeLong[firstActiveLong][1]>=pos) break;
-            bw.write(activeLong[firstActiveLong][2]+"\t"+activeLong[firstActiveLong][3]+"\t"+rSquaredLong[firstActiveLong][2]+"\t"+rSquaredLong[firstActiveLong][3]+"\t"+rSquaredLong[firstActiveLong][4]+"\n");
+            bw.write(activeLong[firstActiveLong][2]+"\t"+activeLong[firstActiveLong][3]+"\t"+rSquaredLong[firstActiveLong][2]+"\t"+(int)(rSquaredLong[firstActiveLong][3])+"\t"+(int)(rSquaredLong[firstActiveLong][4])+"\n");
             if (lastReached) { firstActiveLong=-1; lastActiveLong=-1; break; }
             else firstActiveLong=(firstActiveLong+1)%activeLong.length;   
         }
@@ -453,30 +453,69 @@ public class Rsquare {
      * coefficient, since the denominator's quantities are already cached in 
      * `rSquaredLong` and `rSquaredShort`.
      * 
-     * @return the R^2 coefficient between `activeLong[svIndex]` and 
-     * `activeShort[snpIndex]`.
+     * @return the R^2 coefficient between `activeLong[longIndex]` and 
+     * `activeShort[shortIndex]`.
      */
-    private static final double rSquare(int svIndex, int snpIndex) {
-        final int LAST_SV = activeLongLast[svIndex];
-        final int LAST_SNP = activeShortLast[snpIndex];
-        final double AVG_SV = rSquaredLong[svIndex][0];
-        final double AVG_SNP = rSquaredShort[snpIndex][0];
+    private static final double rSquare(int longIndex, int shortIndex) {
+        final int LAST_LONG = activeLongLast[longIndex];
+        final int LAST_SHORT = activeShortLast[shortIndex];
+        final int N_SAMPLES_LONG = (LAST_LONG+1-FIRST_SAMPLE_INDEX)/2;
+        final int LOG2_N_SAMPLES_LONG = 32-Integer.numberOfLeadingZeros(N_SAMPLES_LONG);
+        final int N_SAMPLES_SHORT = (LAST_SHORT+1-FIRST_SAMPLE_INDEX)/2;
+        final int LOG2_N_SAMPLES_SHORT = 32-Integer.numberOfLeadingZeros(N_SAMPLES_SHORT);
+        final double AVG_LONG = rSquaredLong[longIndex][0];
+        final double AVG_SHORT = rSquaredShort[shortIndex][0];
+
         int i, j;
         double n, numerator;
 
         numerator=0.0;
-        i=FIRST_SAMPLE_INDEX; j=FIRST_SAMPLE_INDEX;
-        while (i<=LAST_SV && j<=LAST_SNP) {
-            if (activeLong[svIndex][i]<activeShort[snpIndex][j]) i+=2;
-            else if (activeLong[svIndex][i]>activeShort[snpIndex][j]) j+=2;
-            else {
-                numerator+=activeLong[svIndex][i+1]*activeShort[snpIndex][j+1];
-                i+=2; j+=2;
+        if (N_SAMPLES_LONG>=N_SAMPLES_SHORT*LOG2_N_SAMPLES_LONG) {
+            for (i=FIRST_SAMPLE_INDEX; i<=LAST_SHORT; i+=2) {
+                j=binarySearch(activeLong[longIndex],LAST_LONG,activeShort[shortIndex][i]);
+                if (j>=0) numerator+=activeLong[longIndex][j+1]*activeShort[shortIndex][i+1];
             }
         }
-        numerator-=totalNSamples*AVG_SV*AVG_SNP;
-        n=numerator/Math.sqrt(rSquaredLong[svIndex][1]*rSquaredShort[snpIndex][1]);
+        else if (N_SAMPLES_SHORT>=N_SAMPLES_LONG*LOG2_N_SAMPLES_SHORT) {
+            for (i=FIRST_SAMPLE_INDEX; i<=LAST_LONG; i+=2) {
+                j=binarySearch(activeShort[shortIndex],LAST_SHORT,activeLong[longIndex][i]);
+                if (j>=0) numerator+=activeLong[longIndex][i+1]*activeShort[shortIndex][j+1];
+            }
+        }
+        else {
+            i=FIRST_SAMPLE_INDEX; j=FIRST_SAMPLE_INDEX;
+            while (i<=LAST_LONG && j<=LAST_SHORT) {
+                if (activeLong[longIndex][i]<activeShort[shortIndex][j]) i+=2;
+                else if (activeLong[longIndex][i]>activeShort[shortIndex][j]) j+=2;
+                else {
+                    numerator+=activeLong[longIndex][i+1]*activeShort[shortIndex][j+1];
+                    i+=2; j+=2;
+                }
+            }
+        }
+        numerator-=totalNSamples*AVG_LONG*AVG_SHORT;
+        n=numerator/Math.sqrt(rSquaredLong[longIndex][1]*rSquaredShort[shortIndex][1]);
         return n*n;
+    }
+
+
+    /**
+     * @param array one of the `active*` rows;
+     * @param last one of the `active*Last` values.
+     */
+    private static final int binarySearch(int[] array, int last, int key) {
+        int low, mid, high, value;
+        
+        low=0;
+        high=(last+1-FIRST_SAMPLE_INDEX)/2-1;
+        while (low <= high) {
+            mid=(low+high)>>>1;
+            value=array[FIRST_SAMPLE_INDEX+mid*2];
+            if (value<key) low=mid+1;
+            else if (value>key) high=mid-1;
+            else return FIRST_SAMPLE_INDEX+mid*2;
+        }
+        return -1;
     }
     
 }
