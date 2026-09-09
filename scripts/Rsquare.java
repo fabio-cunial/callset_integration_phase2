@@ -3,13 +3,13 @@ import java.io.*;
 
 
 /**
- * For each SV, computes the max R^2 coefficient with the SNPs located within a 
- * max distance from the SV's endpoints and not overlapping the SV.
+ * For each long call, computes the max R^2 coefficient with the short calls 
+ * located within a max distance from the long's endpoints and not overlapping 
+ * the long.
  * 
- * Remark: the distinction between SVs and SNPs is only based on length. In 
- * particular, the SNP category includes INS, DEL, replacements. Every SNP that
- * affects bases within the max distance and does not overlap the SV contributes
- * to the SV's R^2.
+ * Remark: both the short and the long categories include INS, DEL and 
+ * replacements. Every short that affects bases within the max distance and does
+ * not overlap the long contributes to the long's R^2.
  * 
  * Remark: for speed, the program works on a small TSV projection of the
  * original VCF, where every record comes from the same chromosome, samples are 
@@ -38,14 +38,14 @@ public class Rsquare {
      * 
      * first,last,type,length,  sample1,count1, sample2,counts2, ..., sampleK,countK
      * 
-     * where `[first..last]` is an interval with zero-based, inclusive 
-     * positions, and `countX` is in {0,1,2}.
+     * where `[first..last]` is the interval of zero-based, inclusive positions
+     * that are affected by the variant, and `countX` is in {0,1,2}.
      * 
      * Remark: rows may have different lengths.
      */
-    private static int[][] activeSvs, activeSnps;
-    private static int[] activeSvsLast, activeSnpsLast;
-    private static int firstActiveSv, firstActiveSnp, lastActiveSv, lastActiveSnp;
+    private static int[][] activeLong, activeShort;
+    private static int[] activeLongLast, activeShortLast;
+    private static int firstActiveLong, firstActiveShort, lastActiveLong, lastActiveShort;
     private static int totalNSamples;
 
     /**
@@ -56,12 +56,12 @@ public class Rsquare {
      * where `tmp*` are just temporary variables that are cached for speeding up
      * computation, and `N` is the number of samples with GT=ALT.
      */
-    private static double[][] rSquaredSv;
+    private static double[][] rSquaredLong;
 
     /**
      * Format of each row: `tmpAvg, tmpD`.
      */
-    private static double[][] rSquaredSnp;
+    private static double[][] rSquaredShort;
 
     /**
      * Scratch space
@@ -73,8 +73,8 @@ public class Rsquare {
      * @param args 0 format: `POS,refLength,altLength, sample=gtCount,...`,
      * where `POS` is sorted and comes from the VCF, and `gtCount` is an integer
      * in {0,1,2}; all the records are expected to come from the same chrom;
-     * @param args 4 format: `svtype,svlen,R^2,AC,N`, where `N` is the number of
-     * samples with GT=ALT and R^2 is -1 iff it cannot be compared to any SNP.
+     * @param args 4 format: `type,length,R^2,AC,N`, where `N` is the number of
+     * samples with GT=ALT and R^2 is -1 iff it cannot be compared to any short.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_TSV = args[0];
@@ -87,25 +87,25 @@ public class Rsquare {
 
         int p1, p2, p3;
         int pos, length, refLength, altLength;
-        long nRecords, nSvs, nSnps;
+        long nRecords, nLong, nShort;
         String str;
         BufferedReader br;
         BufferedWriter bw;
         
         // Allocating reused space
-        activeSvs = new int[CAPACITY][4+2*CAPACITY];
-        activeSvsLast = new int[CAPACITY];
-        firstActiveSv=-1; lastActiveSv=-1;
-        activeSnps = new int[CAPACITY][4+2*CAPACITY];
-        activeSnpsLast = new int[CAPACITY];
-        firstActiveSnp=-1; lastActiveSnp=-1;
+        activeLong = new int[CAPACITY][4+2*CAPACITY];
+        activeLongLast = new int[CAPACITY];
+        firstActiveLong=-1; lastActiveLong=-1;
+        activeShort = new int[CAPACITY][4+2*CAPACITY];
+        activeShortLast = new int[CAPACITY];
+        firstActiveShort=-1; lastActiveShort=-1;
         tmpArray1 = new int[4+2*totalNSamples];
-        rSquaredSv = new double[CAPACITY][5];
-        rSquaredSnp = new double[CAPACITY][2];
+        rSquaredLong = new double[CAPACITY][5];
+        rSquaredShort = new double[CAPACITY][2];
 
         br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_TSV))));
         bw = new BufferedWriter(new FileWriter(OUTPUT_TSV));
-        str=br.readLine(); nRecords=0; nSvs=0; nSnps=0;
+        str=br.readLine(); nRecords=0; nLong=0; nShort=0;
         while (str!=null) {
             p1=str.indexOf('\t');
             pos=Integer.parseInt(str.substring(0,p1));
@@ -115,17 +115,17 @@ public class Rsquare {
             altLength=Integer.parseInt(str.substring(p2+1,p3));
             length=altLength-refLength;
             if (length<=-MIN_SV_LENGTH || length>=MIN_SV_LENGTH) {
-                nSvs++;
-                addActiveSv(pos,refLength,altLength,str,p3+1);
-                removeInactiveSnps(pos-1-MAX_DISTANCE_BP-1);
-                removeInactiveSvs(pos-1-MAX_DISTANCE_BP-1,bw);
+                nLong++;
+                addActiveLong(pos,refLength,altLength,str,p3+1);
+                removeInactiveShorts(pos-1-MAX_DISTANCE_BP-1);
+                removeInactiveLongs(pos-1-MAX_DISTANCE_BP-1,bw);
                 initializeMaxRsquare(MAX_DISTANCE_BP);
             }
             else {
-                nSnps++;
-                addActiveSnp(pos,refLength,altLength,str,p3+1);
-                removeInactiveSvs(pos-1-MAX_DISTANCE_BP-1,bw);
-                removeInactiveSnps(pos-1-MAX_DISTANCE_BP-1);
+                nShort++;
+                addActiveShort(pos,refLength,altLength,str,p3+1);
+                removeInactiveLongs(pos-1-MAX_DISTANCE_BP-1,bw);
+                removeInactiveShorts(pos-1-MAX_DISTANCE_BP-1);
                 updateMaxRsquare(MAX_DISTANCE_BP);
             }
 
@@ -135,8 +135,8 @@ public class Rsquare {
             str=br.readLine();
         }
         br.close();
-        printRemainingSvs(bw);
-        System.err.println("Processed "+nRecords+" total records, "+nSvs+" SVs, "+nSnps+" SNPs.");
+        printRemainingLong(bw);
+        System.err.println("Processed "+nRecords+" total records, "+nLong+" long, "+nShort+" short.");
     }
 
 
@@ -146,16 +146,16 @@ public class Rsquare {
      * @param p the starting position of `str` from which to begin parsing
      * (inclusive).
      */
-    private static final void addActiveSv(int pos, int refLength, int altLength, String str, int p) {
+    private static final void addActiveLong(int pos, int refLength, int altLength, String str, int p) {
         int i;
-        int last, nSamplesSv;
+        int last, nSamplesLong;
         double avg, denom;
 
         // Allocating space
-        if (lastActiveSv==-1) { firstActiveSv=0; lastActiveSv=0; }
+        if (lastActiveLong==-1) { firstActiveLong=0; lastActiveLong=0; }
         else {
-            if ((lastActiveSv+1)%activeSvs.length==firstActiveSv) resizeActiveSvs();
-            lastActiveSv=(lastActiveSv+1)%activeSvs.length;
+            if ((lastActiveLong+1)%activeLong.length==firstActiveLong) resizeActiveLongs();
+            lastActiveLong=(lastActiveLong+1)%activeLong.length;
         }
 
         // Loading the record
@@ -163,25 +163,25 @@ public class Rsquare {
         tmpArray1[2]=getType(refLength,altLength);
         tmpArray1[3]=Math.abs(altLength-refLength);
         last=loadSamples(str,p,tmpArray1,4);
-        if (activeSvs[lastActiveSv]==null || activeSvs[lastActiveSv].length<last+1) activeSvs[lastActiveSv] = new int[last+1];
-        System.arraycopy(tmpArray1,0,activeSvs[lastActiveSv],0,last+1);
-        activeSvsLast[lastActiveSv]=last;
-        nSamplesSv=(last+1-FIRST_SAMPLE_INDEX)/2;
+        if (activeLong[lastActiveLong]==null || activeLong[lastActiveLong].length<last+1) activeLong[lastActiveLong] = new int[last+1];
+        System.arraycopy(tmpArray1,0,activeLong[lastActiveLong],0,last+1);
+        activeLongLast[lastActiveLong]=last;
+        nSamplesLong=(last+1-FIRST_SAMPLE_INDEX)/2;
 
         // Initializing output counts and cached values for computing R^2
-        if (rSquaredSv[lastActiveSv]==null) rSquaredSv[lastActiveSv] = new double[5];
+        if (rSquaredLong[lastActiveLong]==null) rSquaredLong[lastActiveLong] = new double[5];
         avg=0.0; denom=0.0;
         for (i=FIRST_SAMPLE_INDEX+1; i<=last; i+=2) {
-            avg+=activeSvs[lastActiveSv][i];
-            denom+=activeSvs[lastActiveSv][i]*activeSvs[lastActiveSv][i];
+            avg+=activeLong[lastActiveLong][i];
+            denom+=activeLong[lastActiveLong][i]*activeLong[lastActiveLong][i];
         }
-        rSquaredSv[lastActiveSv][3]=avg;
+        rSquaredLong[lastActiveLong][3]=avg;
         avg/=totalNSamples;
         denom-=totalNSamples*avg*avg;
-        rSquaredSv[lastActiveSv][0]=avg;
-        rSquaredSv[lastActiveSv][1]=denom;
-        rSquaredSv[lastActiveSv][2]=-1.0;
-        rSquaredSv[lastActiveSv][4]=nSamplesSv;
+        rSquaredLong[lastActiveLong][0]=avg;
+        rSquaredLong[lastActiveLong][1]=denom;
+        rSquaredLong[lastActiveLong][2]=-1.0;
+        rSquaredLong[lastActiveLong][4]=nSamplesLong;
     }
 
 
@@ -191,16 +191,16 @@ public class Rsquare {
      * @param p the starting position of `str` from which to begin parsing
      * (inclusive).
      */
-    private static final void addActiveSnp(int pos, int refLength, int altLength, String str, int p) {
+    private static final void addActiveShort(int pos, int refLength, int altLength, String str, int p) {
         int i;
         int last;
         double avg, denom;
 
         // Allocating space
-        if (lastActiveSnp==-1) { firstActiveSnp=0; lastActiveSnp=0; }
+        if (lastActiveShort==-1) { firstActiveShort=0; lastActiveShort=0; }
         else {
-            if ((lastActiveSnp+1)%activeSnps.length==firstActiveSnp) resizeActiveSnps();
-            lastActiveSnp=(lastActiveSnp+1)%activeSnps.length;
+            if ((lastActiveShort+1)%activeShort.length==firstActiveShort) resizeActiveShorts();
+            lastActiveShort=(lastActiveShort+1)%activeShort.length;
         }
 
         // Loading the record
@@ -208,21 +208,21 @@ public class Rsquare {
         tmpArray1[2]=getType(refLength,altLength);
         tmpArray1[3]=Math.abs(altLength-refLength);
         last=loadSamples(str,p,tmpArray1,4);
-        if (activeSnps[lastActiveSnp]==null || activeSnps[lastActiveSnp].length<last+1) activeSnps[lastActiveSnp] = new int[last+1];
-        System.arraycopy(tmpArray1,0,activeSnps[lastActiveSnp],0,last+1);
-        activeSnpsLast[lastActiveSnp]=last;
+        if (activeShort[lastActiveShort]==null || activeShort[lastActiveShort].length<last+1) activeShort[lastActiveShort] = new int[last+1];
+        System.arraycopy(tmpArray1,0,activeShort[lastActiveShort],0,last+1);
+        activeShortLast[lastActiveShort]=last;
 
         // Initializing cached values for computing R^2
-        if (rSquaredSnp[lastActiveSnp]==null) rSquaredSnp[lastActiveSnp] = new double[2];
+        if (rSquaredShort[lastActiveShort]==null) rSquaredShort[lastActiveShort] = new double[2];
         avg=0.0; denom=0.0;
         for (i=FIRST_SAMPLE_INDEX+1; i<=last; i+=2) {
-            avg+=activeSnps[lastActiveSnp][i];
-            denom+=activeSnps[lastActiveSnp][i]*activeSnps[lastActiveSnp][i];
+            avg+=activeShort[lastActiveShort][i];
+            denom+=activeShort[lastActiveShort][i]*activeShort[lastActiveShort][i];
         }
         avg/=totalNSamples;
         denom-=totalNSamples*avg*avg;
-        rSquaredSnp[lastActiveSnp][0]=avg;
-        rSquaredSnp[lastActiveSnp][1]=denom;
+        rSquaredShort[lastActiveShort][0]=avg;
+        rSquaredShort[lastActiveShort][1]=denom;
     }
 
 
@@ -251,83 +251,83 @@ public class Rsquare {
 
 
     /**
-     * Removes from the buffer the first few expired SNPs that end before `pos`
-     * (zero-based). The procedure stops at the first SNP that is not expired, 
-     * so it is just best-effort heuristic.
+     * Removes from the buffer the first few expired shorts that end before 
+     * `pos` (zero-based). The procedure stops at the first short that is not 
+     * expired, so it is just best-effort heuristic.
      * 
-     * Remark: at the end of the procedure, `activeSnps` may contain some
-     * expired SNPs.
+     * Remark: at the end of the procedure, `activeShort` may contain some
+     * expired shorts.
      * 
      * @param pos zero-based, inclusive.
      */
-    private static final void removeInactiveSnps(int pos) {
+    private static final void removeInactiveShorts(int pos) {
         boolean lastReached;
 
-        if (firstActiveSnp==-1) return;
+        if (firstActiveShort==-1) return;
         lastReached=false;
         while (true) {
-            if (firstActiveSnp==lastActiveSnp) lastReached=true;
-            if (activeSnps[firstActiveSnp][1]>=pos) break;
-            if (lastReached) { firstActiveSnp=-1; lastActiveSnp=-1; break; }
-            else firstActiveSnp=(firstActiveSnp+1)%activeSnps.length;
+            if (firstActiveShort==lastActiveShort) lastReached=true;
+            if (activeShort[firstActiveShort][1]>=pos) break;
+            if (lastReached) { firstActiveShort=-1; lastActiveShort=-1; break; }
+            else firstActiveShort=(firstActiveShort+1)%activeShort.length;
         }
     }
 
 
     /**
-     * Removes from the buffer the first few expired SVs that end before `pos`
-     * (zero-based). The procedure stops at the first SV that is not expired, 
+     * Removes from the buffer the first few expired longs that end before `pos`
+     * (zero-based). The procedure stops at the first long that is not expired, 
      * so it is just a best-effort heuristic.
      * 
-     * Remark: at the end of the procedure, `activeSvs` may contain some
-     * expired SVs.
+     * Remark: at the end of the procedure, `activeLong` may contain some
+     * expired longs.
      * 
      * @param pos zero-based, inclusive.
      */
-    private static final void removeInactiveSvs(int pos, BufferedWriter bw) throws IOException {
+    private static final void removeInactiveLongs(int pos, BufferedWriter bw) throws IOException {
         boolean lastReached;
 
-        if (firstActiveSv==-1) return;
+        if (firstActiveLong==-1) return;
         lastReached=false;
         while (true) {
-            if (firstActiveSv==lastActiveSv) lastReached=true;
-            if (activeSvs[firstActiveSv][1]>=pos) break;
-            bw.write(activeSvs[firstActiveSv][2]+"\t"+activeSvs[firstActiveSv][3]+"\t"+rSquaredSv[firstActiveSv][2]+"\t"+rSquaredSv[firstActiveSv][3]+"\t"+rSquaredSv[firstActiveSv][4]+"\n");
-            if (lastReached) { firstActiveSv=-1; lastActiveSv=-1; break; }
-            else firstActiveSv=(firstActiveSv+1)%activeSvs.length;   
+            if (firstActiveLong==lastActiveLong) lastReached=true;
+            if (activeLong[firstActiveLong][1]>=pos) break;
+            bw.write(activeLong[firstActiveLong][2]+"\t"+activeLong[firstActiveLong][3]+"\t"+rSquaredLong[firstActiveLong][2]+"\t"+rSquaredLong[firstActiveLong][3]+"\t"+rSquaredLong[firstActiveLong][4]+"\n");
+            if (lastReached) { firstActiveLong=-1; lastActiveLong=-1; break; }
+            else firstActiveLong=(firstActiveLong+1)%activeLong.length;   
         }
     }
 
 
     /**
-     * Initializes `rSquaredSv[lastActiveSv][2]` using all the active SNPs that 
-     * are at distance `<=threshold` from `lastActiveSv` and do not overlap with
-     * it, if any.
+     * Initializes `rSquaredLong[lastActiveLong][2]` using all the active shorts
+     * that are at distance `<=threshold` from `lastActiveLong` and do not 
+     * overlap with it, if any.
      */
     private static final void initializeMaxRsquare(int threshold) {
         boolean lastReached;
         int i, distance;
         double r, max;
         
-        if (firstActiveSnp==-1) return;
-        i=firstActiveSnp; lastReached=false; max=rSquaredSv[lastActiveSv][2];
+        if (firstActiveShort==-1) return;
+        i=firstActiveShort; lastReached=false; max=rSquaredLong[lastActiveLong][2];
         while (true) {
-            if (i==lastActiveSnp) lastReached=true;
-            distance=getDistance(lastActiveSv,i);
+            if (i==lastActiveShort) lastReached=true;
+            distance=getDistance(lastActiveLong,i);
             if (distance<=threshold && distance>=0) {
-                r=rSquare(lastActiveSv,i);
+                r=rSquare(lastActiveLong,i);
                 if (r>=max) max=r;
             }
             if (lastReached) break;
-            i=(i+1)%activeSnps.length;
+            i=(i+1)%activeShort.length;
         }
-        rSquaredSv[lastActiveSv][2]=max;
+        rSquaredLong[lastActiveLong][2]=max;
     }
 
 
     /**
-     * Uses the last active SNP to update the `rSquared` value of every active 
-     * SV that is at distance `<=threshold` from it and does not overlap with 
+     * Uses the last active short to update the `rSquared` value of every active 
+     * long that is at distance `<=threshold` from it and does not overlap with 
      * it, if any.
      */
     private static final void updateMaxRsquare(int threshold) {
@@ -335,17 +335,17 @@ public class Rsquare {
         int i, distance;
         double r;
         
-        if (firstActiveSv==-1) return;
-        i=firstActiveSv; lastReached=false;
+        if (firstActiveLong==-1) return;
+        i=firstActiveLong; lastReached=false;
         while (true) {
-            if (i==lastActiveSv) lastReached=true;
-            distance=getDistance(i,lastActiveSnp);
+            if (i==lastActiveLong) lastReached=true;
+            distance=getDistance(i,lastActiveShort);
             if (distance<=threshold && distance>=0) {
-                r=rSquare(i,lastActiveSnp);
-                if (r>=rSquaredSv[i][2]) rSquaredSv[i][2]=r;
+                r=rSquare(i,lastActiveShort);
+                if (r>=rSquaredLong[i][2]) rSquaredLong[i][2]=r;
             }
             if (lastReached) break;
-            i=(i+1)%activeSvs.length;
+            i=(i+1)%activeLong.length;
         }
     }
 
@@ -354,23 +354,23 @@ public class Rsquare {
      * @return the number of basepairs between two intervals, in any respective
      * order (<0 means that the intervals overlap).
      */
-    private static final int getDistance(int svIndex, int snpIndex) {
-        return Math.max(activeSnps[snpIndex][0]-activeSvs[svIndex][1]-1,activeSvs[svIndex][0]-activeSnps[snpIndex][1]-1);
+    private static final int getDistance(int longIndex, int shortIndex) {
+        return Math.max(activeShort[shortIndex][0]-activeLong[longIndex][1]-1,activeLong[longIndex][0]-activeShort[shortIndex][1]-1);
     }
 
 
     /**
-     * Empties the SV buffer to disk and closes `bw`.
+     * Empties the long buffer to disk and closes `bw`.
      */
-    private static final void printRemainingSvs(BufferedWriter bw) throws IOException {
+    private static final void printRemainingLong(BufferedWriter bw) throws IOException {
         int i;
 
-        if (firstActiveSv!=-1) { 
-            i=firstActiveSv;
+        if (firstActiveLong!=-1) { 
+            i=firstActiveLong;
             while (true) {
-                bw.write(activeSvs[i][2]+"\t"+activeSvs[i][3]+"\t"+rSquaredSv[i][2]+"\t"+rSquaredSv[i][3]+"\t"+rSquaredSv[i][4]+"\n");
-                if (i==lastActiveSv) break;
-                i=(i+1)%activeSvs.length;
+                bw.write(activeLong[i][2]+"\t"+activeLong[i][3]+"\t"+rSquaredLong[i][2]+"\t"+rSquaredLong[i][3]+"\t"+rSquaredLong[i][4]+"\n");
+                if (i==lastActiveLong) break;
+                i=(i+1)%activeLong.length;
             }
         }
         bw.close();
@@ -414,68 +414,68 @@ public class Rsquare {
     }
 
 
-    private static final void resizeActiveSvs() {
-        final int NEW_SIZE = (int)(activeSvs.length*RESIZE_FACTOR);
+    private static final void resizeActiveLongs() {
+        final int NEW_SIZE = (int)(activeLong.length*RESIZE_FACTOR);
 
         int[][] newArray = new int[NEW_SIZE][];
-        System.arraycopy(activeSvs,firstActiveSv,newArray,0,activeSvs.length-firstActiveSv);
-        if (lastActiveSv<activeSvs.length-1) System.arraycopy(activeSvs,0,newArray,activeSvs.length-firstActiveSv,lastActiveSv+1);
+        System.arraycopy(activeLong,firstActiveLong,newArray,0,activeLong.length-firstActiveLong);
+        if (lastActiveLong<activeLong.length-1) System.arraycopy(activeLong,0,newArray,activeLong.length-firstActiveLong,lastActiveLong+1);
         int[] newArrayLast = new int[NEW_SIZE];
-        System.arraycopy(activeSvsLast,firstActiveSv,newArrayLast,0,activeSvsLast.length-firstActiveSv);
-        if (lastActiveSv<activeSvsLast.length-1) System.arraycopy(activeSvsLast,0,newArrayLast,activeSvsLast.length-firstActiveSv,lastActiveSv+1);
+        System.arraycopy(activeLongLast,firstActiveLong,newArrayLast,0,activeLongLast.length-firstActiveLong);
+        if (lastActiveLong<activeLongLast.length-1) System.arraycopy(activeLongLast,0,newArrayLast,activeLongLast.length-firstActiveLong,lastActiveLong+1);
         double[][] newArrayRsq = new double[NEW_SIZE][];
-        System.arraycopy(rSquaredSv,firstActiveSv,newArrayRsq,0,rSquaredSv.length-firstActiveSv);
-        if (lastActiveSv<rSquaredSv.length-1) System.arraycopy(rSquaredSv,0,newArrayRsq,rSquaredSv.length-firstActiveSv,lastActiveSv+1);
-        firstActiveSv=0; lastActiveSv=activeSvs.length-1;
-        activeSvs=newArray; activeSvsLast=newArrayLast; rSquaredSv=newArrayRsq;
+        System.arraycopy(rSquaredLong,firstActiveLong,newArrayRsq,0,rSquaredLong.length-firstActiveLong);
+        if (lastActiveLong<rSquaredLong.length-1) System.arraycopy(rSquaredLong,0,newArrayRsq,rSquaredLong.length-firstActiveLong,lastActiveLong+1);
+        firstActiveLong=0; lastActiveLong=activeLong.length-1;
+        activeLong=newArray; activeLongLast=newArrayLast; rSquaredLong=newArrayRsq;
     }
 
 
-    private static final void resizeActiveSnps() {
-        final int NEW_SIZE = (int)(activeSnps.length*RESIZE_FACTOR);
+    private static final void resizeActiveShorts() {
+        final int NEW_SIZE = (int)(activeShort.length*RESIZE_FACTOR);
 
         int[][] newArray = new int[NEW_SIZE][];
-        System.arraycopy(activeSnps,firstActiveSnp,newArray,0,activeSnps.length-firstActiveSnp);
-        if (lastActiveSnp<activeSnps.length-1) System.arraycopy(activeSnps,0,newArray,activeSnps.length-firstActiveSnp,lastActiveSnp+1);
+        System.arraycopy(activeShort,firstActiveShort,newArray,0,activeShort.length-firstActiveShort);
+        if (lastActiveShort<activeShort.length-1) System.arraycopy(activeShort,0,newArray,activeShort.length-firstActiveShort,lastActiveShort+1);
         int[] newArrayLast = new int[NEW_SIZE];
-        System.arraycopy(activeSnpsLast,firstActiveSnp,newArrayLast,0,activeSnpsLast.length-firstActiveSnp);
-        if (lastActiveSnp<activeSnpsLast.length-1) System.arraycopy(activeSnpsLast,0,newArrayLast,activeSnpsLast.length-firstActiveSnp,lastActiveSnp+1);
+        System.arraycopy(activeShortLast,firstActiveShort,newArrayLast,0,activeShortLast.length-firstActiveShort);
+        if (lastActiveShort<activeShortLast.length-1) System.arraycopy(activeShortLast,0,newArrayLast,activeShortLast.length-firstActiveShort,lastActiveShort+1);
         double[][] newArrayRsq = new double[NEW_SIZE][];
-        System.arraycopy(rSquaredSnp,firstActiveSnp,newArrayRsq,0,rSquaredSnp.length-firstActiveSnp);
-        if (lastActiveSnp<rSquaredSnp.length-1) System.arraycopy(rSquaredSnp,0,newArrayRsq,rSquaredSnp.length-firstActiveSnp,lastActiveSnp+1);
-        firstActiveSnp=0; lastActiveSnp=activeSnps.length-1;
-        activeSnps=newArray; activeSnpsLast=newArrayLast; rSquaredSnp=newArrayRsq;
+        System.arraycopy(rSquaredShort,firstActiveShort,newArrayRsq,0,rSquaredShort.length-firstActiveShort);
+        if (lastActiveShort<rSquaredShort.length-1) System.arraycopy(rSquaredShort,0,newArrayRsq,rSquaredShort.length-firstActiveShort,lastActiveShort+1);
+        firstActiveShort=0; lastActiveShort=activeShort.length-1;
+        activeShort=newArray; activeShortLast=newArrayLast; rSquaredShort=newArrayRsq;
     }
 
 
     /**
      * Remark: this procedure essentially just computes the numerator of the R^2
      * coefficient, since the denominator's quantities are already cached in 
-     * `rSquaredSv` and `rSquaredSnp`.
+     * `rSquaredLong` and `rSquaredShort`.
      * 
-     * @return the R^2 coefficient between `activeSvs[svIndex]` and 
-     * `activeSnps[snpIndex]`.
+     * @return the R^2 coefficient between `activeLong[svIndex]` and 
+     * `activeShort[snpIndex]`.
      */
     private static final double rSquare(int svIndex, int snpIndex) {
-        final int LAST_SV = activeSvsLast[svIndex];
-        final int LAST_SNP = activeSnpsLast[snpIndex];
-        final double AVG_SV = rSquaredSv[svIndex][0];
-        final double AVG_SNP = rSquaredSnp[snpIndex][0];
+        final int LAST_SV = activeLongLast[svIndex];
+        final int LAST_SNP = activeShortLast[snpIndex];
+        final double AVG_SV = rSquaredLong[svIndex][0];
+        final double AVG_SNP = rSquaredShort[snpIndex][0];
         int i, j;
         double n, numerator;
 
         numerator=0.0;
         i=FIRST_SAMPLE_INDEX; j=FIRST_SAMPLE_INDEX;
         while (i<=LAST_SV && j<=LAST_SNP) {
-            if (activeSvs[svIndex][i]<activeSnps[snpIndex][j]) i+=2;
-            else if (activeSvs[svIndex][i]>activeSnps[snpIndex][j]) j+=2;
+            if (activeLong[svIndex][i]<activeShort[snpIndex][j]) i+=2;
+            else if (activeLong[svIndex][i]>activeShort[snpIndex][j]) j+=2;
             else {
-                numerator+=activeSvs[svIndex][i+1]*activeSnps[snpIndex][j+1];
+                numerator+=activeLong[svIndex][i+1]*activeShort[snpIndex][j+1];
                 i+=2; j+=2;
             }
         }
         numerator-=totalNSamples*AVG_SV*AVG_SNP;
-        n=numerator/Math.sqrt(rSquaredSv[svIndex][1]*rSquaredSnp[snpIndex][1]);
+        n=numerator/Math.sqrt(rSquaredLong[svIndex][1]*rSquaredShort[snpIndex][1]);
         return n*n;
     }
     
