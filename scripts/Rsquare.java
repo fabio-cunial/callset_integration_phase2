@@ -7,7 +7,7 @@ import java.io.*;
  * located within a max distance from the long's endpoints and not overlapping 
  * the long.
  * 
- * Remark: both the short and the long categories include INS, DEL and 
+ * Remark: both the short and the long categories may include INS, DEL and 
  * replacements. Every short that affects bases within the max distance and that
  * does not overlap the long contributes to the long's R^2.
  * 
@@ -73,20 +73,26 @@ public class Rsquare {
      * @param args 0 format: `POS,refLength,altLength, sample=gtCount,...`,
      * where `POS` is sorted and comes from the VCF, and `gtCount` is an integer
      * in {0,1,2}; all the records are expected to come from the same chrom;
-     * @param args 4 format: `type,length,R^2,AC,N`, where `N` is the number of
-     * samples with GT=ALT and R^2 is -1 iff it cannot be compared to any short.
+     * @param args 1 total number of samples in the entire cohort;
+     * @param args 2 only variants of length >=this are kept as long;
+     * @param args 3 only variants of length <=this are kept as short;
+     * @param args 4 max bp distance to compare two variants;
+     * @param args 5 output file with format: `type,length,R^2,AC,N`, where `N` 
+     * is the number of samples with GT=ALT and R^2 is -1 iff it cannot be
+     * compared to any short.
      */
     public static void main(String[] args) throws IOException {
-        final String INPUT_TSV = args[0];
+        final String INPUT_TSV_GZ = args[0];
         totalNSamples=Integer.parseInt(args[1]);
-        final int MIN_SV_LENGTH = Integer.parseInt(args[2]);
-        final int MAX_DISTANCE_BP = Integer.parseInt(args[3]);
-        final String OUTPUT_TSV = args[4];
+        final int MIN_LONG_LENGTH = Integer.parseInt(args[2]);
+        final int MAX_SHORT_LENGTH = Integer.parseInt(args[3]);
+        final int MAX_DISTANCE_BP = Integer.parseInt(args[4]);
+        final String OUTPUT_TSV = args[5];
 
         final int QUANTUM = 1000;  // Arbitrary
 
         int p1, p2, p3;
-        int pos, length, refLength, altLength;
+        int pos, length, refLength, altLength, type;
         long nRecords, nLong, nShort;
         String str;
         BufferedReader br;
@@ -103,7 +109,7 @@ public class Rsquare {
         rSquaredLong = new double[CAPACITY][5];
         rSquaredShort = new double[CAPACITY][2];
 
-        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_TSV))));
+        br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(INPUT_TSV_GZ))));
         bw = new BufferedWriter(new FileWriter(OUTPUT_TSV));
         str=br.readLine(); nRecords=0; nLong=0; nShort=0;
         while (str!=null) {
@@ -113,20 +119,24 @@ public class Rsquare {
             refLength=Integer.parseInt(str.substring(p1+1,p2));
             p3=str.indexOf('\t',p2+1);
             altLength=Integer.parseInt(str.substring(p2+1,p3));
-            length=altLength-refLength;
-            if (length<=-MIN_SV_LENGTH || length>=MIN_SV_LENGTH) {
+            type=getType(refLength,altLength);
+            length=getLength(refLength,altLength,type);
+            if (length>=MIN_LONG_LENGTH) {
                 nLong++;
-                addActiveLong(pos,refLength,altLength,str,p3+1);
                 removeInactiveShorts(pos-1-MAX_DISTANCE_BP-1);
                 removeInactiveLongs(pos-1-MAX_DISTANCE_BP-1,bw);
+                addActiveLong(pos,refLength,altLength,type,length,str,p3+1);
                 initializeMaxRsquare(MAX_DISTANCE_BP);
             }
-            else {
+            else if (length<=MAX_SHORT_LENGTH) {
                 nShort++;
-                addActiveShort(pos,refLength,altLength,str,p3+1);
-                removeInactiveLongs(pos-1-MAX_DISTANCE_BP-1,bw);
                 removeInactiveShorts(pos-1-MAX_DISTANCE_BP-1);
+                removeInactiveLongs(pos-1-MAX_DISTANCE_BP-1,bw);
+                addActiveShort(pos,refLength,altLength,type,length,str,p3+1);
                 updateMaxRsquare(MAX_DISTANCE_BP);
+            }
+            else {
+                // Other lengths are completely discarded
             }
 
             // Next iteration
@@ -135,7 +145,7 @@ public class Rsquare {
             str=br.readLine();
         }
         br.close();
-        printRemainingLong(bw);
+        printRemainingLongs(bw);
         System.err.println("Processed "+nRecords+" total records, "+nLong+" long, "+nShort+" short.");
     }
 
@@ -146,7 +156,7 @@ public class Rsquare {
      * @param p the starting position of `str` from which to begin parsing
      * (inclusive).
      */
-    private static final void addActiveLong(int pos, int refLength, int altLength, String str, int p) {
+    private static final void addActiveLong(int pos, int refLength, int altLength, int type, int length, String str, int p) {
         int i;
         int last, nSamplesLong;
         double avg, denom;
@@ -159,9 +169,9 @@ public class Rsquare {
         }
 
         // Loading the record
-        getInterval(pos,refLength,altLength,tmpArray1);
-        tmpArray1[2]=getType(refLength,altLength);
-        tmpArray1[3]=Math.abs(altLength-refLength);
+        getInterval(pos,refLength,altLength,type,tmpArray1);
+        tmpArray1[2]=type;
+        tmpArray1[3]=length;
         last=loadSamples(str,p,tmpArray1,4);
         if (activeLong[lastActiveLong]==null || activeLong[lastActiveLong].length<last+1) activeLong[lastActiveLong] = new int[last+1];
         System.arraycopy(tmpArray1,0,activeLong[lastActiveLong],0,last+1);
@@ -191,7 +201,7 @@ public class Rsquare {
      * @param p the starting position of `str` from which to begin parsing
      * (inclusive).
      */
-    private static final void addActiveShort(int pos, int refLength, int altLength, String str, int p) {
+    private static final void addActiveShort(int pos, int refLength, int altLength, int type, int length, String str, int p) {
         int i;
         int last;
         double avg, denom;
@@ -204,9 +214,9 @@ public class Rsquare {
         }
 
         // Loading the record
-        getInterval(pos,refLength,altLength,tmpArray1);
-        tmpArray1[2]=getType(refLength,altLength);
-        tmpArray1[3]=Math.abs(altLength-refLength);
+        getInterval(pos,refLength,altLength,type,tmpArray1);
+        tmpArray1[2]=type;
+        tmpArray1[3]=length;
         last=loadSamples(str,p,tmpArray1,4);
         if (activeShort[lastActiveShort]==null || activeShort[lastActiveShort].length<last+1) activeShort[lastActiveShort] = new int[last+1];
         System.arraycopy(tmpArray1,0,activeShort[lastActiveShort],0,last+1);
@@ -355,6 +365,12 @@ public class Rsquare {
      * order (<0 means that the intervals overlap).
      */
     private static final int getDistance(int longIndex, int shortIndex) {
+        // Special case: two INS at the same POS are considered overlapping.
+        if (activeLong[longIndex][1]<activeLong[longIndex][0] && activeShort[shortIndex][1]<activeShort[shortIndex][0] && activeLong[longIndex][0]==activeShort[shortIndex][0]) return -1;
+
+        // Every other pair of calls.
+        // Remark: an INS overlaps with any interval call that contains or is 
+        // identical to its two adjacent positions.
         return Math.max(activeShort[shortIndex][0]-activeLong[longIndex][1]-1,activeLong[longIndex][0]-activeShort[shortIndex][1]-1);
     }
 
@@ -362,13 +378,13 @@ public class Rsquare {
     /**
      * Empties the long buffer to disk and closes `bw`.
      */
-    private static final void printRemainingLong(BufferedWriter bw) throws IOException {
+    private static final void printRemainingLongs(BufferedWriter bw) throws IOException {
         int i;
 
         if (firstActiveLong!=-1) { 
             i=firstActiveLong;
             while (true) {
-                bw.write(activeLong[i][2]+"\t"+activeLong[i][3]+"\t"+rSquaredLong[i][2]+"\t"+rSquaredLong[i][3]+"\t"+rSquaredLong[i][4]+"\n");
+                bw.write(activeLong[i][2]+"\t"+activeLong[i][3]+"\t"+rSquaredLong[i][2]+"\t"+(int)(rSquaredLong[i][3])+"\t"+(int)(rSquaredLong[i][4])+"\n");
                 if (i==lastActiveLong) break;
                 i=(i+1)%activeLong.length;
             }
@@ -384,16 +400,30 @@ public class Rsquare {
      * Remark: the interval is empty for INS. This is represented by setting
      * `last<first`.
      */
-    private static final void getInterval(int pos, int refLength, int altLength, int[] out) {
-        final int TYPE = getType(refLength,altLength);
-
-        if (TYPE==TYPE_SNP) { out[0]=pos-1; out[1]=pos-1; }
-        else if (TYPE==TYPE_DEL) { out[0]=(pos-1)+1; out[1]=(pos-1)+(refLength-1); }
-        else if (TYPE==TYPE_INS) { out[0]=pos; out[1]=pos-1; }
-        else if (TYPE==TYPE_SUB) { out[0]=pos-1; out[1]=(pos-1)+refLength-1; }
+    private static final void getInterval(int pos, int refLength, int altLength, int type, int[] out) {
+        if (type==TYPE_SNP) { out[0]=pos-1; out[1]=pos-1; }
+        else if (type==TYPE_DEL) { out[0]=(pos-1)+1; out[1]=(pos-1)+(refLength-1); }
+        else if (type==TYPE_INS) { out[0]=pos; out[1]=pos-1; }
+        else if (type==TYPE_SUB) { out[0]=pos-1; out[1]=(pos-1)+refLength-1; }
         else {
-            System.err.println("ERROR: wrong type="+TYPE+" for lengths "+refLength+","+altLength);
+            System.err.println("ERROR: wrong type="+type+" for lengths "+refLength+","+altLength);
             System.exit(1);
+        }
+    }
+
+
+    /**
+     * @return a non-negative integer.
+     */
+    private static final int getLength(int refLength, int altLength, int type) {
+        if (type==TYPE_SNP) return 1;
+        else if (type==TYPE_DEL) return refLength-1;
+        else if (type==TYPE_INS) return altLength-1;
+        else if (type==TYPE_SUB) return Math.max(refLength,altLength);
+        else {
+            System.err.println("ERROR: wrong type="+type+" for lengths "+refLength+","+altLength);
+            System.exit(1);
+            return -1;
         }
     }
 
