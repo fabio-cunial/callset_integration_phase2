@@ -1,157 +1,89 @@
 version 1.0
 
+
+# For each long call, computes the max R^2 coefficient with the short calls 
+# located within a max distance from the long's endpoints. See `Rsquare.java` 
+# for details.
 #
 workflow Rsquare {
     input {
-        String chr_id
+        String chromosome_id
+        String samples_id
+
         File input_bcf
         File input_csi
-        File input_bed
-        File reference_fai
-        String remote_outdir
+        File samples_txt
 
         Int min_long_length = 50
         Int max_short_length = 49
         Int max_distance_bp = 1000000
+        Float min_af = 0.01
+
+        String remote_outdir
 
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
     }
     parameter_meta {
-        input_bcf: "Every record must belong to a single chromosome and be biallelic."
-        input_bed: "Whole-genome BED, not necessarily limited to the current chromosome."
+        input_bcf: "Every record must belong to a single autosome and be biallelic."
+        samples_txt: "One sample ID per line, in any order. Samples that do not occur in the VCF are discarded, and the remaining ones are reordered as in `input_bcf`."
         max_short_length: "Must be <min_long_length"
+        max_distance_bp: "Max bp distance to compare a long to a short"
+        remote_outdir: "Without final slash"
     }
 
 
-    call SubsetByBed {
+    call Rsquare {
         input:
-            chr_id = chr_id,
+            chromosome_id = chromosome_id,
+            samples_id = samples_id,
+
             input_bcf = input_bcf,
             input_csi = input_csi,
-            input_bed = input_bed,
-            reference_fai = reference_fai,
-            docker_image = docker_image
-    }
-    call Rsquare as all {
-        input:
-            id = chr_id + "_all",
-            input_bcf = input_bcf,
-            input_csi = input_csi,
-            remote_outdir = remote_outdir,
+            samples_txt = samples_txt,
 
             min_long_length = min_long_length,
             max_short_length = max_short_length,
             max_distance_bp = max_distance_bp,
+            min_af = min_af,
 
-            docker_image = docker_image
-    }
-    call Rsquare as in_bed {
-        input:
-            id = chr_id + "_in_bed",
-            input_bcf = SubsetByBed.in_bed_bcf,
-            input_csi = SubsetByBed.in_bed_csi,
             remote_outdir = remote_outdir,
-
-            min_long_length = min_long_length,
-            max_short_length = max_short_length,
-            max_distance_bp = max_distance_bp,
-
-            docker_image = docker_image
-    }
-    call Rsquare as not_in_bed {
-        input:
-            id = chr_id + "_not_in_bed",
-            input_bcf = SubsetByBed.not_in_bed_bcf,
-            input_csi = SubsetByBed.not_in_bed_csi,
-            remote_outdir = remote_outdir,
-
-            min_long_length = min_long_length,
-            max_short_length = max_short_length,
-            max_distance_bp = max_distance_bp,
 
             docker_image = docker_image
     }
 }
 
 
-task SubsetByBed {
-    input {
-        String chr_id
-        File input_bcf
-        File input_csi
-        File input_bed
-        File reference_fai
-
-        String docker_image
-        Int n_cpu = 4
-        Int mem_gb = 4
-        Int preemptible_number = 0
-    }
-
-    Int disk_size_gb = 10 + 4*( ceil(size(input_bcf,"GB")) )
-    String docker_dir = "/callset_integration"
-
-    command <<<
-        set -euxo pipefail
-        
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        TIME_COMMAND="/usr/bin/time --verbose"
-
-        ${TIME_COMMAND} bedtools sort -i ~{input_bed} -faidx ~{reference_fai} > sorted.bed
-        ${TIME_COMMAND} bedtools complement -i sorted.bed -g ~{reference_fai} > complement.bed
-        ${TIME_COMMAND} awk -F'\t' -v c=~{chr_id} '$1==c' sorted.bed > sorted_chr.bed
-        ${TIME_COMMAND} awk -F'\t' -v c=~{chr_id} '$1==c' complement.bed > complement_chr.bed
-        if [ -s sorted_chr.bed ]; then
-            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --regions-file sorted_chr.bed     --regions-overlap pos --write-index ~{input_bcf} --output in_bed.bcf & PID1=$!
-        else
-            bcftools view --header-only --output-type b --write-index ~{input_bcf} --output in_bed.bcf & PID1=$!
-        fi
-        if [ -s complement_chr.bed ]; then
-            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --targets-file complement_chr.bed --targets-overlap pos --write-index ~{input_bcf} --output not_in_bed.bcf & PID2=$!
-        else
-            bcftools view --header-only --output-type b --write-index ~{input_bcf} --output not_in_bed.bcf & PID2=$!
-        fi
-        wait ${PID1} ; wait ${PID2}
-    >>>
-    
-    output {
-        File in_bed_bcf = "in_bed.bcf"
-        File in_bed_csi = "in_bed.bcf.csi"
-        File not_in_bed_bcf = "not_in_bed.bcf"
-        File not_in_bed_csi = "not_in_bed.bcf.csi"
-    }
-    runtime {
-        cpu: n_cpu
-        memory: mem_gb + " GiB"
-        disks: "local-disk " +  disk_size_gb + " SSD"
-        preemptible: preemptible_number
-        docker: docker_image
-    }
-}
-
-
-# TOOL                                                CPU     RAM     TIME
+# Performance on chr22 (1,908,914 records in VCF; 1,905,492 records in sparse 
+# matrix; 36,787 long; 1,868,705 short; 1Mbp max distance):
+#
+# TOOL                                       CPU        RAM         TIME
 # 
-# bcftools query | awk | gzip
-# Rsquare.java
+# bcftools query | awk | gzip                                         1h
+# Rsquare.java                              100%        4.3G       1h10m
 #
 task Rsquare {
     input {
-        String id
+        String chromosome_id
+        String samples_id
+
         File input_bcf
         File input_csi
-        String remote_outdir
+        File samples_txt
 
         Int min_long_length
         Int max_short_length
         Int max_distance_bp
+        Float min_af
+
+        String remote_outdir
 
         String docker_image
-        Int n_cpu = 4
-        Int mem_gb = 16
+        Int n_cpu = 3
+        Int mem_gb = 8
         Int preemptible_number = 0
+    }
+    parameter_meta {
+        n_cpu: "3 because there can be 3 concurrent processes in a pipe."
     }
 
     Int disk_size_gb = 10 + 10*( ceil(size(input_bcf,"GB")) )
@@ -166,36 +98,63 @@ task Rsquare {
         EFFECTIVE_RAM_MB=$(( ~{mem_gb}*1024 - 512 ))
         TIME_COMMAND="/usr/bin/time --verbose"
 
-        # Building a sparse projection of the VCF
-        bcftools view --header-only ~{input_bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 > samples.txt
-        N_SAMPLES=$(wc -l < samples.txt)
-        date 1>&2
-        bcftools query --format '%POS\t%REF\t%ALT[\t%SAMPLE=%GT]\n' --include 'GT="alt" | GT="mis"' ~{input_bcf} | awk -F'\t' -v OFS='\t' '
-        BEGIN {
-            n_samples=0
-            while ((getline sample_id < "samples.txt") > 0) { n_samples++; sample_index[sample_id]=n_samples }
-        }
-        {
-            n_printed = 0
-            for (i=4; i<=NF; i++) {
-                p = index($i, "="); sid = substr($i, 1, p-1)
-                n_alleles = split(substr($i, p+1), alleles, "[/|]")
-                alt_count = 0
-                for (j = 1; j <= n_alleles; j++) if (alleles[j] + 0 > 0) alt_count++
-                if (alt_count > 0) {
-                    if (n_printed == 0) printf "%s\t%d\t%d", $1, length($2), length($3)
-                    printf "\t%d=%d", sample_index[sid], alt_count
-                    n_printed++
-                }
+        MATRIX_FILENAME="~{chromosome_id}_~{samples_id}.tsv.gz"
+        RUN_ID="~{chromosome_id}_~{samples_id}_~{min_long_length}_~{max_short_length}_~{max_distance_bp}_~{min_af}"
+
+        # Making sure that `samples_txt` is a subset of the samples in the VCF
+        # and in the same relative order.
+        bcftools query --list-samples ~{input_bcf} > vcf_samples.txt
+        awk '
+        NR==FNR { requested[$0]=1; next }
+        ($0 in requested)
+        ' ~{samples_txt} vcf_samples.txt > samples.txt
+        rm -f vcf_samples.txt
+        N_SAMPLES_REQUESTED=$(wc -l < ~{samples_txt})
+        N_SAMPLES_KEPT=$(wc -l < samples.txt)
+        if [ ${N_SAMPLES_KEPT} -eq 0 ]; then
+            echo "No requested samples found in the VCF." 1>&2
+            exit 1
+        fi
+
+        # Building a sparse projection of the VCF that contains only the 
+        # requested samples.
+        TEST=$(gcloud storage ls ~{remote_outdir}/matrices/${MATRIX_FILENAME} || echo "0")
+        if [ "$TEST" != "0" ]; then
+            gcloud storage cp ~{remote_outdir}/matrices/${MATRIX_FILENAME} .
+        else
+            date 1>&2
+            bcftools query --format '%POS\t%REF\t%ALT\t%ID[\t%SAMPLE=%GT]\n' --include 'GT="alt" | GT="mis"' ~{input_bcf} | awk -F'\t' -v OFS='\t' '
+            BEGIN {
+                n_samples=0
+                while ((getline sample_id < "samples.txt") > 0) { n_samples++; sample_index[sample_id]=n_samples }
             }
-            if (n_printed > 0) printf "\n"
-        }' | gzip -1 -c > matrix.tsv.gz
-        date 1>&2
+            {
+                n_printed = 0
+                for (i=4; i<=NF; i++) {
+                    p = index($i, "="); sid = substr($i, 1, p-1)
+                    if (!(sid in sample_index)) continue
+                    n_alleles = split(substr($i, p+1), alleles, "[/|]")
+                    alt_count = 0
+                    for (j = 1; j <= n_alleles; j++) if (alleles[j] + 0 > 0) alt_count++
+                    if (alt_count > 0) {
+                        if (n_printed == 0) printf "%s\t%d\t%d\t%s", $1, length($2), length($3), $4
+                        printf "\t%d=%d", sample_index[sid], alt_count
+                        n_printed++
+                    }
+                }
+                if (n_printed > 0) printf "\n"
+            }' | gzip -1 -c > ${MATRIX_FILENAME}
+            date 1>&2
+            gcloud storage cp ${MATRIX_FILENAME} ~{remote_outdir}/matrices/
+            zcat ${MATRIX_FILENAME} | head -n 10 1>&2 || true
+            ls -laht 1>&2
+        fi
 
         # Computing R^2
-        bcftools index --nrecords ~{input_csi} 1>&2
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare matrix.tsv.gz ${N_SAMPLES} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{id}.tsv
-        gcloud storage mv ~{id}.tsv ~{remote_outdir}/
+        N_RECORDS_IN_VCF=$(bcftools index --nrecords ~{input_csi})
+        echo "Number of records in VCF: ${N_RECORDS_IN_VCF}" > ${RUN_ID}.log
+        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare ${MATRIX_FILENAME} ~{chromosome_id} ${N_SAMPLES_KEPT} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{min_af} ${RUN_ID}.bed >> ${RUN_ID}.log
+        gcloud storage mv ${RUN_ID}.bed ${RUN_ID}.log ~{remote_outdir}/
     >>>
     
     output {

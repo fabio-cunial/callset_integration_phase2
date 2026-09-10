@@ -182,7 +182,7 @@ public class Rsquare {
         }
         br.close();
         printRemainingLongs(bw);
-        System.err.println("Processed "+nRecords+" total records, "+nLong+" long ("+nLongWithAF+" with the desired AF), "+nShort+" short ("+nShortWithAF+" with the desired AF).");
+        System.out.println("Processed "+nRecords+" total records, "+nLong+" long ("+nLongWithAF+" with the desired AF), "+nShort+" short ("+nShortWithAF+" with the desired AF).");
     }
 
 
