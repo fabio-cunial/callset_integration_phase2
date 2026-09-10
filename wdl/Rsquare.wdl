@@ -36,6 +36,7 @@ workflow Rsquare {
         input:
             id = chr_id + "_all",
             input_bcf = input_bcf,
+            input_csi = input_csi,
             remote_outdir = remote_outdir,
 
             min_long_length = min_long_length,
@@ -48,6 +49,7 @@ workflow Rsquare {
         input:
             id = chr_id + "_in_bed",
             input_bcf = SubsetByBed.in_bed_bcf,
+            input_csi = SubsetByBed.in_bed_csi,
             remote_outdir = remote_outdir,
 
             min_long_length = min_long_length,
@@ -60,6 +62,7 @@ workflow Rsquare {
         input:
             id = chr_id + "_not_in_bed",
             input_bcf = SubsetByBed.not_in_bed_bcf,
+            input_csi = SubsetByBed.not_in_bed_csi,
             remote_outdir = remote_outdir,
 
             min_long_length = min_long_length,
@@ -101,21 +104,23 @@ task SubsetByBed {
         ${TIME_COMMAND} awk -F'\t' -v c=~{chr_id} '$1==c' sorted.bed > sorted_chr.bed
         ${TIME_COMMAND} awk -F'\t' -v c=~{chr_id} '$1==c' complement.bed > complement_chr.bed
         if [ -s sorted_chr.bed ]; then
-            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --regions-file sorted_chr.bed     --regions-overlap pos ~{input_bcf} --output in_bed.bcf & PID1=$!
+            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --regions-file sorted_chr.bed     --regions-overlap pos --write-index ~{input_bcf} --output in_bed.bcf & PID1=$!
         else
-            bcftools view --header-only --output-type b ~{input_bcf} --output in_bed.bcf
+            bcftools view --header-only --output-type b --write-index ~{input_bcf} --output in_bed.bcf & PID1=$!
         fi
         if [ -s complement_chr.bed ]; then
-            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --targets-file complement_chr.bed --targets-overlap pos ~{input_bcf} --output not_in_bed.bcf & PID2=$!
+            ${TIME_COMMAND} bcftools view --threads $(( ${N_THREADS} / 2 )) --output-type b --targets-file complement_chr.bed --targets-overlap pos --write-index ~{input_bcf} --output not_in_bed.bcf & PID2=$!
         else
-            bcftools view --header-only --output-type b ~{input_bcf} --output not_in_bed.bcf
+            bcftools view --header-only --output-type b --write-index ~{input_bcf} --output not_in_bed.bcf & PID2=$!
         fi
         wait ${PID1} ; wait ${PID2}
     >>>
     
     output {
         File in_bed_bcf = "in_bed.bcf"
+        File in_bed_csi = "in_bed.bcf.csi"
         File not_in_bed_bcf = "not_in_bed.bcf"
+        File not_in_bed_csi = "not_in_bed.bcf.csi"
     }
     runtime {
         cpu: n_cpu
@@ -136,6 +141,7 @@ task Rsquare {
     input {
         String id
         File input_bcf
+        File input_csi
         String remote_outdir
 
         Int min_long_length
@@ -187,6 +193,7 @@ task Rsquare {
         date 1>&2
 
         # Computing R^2
+        bcftools index --nrecords ~{input_csi} 1>&2
         ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare matrix.tsv.gz ${N_SAMPLES} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{id}.tsv
         gcloud storage mv ~{id}.tsv ~{remote_outdir}/
     >>>
