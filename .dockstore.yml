@@ -730,4 +730,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/TruvariAnnoRemap.wdl
   testParameterFiles:
+- name: Rsquare 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/Rsquare.wdl
+  testParameterFiles:
 
