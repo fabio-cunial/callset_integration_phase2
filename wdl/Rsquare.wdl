@@ -19,7 +19,7 @@ workflow Rsquare {
         Int min_long_length = 50
         Int max_short_length = 49
         Int max_distance_bp = 1000000
-        Float min_af = 0.01
+        Float min_af = 0.001
 
         String remote_outdir
 
@@ -63,7 +63,7 @@ workflow Rsquare {
 #
 # TOOL                                       CPU        RAM         TIME
 # 
-# bcftools query | awk | gzip                                         1h
+# bcftools query | awk | gzip -1                                      1h
 # Rsquare.java                              100%        4.3G       1h10m
 #
 task Rsquare {
