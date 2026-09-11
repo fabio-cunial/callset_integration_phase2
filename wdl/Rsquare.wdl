@@ -116,8 +116,8 @@ task Rsquare {
             exit 1
         fi
 
-        # Building a sparse projection of the VCF that contains only the 
-        # requested samples.
+        # Building and caching a sparse projection of the VCF, that contains
+        # only the requested samples and the information needed for R^2.
         TEST=$(gcloud storage ls ~{remote_outdir}/matrices/${MATRIX_FILENAME} || echo "0")
         if [ "$TEST" != "0" ]; then
             gcloud storage cp ~{remote_outdir}/matrices/${MATRIX_FILENAME} .
