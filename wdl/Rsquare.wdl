@@ -129,6 +129,10 @@ task Rsquare {
 
         # Building and caching a sparse projection of the VCF, that contains
         # only the requested samples and the information needed for R^2.
+        #
+        # Remark: the sparse matrix could be made more compressible by storing
+        # all the sample indexes first, and then all their GT counts. We leave
+        # this to the future.
         TEST=$(gcloud storage ls ~{remote_outdir}/matrices/${MATRIX_FILENAME} || echo "0")
         if [ "$TEST" != "0" ]; then
             gcloud storage cp ~{remote_outdir}/matrices/${MATRIX_FILENAME} .
@@ -154,7 +158,7 @@ task Rsquare {
                     }
                 }
                 if (n_printed > 0) printf "\n"
-            }' | gzip -1 -c > ${MATRIX_FILENAME}
+            }' | gzip -4 -c > ${MATRIX_FILENAME}
             date 1>&2
             gcloud storage cp ${MATRIX_FILENAME} ${RUN_ID}.log ~{remote_outdir}/matrices/
             zcat ${MATRIX_FILENAME} | head -n 10 1>&2 || true
