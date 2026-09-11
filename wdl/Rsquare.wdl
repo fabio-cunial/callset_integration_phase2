@@ -14,6 +14,8 @@ workflow Rsquare {
         File input_csi
         File samples_txt
 
+        Int matrix_only = 0
+
         Int min_long_length = 50
         Int max_short_length = 49
         Int max_distance_bp = 1000000
@@ -29,6 +31,7 @@ workflow Rsquare {
         max_short_length: "Must be <min_long_length"
         max_distance_bp: "Max bp distance to compare a long to a short"
         remote_outdir: "Without final slash"
+        matrix_only: "1=the program only computes and saves the sparse projection of the VCF."
     }
 
 
@@ -40,6 +43,8 @@ workflow Rsquare {
             input_bcf = input_bcf,
             input_csi = input_csi,
             samples_txt = samples_txt,
+
+            matrix_only = matrix_only,
 
             min_long_length = min_long_length,
             max_short_length = max_short_length,
@@ -70,6 +75,8 @@ task Rsquare {
         File input_csi
         File samples_txt
 
+        Int matrix_only
+
         Int min_long_length
         Int max_short_length
         Int max_distance_bp
@@ -94,7 +101,7 @@ task Rsquare {
         
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        N_THREADS=$(( ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         EFFECTIVE_RAM_MB=$(( ~{mem_gb}*1024 - 512 ))
         TIME_COMMAND="/usr/bin/time --verbose"
 
@@ -104,6 +111,7 @@ task Rsquare {
         # Making sure that `samples_txt` is a subset of the samples in the VCF
         # and in the same relative order.
         bcftools query --list-samples ~{input_bcf} > vcf_samples.txt
+        N_SAMPLES_IN_VCF=$(wc -l < vcf_samples.txt)
         awk '
         NR==FNR { requested[$0]=1; next }
         ($0 in requested)
@@ -115,6 +123,9 @@ task Rsquare {
             echo "No requested samples found in the VCF." 1>&2
             exit 1
         fi
+        echo "Number of samples in the VCF: ${N_SAMPLES_IN_VCF}" > ${RUN_ID}.log
+        echo "Number of samples requested: ${N_SAMPLES_REQUESTED}" >> ${RUN_ID}.log
+        echo "Number of samples kept for R^2 computation: ${N_SAMPLES_KEPT}" >> ${RUN_ID}.log
 
         # Building and caching a sparse projection of the VCF, that contains
         # only the requested samples and the information needed for R^2.
@@ -145,16 +156,18 @@ task Rsquare {
                 if (n_printed > 0) printf "\n"
             }' | gzip -1 -c > ${MATRIX_FILENAME}
             date 1>&2
-            gcloud storage cp ${MATRIX_FILENAME} ~{remote_outdir}/matrices/
+            gcloud storage cp ${MATRIX_FILENAME} ${RUN_ID}.log ~{remote_outdir}/matrices/
             zcat ${MATRIX_FILENAME} | head -n 10 1>&2 || true
             ls -laht 1>&2
         fi
 
         # Computing R^2
-        N_RECORDS_IN_VCF=$(bcftools index --nrecords ~{input_csi})
-        echo "Number of records in VCF: ${N_RECORDS_IN_VCF}" > ${RUN_ID}.log
-        ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare ${MATRIX_FILENAME} ~{chromosome_id} ${N_SAMPLES_KEPT} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{min_af} ${RUN_ID}.bed >> ${RUN_ID}.log
-        gcloud storage mv ${RUN_ID}.bed ${RUN_ID}.log ~{remote_outdir}/
+        if [ ~{matrix_only} -eq 0 ]; then
+            N_RECORDS_IN_VCF=$(bcftools index --nrecords ~{input_csi})
+            echo "Number of records in the VCF: ${N_RECORDS_IN_VCF}" >> ${RUN_ID}.log
+            ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare ${MATRIX_FILENAME} ~{chromosome_id} ${N_SAMPLES_KEPT} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{min_af} ${RUN_ID}.bed >> ${RUN_ID}.log
+            gcloud storage mv ${RUN_ID}.bed ${RUN_ID}.log ~{remote_outdir}/
+        fi
     >>>
     
     output {
