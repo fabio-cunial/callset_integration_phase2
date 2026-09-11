@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Render a 2D density heatmap of R^2 (y) versus allele frequency (x) from the
-BED emitted by `Rsquare.java`:
+"""Render a two-panel figure from the BED emitted by `Rsquare.java`: a 2D
+density heatmap of R^2 (y) versus allele frequency (x) on the left, and the
+distribution of all the plotted R^2 values on the right. The BED columns are:
 
     CHROM, P, P+1, ID, type, length, AC, N, R^2, ACs, Ns, IDs
 
@@ -8,7 +9,12 @@ where AC/N describe the long variant and ACs/Ns/IDs describe the best-matching
 short. This plot uses the AC and R^2 fields; type and length are read only to
 back the --type / --min-length / --max-length filters.
 
-The x axis is AF = AC / (2T), T being the total number of samples in the cohort
+The right panel shares the y axis and the R^2 bins with the heatmap, so it is
+exactly the heatmap's row marginal (the same calls, summed over AF); it answers
+"how are R^2 values distributed overall", which the heatmap hides by spreading
+each row over the AF axis and by compressing counts through a color ramp.
+
+The x axis of the left panel is AF = AC / (2T), T the total number of samples
 (the same definition `Rsquare.java` uses for its --min-af cutoff, where
 minAC = ceil(2*totalNSamples*MIN_AF)). AF is extremely right-skewed, so the x
 bins are log-spaced; R^2 is bounded in [0,1], so the y bins are equally spaced.
@@ -28,9 +34,10 @@ Usage:
     python plot_rsquare_heatmap.py rsquare.bed 6300 --x-bins 40 --dark
     python plot_rsquare_heatmap.py rsquare.bed 6300 --dump-counts  # table view
 
-Colors: matplotlib's default sequential colormap, viridis (dark = near zero,
-light = dense). Empty bins are drawn in the surface color, not in the colormap's
-low step, so "no variants" stays distinct from "few variants".
+Colors: the heatmap uses matplotlib's default sequential colormap, viridis (dark
+= near zero, light = dense). Empty bins are drawn in the surface color, not in
+the colormap's low step, so "no variants" stays distinct from "few variants".
+The right panel is a single series, so it takes one flat blue.
 """
 
 import argparse
@@ -43,7 +50,7 @@ import matplotlib
 matplotlib.use("Agg")  # headless: write files, never open a window
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
-from matplotlib.ticker import FuncFormatter, LogLocator
+from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator
 
 # Column indexes in the `Rsquare.java` output BED. CHROM (0), ID (3) and IDs
 # (11) are strings and are never parsed.
@@ -62,8 +69,11 @@ TYPE_CODES = {v: k for k, v in TYPE_NAMES.items()}
 XLABEL_Y = -0.12
 
 THEMES = {
-    "light": {"surface": "#fcfcfb", "primary": "#0b0b0b", "secondary": "#52514e"},
-    "dark": {"surface": "#1a1a19", "primary": "#ffffff", "secondary": "#c3c2b7"},
+    # "bar" is the single-series color of the right panel, stepped per surface.
+    "light": {"surface": "#fcfcfb", "primary": "#0b0b0b", "secondary": "#52514e",
+              "bar": "#2a78d6"},
+    "dark": {"surface": "#1a1a19", "primary": "#ffffff", "secondary": "#c3c2b7",
+             "bar": "#3987e5"},
 }
 
 
@@ -112,12 +122,32 @@ def log_integer_edges(lo, hi, n_bins):
 
 
 def af_tick(v, _):
-    """AF tick label: plain decimal where that is readable, 10^-k below it."""
+    """AF tick label: plain decimal where that is readable, m x 10^-k below it.
+
+    The locator also places ticks at the 2 and 5 steps when the axis spans less
+    than three decades, so the mantissa has to survive into the label: rounding
+    log10 would print both 0.002 and 0.005 as a power of ten, and at the wrong
+    decade.
+    """
     if v <= 0:
         return ""
     if v >= 0.01:
         return f"{v:g}"
-    return f"$10^{{{int(round(np.log10(v)))}}}$"
+    exponent = int(np.floor(np.log10(v) + 1e-9))
+    mantissa = v / 10.0 ** exponent
+    if abs(mantissa - 1.0) < 1e-6:
+        return f"$10^{{{exponent}}}$"
+    return f"${mantissa:.3g}\\times10^{{{exponent}}}$"
+
+
+def count_tick(v, _):
+    """Count tick label, abbreviated: 1200 -> 1.2k, 3400000 -> 3.4M."""
+    if v < 0:
+        return ""
+    for scale, suffix in ((1e6, "M"), (1e3, "k")):
+        if v >= scale:
+            return f"{v / scale:g}{suffix}"
+    return f"{v:g}"
 
 
 def parse_types(spec):
@@ -147,14 +177,17 @@ def main():
                          "is AF = AC/(2T)")
     ap.add_argument("--out", help="output PNG (default: <bed>.af_r2_heatmap.png)")
     ap.add_argument("--x-bins", type=int, default=32, help="target number of log-spaced AC bins (default 32)")
-    ap.add_argument("--y-bins", type=int, default=20, help="number of equal R^2 bins (default 20)")
+    ap.add_argument("--y-bins", type=int, default=20,
+                    help="number of equal R^2 bins, in both panels (default 20)")
     ap.add_argument("--max-ac", type=int, help="upper AC limit (default: max in the data)")
     ap.add_argument("--type", help="keep only these types, e.g. DEL,INS")
     ap.add_argument("--min-length", type=float, help="keep only variants of length >= this")
     ap.add_argument("--max-length", type=float, help="keep only variants of length <= this")
     ap.add_argument("--color-scale", choices=("auto", "log", "linear"), default="auto",
                     help="count scale for the color ramp (default auto: log when counts span >2 orders of magnitude)")
-    ap.add_argument("--no-median", action="store_true", help="omit the per-AC-bin median R^2 trend line")
+    ap.add_argument("--no-median", action="store_true",
+                    help="omit the per-AC-bin median R^2 trend line (and the "
+                         "overall median in the right panel)")
     ap.add_argument("--dark", action="store_true", help="render on the dark surface")
     ap.add_argument("--dump-counts", action="store_true",
                     help="also write the bin counts as a TSV table next to the PNG")
@@ -229,8 +262,13 @@ def main():
         "xtick.color": theme["secondary"],
         "ytick.color": theme["secondary"],
     })
-    fig, ax = plt.subplots(figsize=(9.0, 5.5), facecolor=theme["surface"])
+    # Left: the heatmap. Right: its row marginal, sharing the R^2 axis so a band
+    # of the distribution lines up with the rows of the heatmap that produced it.
+    fig, (ax, ax_dist) = plt.subplots(
+        1, 2, figsize=(11.5, 5.5), facecolor=theme["surface"], sharey=True,
+        gridspec_kw={"width_ratios": [3.2, 1.0], "wspace": 0.05})
     ax.set_facecolor(theme["surface"])
+    ax_dist.set_facecolor(theme["surface"])
 
     # Bins are built on integer AC (above); rescale to AF only for drawing, so
     # integer AC k occupies [(k-0.5)/2T, (k+0.5)/2T).
@@ -255,7 +293,7 @@ def main():
             # Thin dashed red: red is absent from viridis, so the line stays
             # readable over any cell without needing a halo to lift it off.
             ax.plot(centers, medians, color="red", linewidth=1.0, linestyle="--",
-                    zorder=4, label="median")
+                    zorder=4, label="median per AF bin")
             # Outside the axes, on the same line as the x label and flush with
             # the right spine, so it never covers a data cell.
             leg = ax.legend(loc="upper right", bbox_to_anchor=(1.0, XLABEL_Y),
@@ -287,7 +325,38 @@ def main():
         ax.spines[side].set_linewidth(0.8)
     ax.tick_params(length=3, width=0.8)
 
-    cbar = fig.colorbar(mesh, ax=ax, pad=0.02)
+    # ---- right panel: the distribution of all the plotted R^2 values --------
+    # Summing the heatmap's columns rather than re-histogramming r2 keeps the
+    # two panels describing the exact same set of calls, by construction.
+    row_counts = counts.sum(axis=0)
+    ax_dist.barh(y_edges[:-1], row_counts, height=np.diff(y_edges), align="edge",
+                 color=theme["bar"], edgecolor=theme["surface"], linewidth=0.8,
+                 zorder=2)
+    if not args.no_median:
+        # The overall median, i.e. where this distribution's mass splits; the
+        # left panel's line is the same statistic taken per AF bin.
+        median_all = float(np.median(r2))
+        ax_dist.axhline(median_all, color="red", linewidth=1.0, linestyle="--",
+                        zorder=4)
+        # Flush right, just above the line; on a surface patch because the bar
+        # it sits over is long whenever the median lands near the mode.
+        ax_dist.text(0.97, median_all + 0.012, f"median {median_all:.2f}",
+                     transform=ax_dist.get_yaxis_transform(), ha="right",
+                     va="bottom", fontsize=9, color=theme["secondary"], zorder=5,
+                     bbox=dict(facecolor=theme["surface"], edgecolor="none", pad=1.5))
+    ax_dist.set_xlim(0, max(row_counts.max(), 1) * 1.02)
+    ax_dist.set_xlabel("long calls")
+    ax_dist.xaxis.set_label_coords(0.5, XLABEL_Y)  # same line as the AF label
+    ax_dist.xaxis.set_major_locator(MaxNLocator(3, integer=True))
+    ax_dist.xaxis.set_major_formatter(FuncFormatter(count_tick))
+    for side in ("top", "right"):
+        ax_dist.spines[side].set_visible(False)
+    for side in ("bottom", "left"):  # the left spine is the bars' baseline
+        ax_dist.spines[side].set_color(theme["secondary"])
+        ax_dist.spines[side].set_linewidth(0.8)
+    ax_dist.tick_params(length=3, width=0.8, left=False)
+
+    cbar = fig.colorbar(mesh, ax=ax_dist, pad=0.06)
     cbar.set_label("long calls per bin" + (" (log scale)" if use_log else ""),
                    color=theme["secondary"])
     cbar.outline.set_visible(False)
@@ -307,6 +376,10 @@ def main():
                      f"(AC {max_ac:,}) dropped")
     ax.text(0.0, 1.012, subtitle, transform=ax.transAxes, color=theme["secondary"],
             fontsize=9, va="bottom")
+    # Names the right panel on the subtitle's baseline, so the two panels share
+    # one header line instead of stacking a second title band.
+    ax_dist.text(0.0, 1.012, "all $R^2$ values", transform=ax_dist.transAxes,
+                 color=theme["secondary"], fontsize=9, va="bottom")
 
     out = args.out or f"{os.path.splitext(args.bed)[0]}.af_r2_heatmap.png"
     fig.savefig(out, dpi=args.dpi, bbox_inches="tight", facecolor=theme["surface"])
@@ -318,8 +391,10 @@ def main():
           f"  (T = {args.total_samples:,}, 2T = {n_alleles:,})")
 
     if args.dump_counts:
-        # Table view of exactly what the heatmap encodes. Bins are half-open in
-        # AC, so both the integer AC range and the AF range are given.
+        # Table view of exactly what the figure encodes: one row per AC bin for
+        # the heatmap, then a final `all` row holding the column totals, i.e.
+        # the right panel. Bins are half-open in AC, so both the integer AC
+        # range and the AF range are given.
         table = f"{os.path.splitext(out)[0]}.counts.tsv"
         with open(table, "w") as f:
             f.write("ac_lo\tac_hi\taf_lo\taf_hi\t" + "\t".join(
@@ -328,6 +403,9 @@ def main():
                 f.write(f"{x_edges[k]}\t{x_edges[k+1]-1}\t"
                         f"{x_edges[k]/n_alleles:.6g}\t{(x_edges[k+1]-1)/n_alleles:.6g}\t" +
                         "\t".join(str(int(c)) for c in counts[k]) + "\n")
+            f.write(f"all\tall\t{x_edges[0]/n_alleles:.6g}\t"
+                    f"{(x_edges[-1]-1)/n_alleles:.6g}\t" +
+                    "\t".join(str(int(c)) for c in row_counts) + "\n")
         print(f"wrote {table}")
 
 
