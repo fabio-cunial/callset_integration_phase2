@@ -253,7 +253,7 @@ task Impl {
         #               sequence where possible to save space;
         # bnd: BND records, in their original form.
         #
-        # Remark: the funtion outputs indexed `.vcf.gz` files, since they are
+        # Remark: the function outputs indexed `.vcf.gz` files, since they are
         # needed by `bcftools merge`.
         #
         function CanonizeVcf() {
@@ -423,7 +423,7 @@ task Impl {
         # Collapses with truvari all files `SAMPLEID_CALLERID_sv.vcf.gz`,
         # creating an output file `SAMPLEID_sv.vcf.gz`.
         #
-        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # Remark: the function's inputs are indexed `.vcf.gz`, since they are
         # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
         # downstream.
         #
@@ -523,7 +523,7 @@ task Impl {
         # Collapses with truvari all files `SAMPLEID_CALLERID_bnd.vcf.gz`,
         # creating an output file `SAMPLEID_bnd.vcf.gz`.
         #
-        # Remark: the funtion's inputs are indexed `.vcf.gz`, since they are
+        # Remark: the function's inputs are indexed `.vcf.gz`, since they are
         # needed by `bcftools merge`. It outputs a `.vcf.gz` since it's needed
         # downstream.
         #
@@ -558,7 +558,7 @@ task Impl {
         # Copies truvari's SUPP field from SAMPLE to three tags in INFO. This is
         # necessary, since kanpig overwrites the SAMPLE column.
         #
-        # Remark: the funtion requires an indexed `.vcf.gz` in input, and it
+        # Remark: the function requires an indexed `.vcf.gz` in input, and it
         # outputs an indexed `.vcf.gz` of `bcf`, depending on `OUTPUT_FORMAT`
         # (`z` or `b`).
         #
@@ -621,9 +621,13 @@ task Impl {
             ${TIME_COMMAND} bcftools sort --max-mem ${EFFECTIVE_RAM_GB}G --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Discarding records that are not marked as present by kanpig
+            # Discarding records that are not marked as present by kanpig.
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis". Kanpig is not
+            # likely to emit partially-missing genotypes, but it's better to be
+            # robust.
             local N_RECORDS_BEFORE_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
-            ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || (GT="mis" && GT~"1")' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             local N_RECORDS_AFTER_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             
@@ -647,7 +651,7 @@ task Impl {
         #
         # This is necessary, since XGBoost downstream uses only INFO fields.
         #
-        # Remark: the funtion requires an indexed `.vcf.gz` in input. It
+        # Remark: the function requires an indexed `.vcf.gz` in input. It
         # outputs a `.vcf.gz` since it's needed by the following steps.
         #
         function CopyKanpigFieldsToInfo() {
@@ -666,9 +670,7 @@ task Impl {
             echo '##INFO=<ID=KS_2,Number=1,Type=Integer,Description="Kanpig score 2">' >> ${SAMPLE_ID}_header.txt
             echo '##INFO=<ID=GT_COUNT,Number=1,Type=Integer,Description="GT converted to an integer in {0,1,2}.">' >> ${SAMPLE_ID}_header.txt
             
-            # Copying fields from FORMAT to INFO. Every record is assumed to
-            # have a distinct ID, which is enforced by the steps of the
-            # pipeline upstream.
+            # Copying fields from FORMAT to INFO
             bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t[%KS]\t[%SQ]\t[%GQ]\t[%DP]\t[%AD]\t[%GT]\t%INFO/SUPP_PBSV\t%INFO/SUPP_SNIFFLES\t%INFO/SUPP_PAV\n' ${INPUT_VCF_GZ} | awk 'BEGIN { FS="\t"; OFS="\t"; } { \
                 KS_1=-1; KS_2=-1; \
                 p=0; \
