@@ -129,7 +129,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             local RESOURCE_VCF_GZ=$3
 
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL -L ~{training_resource_bed}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION -L ~{training_resource_bed}
             ls -laht
             # Output:
             # ${SAMPLE_ID}_extract.annot.hdf5
@@ -140,7 +140,7 @@ task Impl {
             ls -laht
             # Output: 
             # ${SAMPLE_ID}.train.*
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --verbosity DEBUG
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
             ls -laht
             # Output:
             # ${SAMPLE_ID}_score.vcf.gz
