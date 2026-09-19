@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage3.wdl
 java -jar ${WOMTOOL_PATH} validate -l Rsquare.wdl
 java -jar ${WOMTOOL_PATH} validate -l TruvariAnnoRemap.wdl
 java -jar ${WOMTOOL_PATH} validate -l UltralongCreateRemapChunks.wdl
@@ -23,7 +24,6 @@ java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongBuildTruth.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage3_Ultralong.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_UltralongAnnotate.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage1.wdl
-java -jar ${WOMTOOL_PATH} validate -l SV_Integration_Workpackage3.wdl
 java -jar ${WOMTOOL_PATH} validate -l SameChromPos.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndBuildTruth.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_BndGetTrainingIntervalsPrime.wdl

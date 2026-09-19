@@ -72,6 +72,7 @@ task Impl {
         String remote_outdir
         
         File training_resource_bed
+        String resource_matching_strategy = "START_POSITION_AND_GIVEN_REPRESENTATION"
 
         Array[String] annotations
         File training_python_script
@@ -83,9 +84,13 @@ task Impl {
         Int ram_size_gb = 3
         Int disk_size_gb = 20
         Int preemptible_number = 4
+
         Int debug_mode = 0
+        String extract_extra_args = ""
     }
     parameter_meta {
+        resource_matching_strategy: "The default value is in theory the most appropriate for SVs. For available values, see: https://gatk.broadinstitute.org/hc/en-us/articles/54698831670043-ExtractVariantAnnotations-BETA#--resource-matching-strategy"
+        extract_extra_args: "Extra arguments for `ExtractVariantAnnotations`. Use e.g. `-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5` to discard chromosomes for plotting ROC curves."
     }
     
     String docker_dir = "/root"
@@ -129,7 +134,7 @@ task Impl {
             local INPUT_VCF_GZ=$2
             local RESOURCE_VCF_GZ=$3
 
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION -L ~{training_resource_bed}
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ExtractVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_extract -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --maximum-number-of-unlabeled-variants 10000000 --mode INDEL --mnp-type INDEL --resource-matching-strategy ~{resource_matching_strategy} -L ~{training_resource_bed} ~{extract_extra_args}
             ls -laht
             # Output:
             # ${SAMPLE_ID}_extract.annot.hdf5
@@ -140,7 +145,7 @@ task Impl {
             ls -laht
             # Output: 
             # ${SAMPLE_ID}.train.*
-            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy START_POSITION_AND_GIVEN_REPRESENTATION --verbosity DEBUG
+            gatk --java-options "-Xmx${EFFECTIVE_RAM_GB}G" ScoreVariantAnnotations -V ${INPUT_VCF_GZ} -O ${SAMPLE_ID}_score -A ~{sep=" -A " annotations} --resource:resource,training=true,calibration=true ${RESOURCE_VCF_GZ} --resource:extracted,extracted=true ${SAMPLE_ID}_extract.vcf.gz --model-prefix ${SAMPLE_ID}.train --model-backend PYTHON_SCRIPT --python-script ~{scoring_python_script} --mode INDEL --mnp-type INDEL --ignore-all-filters --resource-matching-strategy ~{resource_matching_strategy} --verbosity DEBUG
             ls -laht
             # Output:
             # ${SAMPLE_ID}_score.vcf.gz
@@ -159,9 +164,6 @@ task Impl {
         # SUPP_*, SCORE, CALIBRATION_SENSITIVITY
         #
         # Remark: the procedure outputs an indexed `.bcf`.
-        #
-        # @param 2 A VCF where all IDs are distinct. This is guaranteed by
-        # workpackages upstream.
         #
         function CopyInfoToFormat() {
             local SAMPLE_ID=$1
@@ -226,6 +228,7 @@ task Impl {
                 gsutil mv ${SAMPLE_ID}_chunk_${i}.bcf.csi ~{remote_outdir}/chunk_${i}/${SAMPLE_ID}.bcf.csi
                 i=$(( ${i} + 1 ))
             done 4< ~{split_for_bcftools_merge_csv}
+            rm -f ${SAMPLE_ID}.bed
             touch ${SAMPLE_ID}.done
             gsutil mv ${SAMPLE_ID}.done ~{remote_outdir}/ && echo 0 || echo 1
         }
