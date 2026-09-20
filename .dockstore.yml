@@ -735,4 +735,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/Rsquare.wdl
   testParameterFiles:
+- name: SV_Integration_CanonizeDipcall 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_CanonizeDipcall.wdl
+  testParameterFiles:
 
