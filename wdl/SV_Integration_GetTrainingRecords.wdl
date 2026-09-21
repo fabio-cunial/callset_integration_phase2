@@ -65,10 +65,7 @@ task Impl {
         File training_resource_tbi
         File training_resource_bed
         
-        File reference_fa
         File reference_fai
-        File standard_chromosomes_bed
-        File autosomes_bed
         File reference_agp
         
         String docker_image
