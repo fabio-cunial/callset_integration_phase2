@@ -136,8 +136,10 @@ task Impl {
         Int ram_size_gb = 8
         Int disk_size_gb = 256
         Int preemptible_number = 4
+        Int stop_at_truvari_collapse_of_main = 0
     }
     parameter_meta {
+        stop_at_truvari_collapse_of_main: "Stops immediately after the truvari collapse of the main VCF and copies only that to `remote_outdir`."
     }
     
     String docker_dir = "/callset_integration"
@@ -805,6 +807,14 @@ END
             CanonizeVcf ${SAMPLE_ID}_pbsv.vcf.gz ${SAMPLE_ID}_pbsv.vcf.gz.tbi ${SAMPLE_ID} pbsv ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
             CanonizeVcf ${SAMPLE_ID}_sniffles.vcf.gz ${SAMPLE_ID}_sniffles.vcf.gz.tbi ${SAMPLE_ID} sniffles ~{min_sv_length} ~{max_sv_length} ~{standard_chromosomes_bed} not_gaps.bed
             IntrasampleMerge_sv ${SAMPLE_ID}
+            if [ ~{stop_at_truvari_collapse_of_main} -eq 1 ]; then
+                gcloud storage mv ${SAMPLE_ID}_sv.vcf.'gz*' ~{remote_outdir}/
+                touch ${SAMPLE_ID}.done
+                gcloud storage mv ${SAMPLE_ID}.done ~{remote_outdir}/
+                DelocalizeSample ${SAMPLE_ID}
+                rm -f ${SAMPLE_ID}_*
+                continue
+            fi
             IntrasampleMerge_ultralong ${SAMPLE_ID}
             IntrasampleMerge_bnd ${SAMPLE_ID}
             
