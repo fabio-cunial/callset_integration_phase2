@@ -30,7 +30,7 @@ workflow SV_Integration_Workpackage8 {
         remote_indir: "Without final slash"
         remote_workpackages1_dir: "Contains the TSV workpackage files used by Workpackage1.wdl, which contain the SAB of each sample in the second column. Without final slash."
         remote_outdir: "Without final slash"
-        n_samples_fraction_frequent: "A record is considered frequent iff it was discovered in at least this fraction of the total number of samples."
+        n_samples_fraction_frequent: "A record is considered frequent iff it was discovered in at least this fraction of the total number of samples. Setting this to zero (i.e. considering every record as frequent) makes the downstream steps re-genotype the entire cohort VCF for each sample (rather than using a personalized VCF per sample)."
         concat_all_naive: "Concatenate chromosomes in a naive (1, default) or non-naive (0) way. Non-naive is necessary when different chromosomes were built by different versions of the pipeline, with slightly different code, and their headers are not exactly identical. Intra-chromosome concatenation is always performed in a naive way."
     }
     
