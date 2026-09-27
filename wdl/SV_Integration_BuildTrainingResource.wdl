@@ -196,6 +196,11 @@ task Impl {
             # Removing SNVs, replacement records, records that are not marked
             # as ALT, records with a FILTER, and records with unresolved
             # REF/ALT.
+            #
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis". It is an 
+            # attempt to be conservative in keeping only calls with a fully-
+            # resolved genotype.
             ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (STRLEN(REF)>1 && STRLEN(ALT)>1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.vcf.gz > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; tabix -@ ${N_THREADS} -f ${SAMPLE_ID}_in.vcf.gz
             

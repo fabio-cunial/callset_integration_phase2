@@ -103,10 +103,15 @@ task Impl {
 
         # Removing records that are not marked as ALT and records with 
         # unresolved REF/ALT, if any.
+        #
         # Remark: we keep records with a FILTER, since the only filters are
         # incomplete_inversion ("Only one inversion breakpoint is supported")
         # and not_fully_covered ("Tandem duplication is not fully covered by a 
         # contig").
+        #
+        # Remark: `GT="alt"` does not include partially-missing genotypes like 
+        # `./1`, which are instead classified as "mis". It is an attempt to be 
+        # conservative in keeping only calls with a fully-resolved genotype.
         ${TIME_COMMAND} bcftools filter --exclude 'GT!="alt" || REF="*" || ALT="*"' --output-type v ~{sample_id}_in.vcf --output ~{sample_id}_out.vcf
         rm -f ~{sample_id}_in.vcf ; mv ~{sample_id}_out.vcf ~{sample_id}_in.vcf
 
