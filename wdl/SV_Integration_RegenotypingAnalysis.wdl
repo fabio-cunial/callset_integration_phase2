@@ -458,7 +458,7 @@ task SplitInfrequentBcfBySample {
         # Keeping only present records. Removing FORMAT and SAMPLE.
         for FILE in $(ls *.bcf); do
             SAMPLE_ID=$(basename ${FILE} .bcf)
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'GT="alt"' --drop-genotypes --output-type b ${FILE} --output ${SAMPLE_ID}_~{suffix}.bcf
+            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'GT="alt" | (GT="mis" & GT~"1")' --drop-genotypes --output-type b ${FILE} --output ${SAMPLE_ID}_~{suffix}.bcf
             bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_~{suffix}.bcf
         done
         ls -laht
@@ -556,7 +556,7 @@ task Kanpig {
         mv in.bcf.csi ~{sample_id}_kanpig.bcf.csi
         
         N_RECORDS=$(bcftools index --nrecords ~{sample_id}_kanpig.bcf.csi)
-        N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ~{sample_id}_kanpig.bcf | wc -l )
+        N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt" | (GT="mis" & GT~"1")' ~{sample_id}_kanpig.bcf | wc -l )
         echo "${N_RECORDS},${N_PRESENT_RECORDS}" > ~{sample_id}_kanpig_nrecords.txt
         
         # Uploading
@@ -852,9 +852,9 @@ task PrecisionRecallAnalysis {
         
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt" | (GT="mis" & GT~"1")' --output-type z ~{sample_id}_truvari.bcf --output out.vcf.gz
         rm -f ~{sample_id}_truvari.bcf* ; mv out.vcf.gz ~{sample_id}_truvari.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_truvari.vcf.gz
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}_kanpig.bcf --output out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt" | (GT="mis" & GT~"1")' --output-type z ~{sample_id}_kanpig.bcf --output out.vcf.gz
         rm -f ~{sample_id}_kanpig.bcf* ; mv out.vcf.gz ~{sample_id}_kanpig.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}_kanpig.vcf.gz
         
         # Benchmarking

@@ -112,8 +112,10 @@ task Impl {
         
             mv chunk_${CHUNK_ID}.bcf chunk_${CHUNK_ID}_in.bcf
             mv chunk_${CHUNK_ID}.bcf.csi chunk_${CHUNK_ID}_in.bcf.csi
-        
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
+
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis".
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt" | (GT="mis" & GT~"1"))\n' chunk_${CHUNK_ID}_in.bcf | bgzip -c > chunk_${CHUNK_ID}_annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 chunk_${CHUNK_ID}_annotations.tsv.gz
             ${TIME_COMMAND} bcftools annotate --threads ${N_THREADS} --annotations chunk_${CHUNK_ID}_annotations.tsv.gz --columns CHROM,POS,~ID,REF,ALT,QUAL --output-type b chunk_${CHUNK_ID}_in.bcf --output chunk_${CHUNK_ID}_out.bcf
             rm -f chunk_${CHUNK_ID}_in.bcf* ; mv chunk_${CHUNK_ID}_out.bcf chunk_${CHUNK_ID}_in.bcf

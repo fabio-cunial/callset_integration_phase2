@@ -498,7 +498,7 @@ task PrecisionRecallAnalysis {
         
         # Keeping only records that are genotyped as present. This is important,
         # since truvari bench does not consider GTs when matching.
-        ${TIME_COMMAND} bcftools filter --include 'GT="alt"' --output-type z ~{sample_id}.bcf --output out.vcf.gz
+        ${TIME_COMMAND} bcftools filter --include 'GT="alt" | (GT="mis" & GT~"1")' --output-type z ~{sample_id}.bcf --output out.vcf.gz
         rm -f ~{sample_id}.bcf* ; mv out.vcf.gz ~{sample_id}.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ~{sample_id}.vcf.gz
         
         # Benchmarking

@@ -122,9 +122,13 @@ task SingleChromosome {
         rm in.bcf* ; mv out.vcf.gz in.vcf.gz
 
         # Annotating every record with the number of samples it occurs in.
-        # Note that this is not equal to the QUAL field in input to `truvari
+        #
+        # Remark: this is not equal to the QUAL field in input to `truvari
         # collapse` upstream, so it has to be recomputed here.
-        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t%COUNT(GT="alt")\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
+        #
+        # Remark: `GT="alt"` does not include partially-missing genotypes 
+        # like `./1`, which are instead classified as "mis".
+        ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%REF\t%ALT\t%ID\t%COUNT(GT="alt" | (GT="mis" & GT~"1"))\n' in.vcf.gz | bgzip -c > annotations.tsv.gz
         tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
         echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
         COLUMNS='CHROM,POS,REF,ALT,~ID,N_DISCOVERY_SAMPLES'

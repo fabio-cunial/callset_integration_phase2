@@ -624,12 +624,18 @@ task Impl {
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Discarding records that are not marked as present by kanpig.
+            #
             # Remark: `GT="alt"` does not include partially-missing genotypes 
             # like `./1`, which are instead classified as "mis". Kanpig is not
             # likely to emit partially-missing genotypes, but it's better to be
             # robust.
+            #
+            # Remark: the single `|` and `&` operators in the bcftools 
+            # expression below are sample-level, i.e. each condition is 
+            # evaluated within the same sample. Not crucial here, since there is
+            # just one sample, but used for consistency throughout the pipeline.
             local N_RECORDS_BEFORE_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
-            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || (GT="mis" && GT~"1")' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --include 'GT="alt" | (GT="mis" & GT~"1")' --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             local N_RECORDS_AFTER_KANPIG=$( bcftools index --nrecords ${SAMPLE_ID}_in.vcf.gz.tbi )
             

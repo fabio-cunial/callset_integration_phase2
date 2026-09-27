@@ -445,7 +445,7 @@ task FilterByAc {
         GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
         GSUTIL_DELAY_S="600"
         
-        
+        # ------------> I think AC should be recomputed before filtering on it... It might be the residual of some bcftools merge upstream...
         ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include "AC>=~{min_count}" --output-type z ~{bcf} --output out.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>
@@ -700,7 +700,7 @@ task FilterBySamples {
         bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
         comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
         date
-        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt")>0' --output-type z --output out.vcf.gz
+        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt" | (GT="mis" & GT~"1"))>0' --output-type z --output out.vcf.gz
         date
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
     >>>

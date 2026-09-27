@@ -164,11 +164,11 @@ task Impl {
             
             # Printing debug information
             local N_RECORDS=$(bcftools index --nrecords ${SAMPLE_ID}_kanpig.vcf.gz)
-            local N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt"' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local N_PRESENT_RECORDS=$( bcftools query --format '%ID' --include 'GT="alt" | (GT="mis" & GT~"1")' ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             local PERCENT=$( echo "scale=2; 100 * ${N_PRESENT_RECORDS} / ${N_RECORDS}" | bc )
             echo "${N_PRESENT_RECORDS},${N_RECORDS},${PERCENT},Number of records that are marked as ALT by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             local N_HETS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="het"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
-            local N_PRESENT_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="alt"' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
+            local N_PRESENT_RECORDS_IN_AUTOSOMES=$( bcftools query --format '%ID' --include 'GT="alt" | (GT="mis" & GT~"1")' --regions-file ~{autosomes_bed} --regions-overlap pos ${SAMPLE_ID}_kanpig.vcf.gz | wc -l )
             PERCENT=$( echo "scale=2; 100 * ${N_HETS_IN_AUTOSOMES} / ${N_PRESENT_RECORDS_IN_AUTOSOMES}" | bc )
             echo "${N_HETS_IN_AUTOSOMES},${N_PRESENT_RECORDS_IN_AUTOSOMES},${PERCENT},Number of records in autosomes that are marked as HET by kanpig" >> ${SAMPLE_ID}_kanpig.csv
             ${TIME_COMMAND} java -cp ~{docker_dir} GetKanpigWindows ${SAMPLE_ID}_kanpig.vcf.gz | bgzip > ${SAMPLE_ID}_kanpig.bed.gz
@@ -224,8 +224,13 @@ task Impl {
             fi
             
             # Re-genotyping a personalized VCF
+            #
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis". Kanpig is not
+            # likely to emit partially-missing genotypes, but it's better to be
+            # robust.
             LocalizeSample ${SAMPLE_ID} ${LINE}
-            ${TIME_COMMAND} bcftools view --include 'GT="alt"' --drop-genotypes --output-type b ./infrequent_bcfs/${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_infrequent.bcf
+            ${TIME_COMMAND} bcftools view --include 'GT="alt" | (GT="mis" & GT~"1")' --drop-genotypes --output-type b ./infrequent_bcfs/${SAMPLE_ID}.bcf --output ${SAMPLE_ID}_infrequent.bcf
             rm -f ./infrequent_bcfs/${SAMPLE_ID}.bcf*
             bcftools index --threads ${N_THREADS} ${SAMPLE_ID}_infrequent.bcf
             ${TIME_COMMAND} bcftools concat --threads ${N_THREADS} --allow-overlaps --rm-dups exact --output-type z frequent.bcf ${SAMPLE_ID}_infrequent.bcf --output ${SAMPLE_ID}_personalized.vcf.gz

@@ -432,7 +432,7 @@ task SplitBcfBySample {
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . truvari_collapsed.bcf
         rm -f truvari_collapsed.bcf*
         for FILE in $(ls *.bcf); do
-            ${TIME_COMMAND} bcftools filter --include 'GT="alt" || GT=".|1" || GT="1|." || GT="./1" || GT="1/."' --output-type b ${FILE} --output out.bcf
+            ${TIME_COMMAND} bcftools filter --include 'GT="alt" | (GT="mis" & GT~"1")' --output-type b ${FILE} --output out.bcf
             rm -f ${FILE}* ; mv out.bcf ${FILE} ; bcftools index --threads ${N_THREADS} -f ${FILE}
         done
         ls -laht

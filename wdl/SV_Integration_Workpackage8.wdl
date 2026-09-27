@@ -139,12 +139,21 @@ task SingleChromosome {
             rm -rf chunk_* ; mv out.bcf in.bcf ; bcftools index --threads ${N_THREADS} -f in.bcf
             
             # Enforcing a distinct ID in every record, and annotating every
-            # record with the number of samples it occurs in. Note that the
-            # latter is not equal to the QUAL field in input to truvari collapse
-            # upstream, so we have to recompute this number.
+            # record with the number of samples it occurs in. 
+            #
+            # Remark: the latter is not equal to the QUAL field in input to 
+            # input to truvari collapse upstream, so we have to recompute this 
+            # number.
+            #
+            # Remark: the single `|` and `&` operators in the bcftools 
+            # expression below are sample-level, i.e. each condition is 
+            # evaluated within the same sample. `||` and `&&` are site-level, 
+            # i.e. each condition is evaluated across all samples at the site,
+            # so one condition could be satisfied by sample X and another by
+            # sample Y.
             CHR=~{chromosome}
             CHR=${CHR#chr}
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt")\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt" | (GT="mis" & GT~"1"))\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
             ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf

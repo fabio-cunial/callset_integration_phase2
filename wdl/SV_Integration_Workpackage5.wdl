@@ -332,8 +332,20 @@ task Impl {
             # Removing records that are REF in all samples. This is not needed
             # in the standard merge, since at that step of the pipeline every
             # input record is ALT in some sample by construction.
+            #
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis". Kanpig is not
+            # likely to emit partially-missing genotypes, but it's better to be
+            # robust.
+            #
+            # Remark: the single `|` and `&` operators in the bcftools 
+            # expression below are sample-level, i.e. each condition is 
+            # evaluated within the same sample. `||` and `&&` are site-level, 
+            # i.e. each condition is evaluated across all samples at the site,
+            # so one condition could be satisfied by sample X and another by
+            # sample Y.
             if [ ~{merge_mode} -eq 2 ]; then
-                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt")>0' --output-type b ~{chunk_id}_merged.bcf --output ~{chunk_id}_cleaned.bcf
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'COUNT(GT="alt" | (GT="mis" & GT~"1"))>0' --output-type b ~{chunk_id}_merged.bcf --output ~{chunk_id}_cleaned.bcf
                 ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f ~{chunk_id}_cleaned.bcf
                 local N_RECORDS=$(bcftools index --nrecords ~{chunk_id}_merged.bcf)
                 local N_ALT_RECORDS=$(bcftools index --nrecords ~{chunk_id}_cleaned.bcf)
