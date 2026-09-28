@@ -151,9 +151,12 @@ task SingleChromosome {
             # i.e. each condition is evaluated across all samples at the site,
             # so one condition could be satisfied by sample X and another by
             # sample Y.
+            #
+            # Remark: we must use `N_PASS` instead of `COUNT` in `--format` with
+            # complex expressions.
             CHR=~{chromosome}
             CHR=${CHR#chr}
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%COUNT(GT="alt" | (GT="mis" & GT~"1"))\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%N_PASS(GT="alt" | (GT="mis" & GT~"1"))\n' in.bcf | awk -v id=${CHR} 'BEGIN { FS="\t"; OFS="\t"; i=0; } { $3=sprintf("%s_%d",id,i++); print $0 }' | bgzip -c > annotations.tsv.gz
             tabix -@ ${N_THREADS} -s1 -b2 -e2 annotations.tsv.gz
             echo '##INFO=<ID=N_DISCOVERY_SAMPLES,Number=1,Type=Integer,Description="Number of samples where the record was discovered">' > header.txt
             ${TIME_COMMAND} bcftools annotate --header-lines header.txt --annotations annotations.tsv.gz --columns CHROM,POS,ID,REF,ALT,N_DISCOVERY_SAMPLES --output-type b in.bcf --output out.bcf
