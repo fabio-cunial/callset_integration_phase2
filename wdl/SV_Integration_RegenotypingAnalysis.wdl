@@ -85,7 +85,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                 remote_indir = remote_outdir+"/truvari",
                 remote_outdir = remote_outdir+"/truvari/mendelian",
                 min_sv_length = 20,
-                max_sv_length = max_sv_length,
+                max_sv_length = 49,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split_truvari.out_flag],
@@ -167,7 +167,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                 
                     bench_method = precision_recall_bench_method,
                     min_sv_length = 20,
-                    max_sv_length = max_sv_length,    
+                    max_sv_length = 49,    
                 
                     reference_fa = reference_fa,
                     reference_fai = reference_fai,
@@ -241,7 +241,7 @@ workflow SV_Integration_RegenotypingAnalysis {
                     remote_indir = remote_outdir+"/"+min_n_samples[i]+"_samples/kanpig",
                     remote_outdir = remote_outdir+"/"+min_n_samples[i]+"_samples/mendelian",
                     min_sv_length = 20,
-                    max_sv_length = max_sv_length,
+                    max_sv_length = 49,
                     tandem_bed = ComplementBed.sorted_bed,
                     not_tandem_bed = ComplementBed.complement_bed,
                     in_flag = me_kanpig.out_flag,
