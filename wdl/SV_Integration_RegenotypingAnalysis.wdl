@@ -847,7 +847,7 @@ task PrecisionRecallAnalysis {
         # Keeping only records in the given length range
         ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}_truvari.bcf --output out.bcf
         rm -f ~{sample_id}_truvari.bcf* ; mv out.bcf ~{sample_id}_truvari.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_truvari.bcf
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ~{sample_id}_kanpig.bcf --output out.bcf
+        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}_kanpig.bcf --output out.bcf
         rm -f ~{sample_id}_kanpig.bcf* ; mv out.bcf ~{sample_id}_kanpig.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}_kanpig.bcf
         
         # Keeping only records that are genotyped as present. This is important,
