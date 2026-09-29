@@ -988,6 +988,7 @@ task BenchTrio {
             local INPUT_VCF_GZ=$1
             local OUTPUT_VCF_GZ=$2
 
+            date 1>&2
             bcftools +setGT ${INPUT_VCF_GZ} --output-type u -- --target-gt q --new-gt c:'0/1' --include 'GT="./1"' | \
                             bcftools +setGT --output-type u -- --target-gt q --new-gt c:'1/0' --include 'GT="1/."' | \
                             bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0/0' --include 'GT="./." | GT="0/." | GT="./0"' | \
@@ -996,6 +997,7 @@ task BenchTrio {
                             bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0|0' --include 'GT="0|." | GT=".|0"' | \
                             bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0'   --include 'GT="."' | \
                             bcftools view --output-type z --output ${OUTPUT_VCF_GZ}
+            date 1>&2
         }
         
         
@@ -1067,15 +1069,15 @@ task BenchTrio {
         Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr
         
         # Benchmarking: VCF with missing->ref.
-        ${TIME_COMMAND} MissingToRef trio.vcf.gz trio_no_missing.vcf.gz
+        MissingToRef trio.vcf.gz trio_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t trio_no_missing.vcf.gz
         Benchmark trio_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_all_no_missing
         
-        ${TIME_COMMAND} MissingToRef tr.vcf.gz tr_no_missing.vcf.gz
+        MissingToRef tr.vcf.gz tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr_no_missing.vcf.gz
         Benchmark tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_tr_no_missing
         
-        ${TIME_COMMAND} MissingToRef not_tr.vcf.gz not_tr_no_missing.vcf.gz
+        MissingToRef not_tr.vcf.gz not_tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t not_tr_no_missing.vcf.gz
         Benchmark not_tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_not_tr_no_missing
         
