@@ -27,6 +27,7 @@ workflow SV_Integration_PlotHwe {
         smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
         ancestry_samples: "A list of sample IDs for each ancestry."
         limit_to_chromosome: "all = Use all chomosomes"
+        min_discovery_count: "Minimum value of `frequent_field` for a variant to be considered as frequent."
     }
     
     # All
@@ -47,7 +48,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as all_plot {
         input:
             gt_counts = all_counts.gt_counts,
-            out_file_name = "all.png",
+            out_file_name = "all",
             plothw_r = plothw_r
     }
     
@@ -67,7 +68,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as trs_plot {
         input:
             gt_counts = trs_counts.gt_counts,
-            out_file_name = "trs.png",
+            out_file_name = "trs",
             plothw_r = plothw_r
     }
     
@@ -87,7 +88,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as not_trs_plot {
         input:
             gt_counts = not_trs_counts.gt_counts,
-            out_file_name = "not_trs.png",
+            out_file_name = "not_trs",
             plothw_r = plothw_r
     }
 
@@ -108,7 +109,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as frequent_plot {
         input:
             gt_counts = frequent_counts.gt_counts,
-            out_file_name = "frequent.png",
+            out_file_name = "frequent",
             plothw_r = plothw_r
     }
     
@@ -129,7 +130,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as infrequent_plot {
         input:
             gt_counts = infrequent_counts.gt_counts,
-            out_file_name = "infrequent.png",
+            out_file_name = "infrequent",
             plothw_r = plothw_r
     }
 
@@ -165,7 +166,7 @@ workflow SV_Integration_PlotHwe {
     call Counts2Plot as biallelic_frequent_plot {
         input:
             gt_counts = biallelic_frequent_counts.gt_counts,
-            out_file_name = "biallelic_frequent.png",
+            out_file_name = "biallelic_frequent",
             plothw_r = plothw_r
     }
     
@@ -186,7 +187,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_all_plot {
             input:
                 gt_counts = ancestry_all_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_all.png",
+                out_file_name = ancestry_name[i]+"_all",
                 plothw_r = plothw_r
         }
         
@@ -205,7 +206,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_trs_plot {
             input:
                 gt_counts = ancestry_trs_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_trs.png",
+                out_file_name = ancestry_name[i]+"_trs",
                 plothw_r = plothw_r
         }
         
@@ -224,7 +225,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_not_trs_plot {
             input:
                 gt_counts = ancestry_not_trs_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_not_trs.png",
+                out_file_name = ancestry_name[i]+"_not_trs",
                 plothw_r = plothw_r
         }
         
@@ -243,7 +244,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_frequent_plot {
             input:
                 gt_counts = ancestry_frequent_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_frequent.png",
+                out_file_name = ancestry_name[i]+"_frequent",
                 plothw_r = plothw_r
         }
         
@@ -262,7 +263,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_infrequent_plot {
             input:
                 gt_counts = ancestry_infrequent_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_infrequent.png",
+                out_file_name = ancestry_name[i]+"_infrequent",
                 plothw_r = plothw_r
         }
         
@@ -281,7 +282,7 @@ workflow SV_Integration_PlotHwe {
         call Counts2Plot as ancestry_biallelic_plot {
             input:
                 gt_counts = ancestry_biallelic_counts.gt_counts,
-                out_file_name = ancestry_name[i]+"_biallelic_frequent.png",
+                out_file_name = ancestry_name[i]+"_biallelic_frequent",
                 plothw_r = plothw_r
         }
     }
@@ -530,7 +531,7 @@ task SelectTRs {
         File tandem_track_bed
         Int mode
         
-        Int n_cpu = 8
+        Int n_cpu = 2
         Int ram_size_gb = 16
     }
     parameter_meta {
@@ -645,11 +646,17 @@ task Counts2Plot {
     command <<<
         set -euxo pipefail
 
-        if ~{defined(plothw_r)}
-        then
-            Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}.png
+        N_ROWS=$(wc -l < ~{gt_counts})
+        if [ ${N_ROWS} -eq 1 ]; then
+            echo "No data to plot"
+            touch ~{out_file_name}.png
         else
-            Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}.png
+            if ~{defined(plothw_r)}
+            then
+                Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}.png
+            else
+                Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}.png
+            fi
         fi
     >>>
 
