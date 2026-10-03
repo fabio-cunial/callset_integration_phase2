@@ -199,7 +199,7 @@ for i=[2:2:ncolumns]
 	Y=Bprime(:,i)./(Bprime(:,i)+Bprime(:,i-1)); plot(X,Y,'ob');
 
 	[nrows,ncolumns]=size(C); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
-	Y=C(:,i)./(C(:,i)+C(:,i-1)); plot(X,Y,'om');
+	Y=C(:,i)./(C(:,i)+C(:,i-1)); plot(X,Y,'.m');
     [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Cprime(:,i)./(Cprime(:,i)+Cprime(:,i-1)); plot(X,Y,'om');
 endfor
@@ -280,9 +280,9 @@ Cprime=load(sprintf('denovo_30x_%s_aou_all_no_missing.csv',EVAL_THRESHOLD));
 subplot(1,3,1); hold on;
 [nrows,ncolumns]=size(B);
 for i=[6:6:ncolumns]
-	[nrows,ncolumns]=size(A); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+	[nrows,ncolumns]=size(A); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=A(:,i-1)./A(:,i); plot(X,Y,'.r');
-    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Aprime(:,i-1)./Aprime(:,i); plot(X,Y,'or');
 
 	[nrows,ncolumns]=size(B); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
@@ -290,9 +290,9 @@ for i=[6:6:ncolumns]
     [nrows,ncolumns]=size(Bprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Bprime(:,i-1)./Bprime(:,i); plot(X,Y,'ob');
 
-	[nrows,ncolumns]=size(C); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+	[nrows,ncolumns]=size(C); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=C(:,i-1)./C(:,i); plot(X,Y,'.m');
-    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Cprime(:,i-1)./Cprime(:,i); plot(X,Y,'om');
 endfor
 ylabel('De novo rate'); xticks([1:length(MIN_N_SAMPLES)+1]); xticklabels(LABELS); xlabel('Min n. samples'); title('All records'); grid on; axis([0,length(LABELS)+1,0,0.25]); axis square; set(gca,'fontsize',FONT_SIZE);
@@ -309,9 +309,9 @@ Cprime=load(sprintf('denovo_30x_%s_aou_tr_no_missing.csv',EVAL_THRESHOLD));
 subplot(1,3,2); hold on;
 [nrows,ncolumns]=size(B);
 for i=[6:6:ncolumns]
-	[nrows,ncolumns]=size(A); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+	[nrows,ncolumns]=size(A); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=A(:,i-1)./A(:,i); plot(X,Y,'.r');
-    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Aprime(:,i-1)./Aprime(:,i); plot(X,Y,'or');
     
 	[nrows,ncolumns]=size(B); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
@@ -319,9 +319,9 @@ for i=[6:6:ncolumns]
     [nrows,ncolumns]=size(Bprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Bprime(:,i-1)./Bprime(:,i); plot(X,Y,'ob');
 
-	[nrows,ncolumns]=size(C); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+	[nrows,ncolumns]=size(C); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=C(:,i-1)./C(:,i); plot(X,Y,'.m');
-    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Cprime(:,i-1)./Cprime(:,i); plot(X,Y,'om');
 endfor
 ylabel('De novo rate'); xticks([1:length(MIN_N_SAMPLES)+1]); xticklabels(LABELS); xlabel('Min n. samples'); title('Inside TRs'); grid on; axis([0,length(LABELS)+1,0,0.25]); axis square; set(gca,'fontsize',FONT_SIZE);
@@ -338,19 +338,19 @@ Cprime=load(sprintf('denovo_30x_%s_aou_not_tr_no_missing.csv',EVAL_THRESHOLD));
 subplot(1,3,3); hold on;
 [nrows,ncolumns]=size(B);
 for i=[6:6:ncolumns]
-	[nrows,ncolumns]=size(A); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+	[nrows,ncolumns]=size(A); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=A(:,i-1)./A(:,i); plot(X,Y,'.r');
-    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Aprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Aprime(:,i-1)./Aprime(:,i); plot(X,Y,'or');
 
 	[nrows,ncolumns]=size(B); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=B(:,i-1)./B(:,i); plot(X,Y,'.b');
     [nrows,ncolumns]=size(Bprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Bprime(:,i-1)./Bprime(:,i); plot(X,Y,'ob');
-    
-	[nrows,ncolumns]=size(C); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+
+	[nrows,ncolumns]=size(C); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=C(:,i-1)./C(:,i); plot(X,Y,'.m');
-    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*i/2 -DELTA/2 + rand(nrows,1).*DELTA;
+    [nrows,ncolumns]=size(Cprime); X=ones(nrows,1).*(i)/6 -DELTA/2 + rand(nrows,1).*DELTA;
 	Y=Cprime(:,i-1)./Cprime(:,i); plot(X,Y,'om');
 endfor
 ylabel('De novo rate'); xticks([1:length(MIN_N_SAMPLES)+1]); xticklabels(LABELS); xlabel('Min n. samples'); title('Outside TRs'); grid on; axis([0,length(LABELS)+1,0,0.25]); axis square; set(gca,'fontsize',FONT_SIZE);
