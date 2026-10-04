@@ -55,7 +55,7 @@ rm -f scored-vcfs/${SAMPLE_ID}_confident.vcf.gz*
 # Annotating query records with truth status, using `truvari bench`.
 ${BCFTOOLS_COMMAND} index -f -t truth-vcfs/${SAMPLE_ID}_canonized.vcf.gz
 rm -rf ./scored-vcfs/${SAMPLE_ID}_truvari/
-${TRUVARI_COMMAND} bench -b truth-vcfs/${SAMPLE_ID}_canonized.vcf.gz -c scored-vcfs/${SAMPLE_ID}_confident_tr.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pctsize 0.9 --pctseq 0.9 --pick single -o ./scored-vcfs/${SAMPLE_ID}_truvari/
+${TRUVARI_COMMAND} bench -b truth-vcfs/${SAMPLE_ID}_canonized.vcf.gz -c scored-vcfs/${SAMPLE_ID}_confident_tr.vcf.gz --sizemin 1 --sizemax ${INFINITY} --sizefilt 1 --pick single -o ./scored-vcfs/${SAMPLE_ID}_truvari/
 mv ./scored-vcfs/${SAMPLE_ID}_truvari/summary.json ./scored-vcfs/${SAMPLE_ID}_truvari.json
 echo '##INFO=<ID=MATCHES_DIPCALL,Number=1,Type=Integer,Description="Matches dipcall">' > scored-vcfs/${SAMPLE_ID}_header.txt
 # TPs
