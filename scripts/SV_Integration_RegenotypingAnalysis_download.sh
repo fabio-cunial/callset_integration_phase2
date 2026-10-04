@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-REMOTE_DIR="gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/scratch/cunial_intersample_vcf/v3/manuscript/regenotyping_analysis"
+REMOTE_DIR="     /scratch/cunial_intersample_vcf/v3/manuscript/regenotyping_analysis"
 N_SAMPLES="1 2 4 8 16 32 64 128 256 512 1024 2048"
 
 set -euxo pipefail
