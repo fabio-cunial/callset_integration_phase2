@@ -956,7 +956,7 @@ task BenchTrio {
             local SUFFIX=$3
             
             # 1. Mendelian error
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
+            ${TIME_COMMAND} bcftools +mendelian2 --rules GRCh38 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
             
             # 2. De novo rate
             

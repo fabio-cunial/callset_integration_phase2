@@ -1,10 +1,10 @@
 version 1.0
 
 
-# Studies precision, recall, Mendelian error, de novo rate in the autosomes of 
-# a cohort VCF, for a given set of samples. This VCF is typically the truvari-
-# collapsed inter-sample VCF before re-genotyping, or the final cohort VCF after
-# re-genotyping.
+# Given a cohort VCF and a set of samples, studies precision and recall in 
+# chr1..22,X,Y, and Mendelian error and de novo rate in chr1..22. The input VCF
+# is typically the truvari-collapsed inter-sample VCF before re-genotyping, or
+# the final cohort VCF after re-genotyping.
 #
 # Remark: this uses essentially the same benchmarking logic as in
 # `SV_Integration_RegenotypingAnalysis.wdl`.
@@ -189,7 +189,8 @@ workflow SV_Integration_PlotPrme {
 }
 
 
-# Selects only the autosomes and writes to a separate file every sample column.
+# Selects only calls in chr1..22,X,Y and writes to a separate file every sample 
+# column.
 #
 # Remark: we keep every record, not just those genotyped as present, to support
 # all types of analysis downstream.
@@ -233,6 +234,7 @@ task SplitBcfBySample {
         for CHR in $(seq 2 22); do
             REGIONS_STRING="${REGIONS_STRING},chr${CHR}"
         done
+        REGIONS_STRING="${REGIONS_STRING},chrX,chrY"
         ${TIME_COMMAND} bcftools +split --samples-file samples.txt --regions ${REGIONS_STRING} --output-type b --output . ~{cohort_bcf}
         rm -f ~{cohort_bcf}*
         for FILE in $(ls *.bcf); do
@@ -335,7 +337,7 @@ task PrecisionRecallAnalysis {
         Int preemptible_number
     }
     parameter_meta {  
-        min_sv_length: "The input VCFs (truvari, kanpig and dipcall) are first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
+        min_sv_length: "The input VCF is first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
         bench_method: "0=truvari bench with default parameters; 1=vcfdist."
     }
     
@@ -355,7 +357,8 @@ task PrecisionRecallAnalysis {
         # ----------------------- Steps of the pipeline ------------------------
         
         # Returns a BED file that excludes every gap from the AGP file of the
-        # reference, and that excludes every chromosome that is not an autosome.
+        # reference, and that excludes every chromosome that is not in 
+        # chr1..22,X,Y.
         #
         function GetReferenceGaps() {
             local INPUT_AGP=$1
@@ -368,7 +371,7 @@ task PrecisionRecallAnalysis {
             mv out.bed in.bed
             bedtools complement -i in.bed -g ~{reference_fai} > out.bed
             mv out.bed in.bed
-            awk 'BEGIN { FS="\t"; OFS="\t"; } { if ($1 ~ /^chr([1-9]|1[0-9]|2[0-2])$/) print $0 }' in.bed > out.bed
+            awk 'BEGIN { FS="\t"; OFS="\t"; } { if ($1 ~ /^chr([1-9]|1[0-9]|2[0-2]|X|Y)$/) print $0 }' in.bed > out.bed
             mv out.bed in.bed
             
             mv in.bed ${OUTPUT_BED}
@@ -405,12 +408,7 @@ task PrecisionRecallAnalysis {
             # Removing SNVs, replacement records, records that are not marked
             # as ALT, records with a FILTER, and records with unresolved
             # REF/ALT.
-            #
-            # Remark: `GT="alt"` does not include partially-missing genotypes 
-            # like `./1`, which are instead classified as "mis". It is an 
-            # attempt to be conservative in keeping only calls with a fully-
-            # resolved genotype.
-            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (STRLEN(REF)>1 && STRLEN(ALT)>1) ||  GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (STRLEN(REF)>1 && STRLEN(ALT)>1) ||  (GT!="alt" && GT!=".|1" && GT!="1|." && GT!="./1" && GT!="1/.") || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             # Making sure SVLEN and SVTYPE are consistently annotated
@@ -534,6 +532,8 @@ task PrecisionRecallAnalysis {
 }
 
 
+# Remark: for simplicity the program works only on autosomes.
+#
 # Remark: `bcftools +trio-dnm2` marks the following triplets (child, father,
 # mother) as de novos:
 #
@@ -603,7 +603,7 @@ task BenchTrio {
             local SUFFIX=$3
             
             # 1. Mendelian error
-            ${TIME_COMMAND} bcftools +mendelian2 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
+            ${TIME_COMMAND} bcftools +mendelian2 --rules GRCh38 ${INPUT_VCF_GZ} --ped ped.tsv > ${SAMPLE_ID}_mendelian_${SUFFIX}.txt
             
             # 2. De novo rate
             
@@ -687,10 +687,14 @@ task BenchTrio {
         # into a ./., affecting the number of records over which Mendelian
         # error is computed.
         
-        # Keeping only INS and DEL in the given length range
-        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output ${PROBAND_ID}_out.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output ${FATHER_ID}_out.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output ${MOTHER_ID}_out.vcf.gz &
+        # Keeping only INS and DEL in the given length range and in autosomes
+        REGIONS_STRING="chr1"
+        for CHR in $(seq 2 22); do
+            REGIONS_STRING="${REGIONS_STRING},chr${CHR}"
+        done
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --targets ${REGIONS_STRING} --output-type z ${PROBAND_ID}_in.vcf.gz --output ${PROBAND_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --targets ${REGIONS_STRING} --output-type z ${FATHER_ID}_in.vcf.gz --output ${FATHER_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --targets ${REGIONS_STRING} --output-type z ${MOTHER_ID}_in.vcf.gz --output ${MOTHER_ID}_out.vcf.gz &
         wait
         rm -f ${PROBAND_ID}_in.vcf.gz* ${FATHER_ID}_in.vcf.gz* ${MOTHER_ID}_in.vcf.gz*
         mv ${PROBAND_ID}_out.vcf.gz ${PROBAND_ID}_in.vcf.gz
