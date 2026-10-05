@@ -1,6 +1,8 @@
 version 1.0
 
 
+# Studies Hardy-Weinberg equilibrium in the autosomes of a cohort VCF.
+#
 # Remark: this workflow uses .vcf.gz everywhere, instead of .bcf, just for
 # simplicity when calling tools based on this format.
 #
@@ -288,6 +290,8 @@ workflow SV_Integration_PlotHwe {
     }
     
     output {
+        Array[File] all_plots = [all_plot.out_image, trs_plot.out_image, not_trs_plot.out_image, frequent_plot.out_image, infrequent_plot.out_image, biallelic_frequent_plot.out_image]
+        Array[File] ancestry_plots = flatten([ancestry_all_plot.out_image, ancestry_trs_plot.out_image, ancestry_not_trs_plot.out_image, ancestry_frequent_plot.out_image, ancestry_infrequent_plot.out_image, ancestry_biallelic_plot.out_image])
     }
 }
 
@@ -303,8 +307,8 @@ task FilterByLengthAndType {
         Int sv_type
         String limit_to_chromosome
         
-        Int n_cpu = 8
-        Int ram_size_gb = 16
+        Int n_cpu = 2
+        Int ram_size_gb = 4
     }
     parameter_meta {
         smaller_or_larger: "0: <sv_length_threshold, 1: >=sv_length_threshold"
@@ -322,13 +326,14 @@ task FilterByLengthAndType {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         
-        if [ ~{limit_to_chromosome} = "all" ]; then
+        if [ "~{limit_to_chromosome}" = "all" ]; then
             # Autosomes only
-            for CHR in $(seq 1 22); do
-                echo -e "chr${CHR}\t0\t3000000000" >> list.bed
+            REGIONS_STRING="--targets chr1"
+            for CHR in $(seq 2 22); do
+                REGIONS_STRING="${REGIONS_STRING},chr${CHR}"
             done
         else
-            echo -e "~{limit_to_chromosome}\t0\t3000000000" >> list.bed
+            REGIONS_STRING="--regions ~{limit_to_chromosome}"
         fi
         if [ ~{smaller_or_larger} -eq 0 ]; then
             OPERATOR='<'
@@ -336,11 +341,11 @@ task FilterByLengthAndType {
             OPERATOR='>='
         fi
         if [ ~{sv_type} -eq 0 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} ${REGIONS_STRING} --include 'ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         elif [ ~{sv_type} -eq 1 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="DEL" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} ${REGIONS_STRING} --include 'SVTYPE=="DEL" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         elif [ ~{sv_type} -eq 2 ]; then
-            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --regions-file list.bed --include 'SVTYPE=="INS" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
+            ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} ${REGIONS_STRING} --include 'SVTYPE=="INS" && ABS(SVLEN)'${OPERATOR}~{sv_length_threshold} --output-type z ~{bcf} --output filtered.vcf.gz
         fi
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t filtered.vcf.gz
     >>>
@@ -355,7 +360,7 @@ task FilterByLengthAndType {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
+        preemptible: 0
     }
 }
 
@@ -372,11 +377,11 @@ task SelectBiallelic {
         Int max_distance_bp
         
         Int n_cpu = 2
-        Int ram_size_gb = 128
+        Int ram_size_gb = 16
     }
     
     String docker_dir = "/callset_integration"
-    Int disk_size_gb = 5*ceil(size(vcf_gz,"GB"))
+    Int disk_size_gb = 3*ceil(size(vcf_gz,"GB"))
 
     command <<<
         set -euxo pipefail
@@ -414,10 +419,273 @@ task SelectBiallelic {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Keeps only records with >= or < a given number of samples in which they were
+# discovered.
+#
+task FilterByNDiscoverySamples {
+    input {
+        File bcf
+        File csi
+        String field
+        Int smaller_or_larger
+        Int min_count
+        
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+    }
+    parameter_meta {
+        field: "E.g. `N_DISCOVERY_SAMPLES`"
+        smaller_or_larger: "0: <min_count, 1: >=min_count"
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        if [ ~{smaller_or_larger} -eq 0 ]; then
+            OPERATOR='<'
+        else
+            OPERATOR='>='
+        fi
+        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include ~{field}${OPERATOR}~{min_count} --output-type z ~{bcf} --output out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# Any overlap with the track is considered, even by a single bp.
+#
+task SelectTRs {
+    input {
+        File bcf
+        File csi
+        File tandem_track_bed
+        Int mode
+        
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+    }
+    parameter_meta {
+        mode: "Keep only calls that: 0=do not overlap with the track; 1=overlap with the track."
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        
+        if [ ~{mode} -eq 1 ]; then
+            INTERSECTION_MODE="-u"
+        elif [ ~{mode} -eq 0 ]; then
+            INTERSECTION_MODE="-v"
+        fi
+        ${TIME_COMMAND} bedtools intersect -header -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} | bgzip -@ ${N_THREADS} --compress-level 2 > out.vcf.gz
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+    }
+
+    runtime {
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+# The output of this program contains only records whose GT has two alleles 
+# (i.e. not just one allele) and that are ALT in some sample.
+#
+task Vcf2Counts {
+    input {
+        File vcf_gz
+        File tbi
+        File? PlotHw_java
+        
+        Int n_cpu = 1
+        Int ram_size_gb = 4
+    }
+    parameter_meta {
+        PlotHw_java: "Custom Java program to use."
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 2*ceil(size(vcf_gz,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
+
+        
+        if ~{defined(PlotHw_java)}
+        then
+            mv ~{PlotHw_java} ./PlotHwFast.java
+            javac PlotHwFast.java
+            CP_STRING=" "
+        else
+            CP_STRING="-cp ~{docker_dir}"
+        fi
+        ${TIME_COMMAND} java ${CP_STRING} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
+    >>>
+
+    output {
+        File gt_counts = "gt_counts.csv"
+    }
+
+    runtime {
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
         preemptible: 4
     }
 }
 
+
+#
+task Counts2Plot {
+    input {
+        File gt_counts
+        String out_file_name
+        File? plothw_r
+
+        Int n_cpu = 1
+        Int ram_size_gb = 4
+    }
+    parameter_meta {
+        plothw_r: "Custom R script to use for plotting."
+    }
+    
+    Int disk_size_gb = 10*ceil(size(gt_counts,"GB"))
+
+    command <<<
+        set -euxo pipefail
+
+        N_ROWS=$(wc -l < ~{gt_counts})
+        if [ ${N_ROWS} -eq 1 ]; then
+            echo "No data to plot"
+            touch ~{out_file_name}.png
+        else
+            if ~{defined(plothw_r)}
+            then
+                Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}.png
+            else
+                Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}.png
+            fi
+        fi
+    >>>
+
+    output {
+        File out_image = out_file_name + ".png"
+    }
+
+    runtime {
+        docker: "fcunial/hapestry:hwe"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " HDD"
+        preemptible: 4
+    }
+}
+
+
+# Remark: only samples that are present both in `sample_ids` and `vcf_gz` are
+# kept, and only records that are ALT in some selected sample are kept.
+#
+task FilterBySamples {
+    input {
+        File bcf
+        File csi
+        File sample_ids
+        
+        Int n_cpu = 2
+        Int ram_size_gb = 4
+    }
+    parameter_meta {
+        sample_ids: "One sample per line. Not necessarily sorted."
+    }
+    
+    String docker_dir = "/callset_integration"
+    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
+
+    command <<<
+        set -euxo pipefail
+        
+        TIME_COMMAND="/usr/bin/time --verbose"
+        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
+        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
+        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
+        
+        cut -f 1 ~{sample_ids} | sort > desired_samples.txt
+        bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
+        comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
+        date
+        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt" | (GT="mis" & GT~"1"))>0' --output-type z --output out.vcf.gz
+        date
+        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
+    >>>
+
+    output {
+        File out_vcf_gz = "out.vcf.gz"
+        File out_tbi = "out.vcf.gz.tbi"
+        File selected_samples = "selected_samples.txt"
+    }
+
+    runtime {
+        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
+        cpu: n_cpu
+        memory: ram_size_gb + "GB"
+        disks: "local-disk " + disk_size_gb + " SSD"
+        preemptible: 0
+    }
+}
+
+
+
+
+# ------------------- Filters that have not been tested yet --------------------
 
 # Keeps only ALT alleles with at least a given count.
 #
@@ -461,269 +729,7 @@ task FilterByAc {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
-    }
-}
-
-
-# Keeps only records with >= or < a given number of samples in which they were
-# discovered.
-#
-task FilterByNDiscoverySamples {
-    input {
-        File bcf
-        File csi
-        String field
-        Int smaller_or_larger
-        Int min_count
-        
-        Int n_cpu = 8
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-        field: "N_DISCOVERY_SAMPLES or AC"
-        smaller_or_larger: "0: <min_count, 1: >=min_count"
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        
-        if [ ~{smaller_or_larger} -eq 0 ]; then
-            OPERATOR='<'
-        else
-            OPERATOR='>='
-        fi
-        ${TIME_COMMAND} bcftools filter --threads ${N_THREADS} --include ~{field}${OPERATOR}~{min_count} --output-type z ~{bcf} --output out.vcf.gz
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
-    >>>
-
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-    }
-
-    runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
-    }
-}
-
-
-# Any overlap with the track is considered, even by a single bp.
-#
-task SelectTRs {
-    input {
-        File bcf
-        File csi
-        File tandem_track_bed
-        Int mode
-        
-        Int n_cpu = 2
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-        mode: "Keep only calls that: 0=do not overlap with the track; 1=overlap with the track."
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 50*ceil(size(bcf,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        
-        
-        if [ ~{mode} -eq 1 ]; then
-            INTERSECTION_MODE="-u"
-        elif [ ~{mode} -eq 0 ]; then
-            INTERSECTION_MODE="-v"
-        fi
-        ( bcftools view --header-only ~{bcf}; ${TIME_COMMAND} bedtools intersect -a ~{bcf} -b ~{tandem_track_bed} ${INTERSECTION_MODE} ) | bgzip --compress-level 2 > out.vcf.gz
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
-    >>>
-
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-    }
-
-    runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
-    }
-}
-
-
-# The output of this program contains only records whose GT has two alleles and
-# that are ALT in some sample.
-#
-task Vcf2Counts {
-    input {
-        File vcf_gz
-        File tbi
-        File? PlotHw_java
-        
-        Int n_cpu = 1
-        Int ram_size_gb = 8
-    }
-    parameter_meta {
-        PlotHw_java: "Custom Java program to use."
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 2*ceil(size(vcf_gz,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        EFFECTIVE_RAM_GB=$(( ~{ram_size_gb} - 1 ))
-
-        
-        if ~{defined(PlotHw_java)}
-        then
-            mv ~{PlotHw_java} ./PlotHwFast.java
-            javac PlotHwFast.java
-            CP_STRING=" "
-        else
-            CP_STRING="-cp ~{docker_dir}"
-        fi
-        ${TIME_COMMAND} java ${CP_STRING} -Xmx${EFFECTIVE_RAM_GB}G PlotHwFast ~{vcf_gz} gt_counts.csv
-    >>>
-
-    output {
-        File gt_counts = "gt_counts.csv"
-    }
-
-    runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 4
-    }
-}
-
-
-#
-task Counts2Plot {
-    input {
-        File gt_counts
-        String out_file_name
-        File? plothw_r
-    }
-    parameter_meta {
-        plothw_r: "Custom R script to use for plotting."
-    }
-    
-    Int disk_size_gb = 10*ceil(size(gt_counts,"GB"))
-
-    command <<<
-        set -euxo pipefail
-
-        N_ROWS=$(wc -l < ~{gt_counts})
-        if [ ${N_ROWS} -eq 1 ]; then
-            echo "No data to plot"
-            touch ~{out_file_name}.png
-        else
-            if ~{defined(plothw_r)}
-            then
-                Rscript ~{plothw_r} ~{gt_counts} ~{out_file_name}.png
-            else
-                Rscript /hwe/PlotHW.r ~{gt_counts} ~{out_file_name}.png
-            fi
-        fi
-    >>>
-
-    output {
-        File out_image = out_file_name + ".png"
-    }
-
-    runtime {
-        docker: "fcunial/hapestry:hwe"
-        cpu: 1
-        memory: "4G"
-        disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: 4
-    }
-}
-
-
-# Remark: only samples that are present both in `sample_ids` and `vcf_gz` are
-# kept, and only records that are ALT in some selected sample are kept.
-#
-task FilterBySamples {
-    input {
-        File bcf
-        File csi
-        File sample_ids
-        
-        Int n_cpu = 8
-        Int ram_size_gb = 16
-    }
-    parameter_meta {
-        sample_ids: "One sample per line. Not necessarily sorted."
-    }
-    
-    String docker_dir = "/callset_integration"
-    Int disk_size_gb = 3*ceil(size(bcf,"GB"))
-
-    command <<<
-        set -euxo pipefail
-        
-        TIME_COMMAND="/usr/bin/time --verbose"
-        N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
-        N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
-        N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
-        
-        cut -f 1 ~{sample_ids} | sort > desired_samples.txt
-        bcftools view --header-only ~{bcf} | tail -n 1 | tr '\t' '\n' | tail -n +10 | sort > present_samples.txt
-        comm -1 -2 desired_samples.txt present_samples.txt > selected_samples.txt
-        date
-        bcftools view --threads ${N_THREADS} --samples-file selected_samples.txt ~{bcf} | bcftools filter --include 'COUNT(GT="alt" | (GT="mis" & GT~"1"))>0' --output-type z --output out.vcf.gz
-        date
-        ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -t out.vcf.gz
-    >>>
-
-    output {
-        File out_vcf_gz = "out.vcf.gz"
-        File out_tbi = "out.vcf.gz.tbi"
-        File selected_samples = "selected_samples.txt"
-    }
-
-    runtime {
-        docker: "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages"
-        cpu: n_cpu
-        memory: ram_size_gb + "GB"
-        disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
+        preemptible: 0
     }
 }
 
@@ -774,7 +780,7 @@ task FilterByMedianDp {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
+        preemptible: 0
     }
 }
 
@@ -825,6 +831,6 @@ task FilterByStdevDp {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: 4
+        preemptible: 0
     }
 }

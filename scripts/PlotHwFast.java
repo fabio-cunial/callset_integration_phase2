@@ -3,8 +3,9 @@ import java.util.zip.*;
 
 
 /**
- * Remark: the program prints only records whose GT has two alleles and that
- * are ALT in some sample. Missing characters in a GT are assumed to be zeros.
+ * Remark: the program prints only records whose GT has two alleles (i.e. not 
+ * just one allele) and that are ALT in some sample. Missing characters in a GT 
+ * are assumed to be zeros.
  */
 public class PlotHwFast {
     
@@ -42,6 +43,7 @@ public class PlotHwFast {
                 end=str.indexOf(FIELD_SEPARATOR,start);
                 if (end<0) end=length;
                 p=str.indexOf(GT_SEPARATOR,start);
+                if (p<0 || p>end) p=end;
                 if (p==start+3) {  // Only GTs with two alleles
                     onLeft=str.charAt(start)=='1';
                     onRight=str.charAt(start+2)=='1';
