@@ -1,8 +1,13 @@
 version 1.0
 
 
-# Studies precision, recall, Mendelian error, de novo rate of the final cohort
-# VCF, on the whole genome and for a given set of samples.
+# Studies precision, recall, Mendelian error, de novo rate in the autosomes of 
+# a cohort VCF, for a given set of samples. This VCF is typically the truvari-
+# collapsed inter-sample VCF before re-genotyping, or the final cohort VCF after
+# re-genotyping.
+#
+# Remark: this uses essentially the same benchmarking logic as in
+# `SV_Integration_RegenotypingAnalysis.wdl`.
 #
 # Structure of `remote_outdir`:
 #
@@ -14,7 +19,8 @@ workflow SV_Integration_PlotPrme {
     input {
         Int max_sv_length = 10000
         
-        String remote_workpackage_11_dir
+        File cohort_bcf
+        File cohort_csi
         String remote_outdir
         
         Int precision_recall_bench_method
@@ -23,7 +29,6 @@ workflow SV_Integration_PlotPrme {
         Array[File] precision_recall_samples_dipcall_bed
         
         Array[String] mendelian_error_samples
-        Array[String] mendelian_error_sex
         File mendelian_error_ped
         Int mendelian_error_n_trios
         
@@ -31,13 +36,12 @@ workflow SV_Integration_PlotPrme {
         File reference_fai
         File reference_agp
         File tandem_bed
-        File ploidy_bed_male
-        File ploidy_bed_female
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:latest"
         Int preemptible_number = 4
     }
     parameter_meta {
+        cohort_bcf: "The all-chromosomes cohort VCF to benchmark"
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
     }
     
@@ -54,7 +58,8 @@ workflow SV_Integration_PlotPrme {
         input:
             samples = flatten([precision_recall_samples, mendelian_error_samples]),
             
-            remote_workpackage_11_dir = remote_workpackage_11_dir,
+            cohort_bcf = cohort_bcf,
+            cohort_csi = cohort_csi,
             remote_outdir = remote_outdir+"/samples",
             docker_image = docker_image,
             preemptible_number = preemptible_number
@@ -69,7 +74,7 @@ workflow SV_Integration_PlotPrme {
                 remote_indir = remote_outdir+"/samples",
                 remote_outdir = remote_outdir+"/mendelian",
                 min_sv_length = 20,
-                max_sv_length = 50,
+                max_sv_length = 49,
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split.out_flag],
@@ -118,7 +123,7 @@ workflow SV_Integration_PlotPrme {
             
                 bench_method = precision_recall_bench_method,
                 min_sv_length = 20,
-                max_sv_length = 50,    
+                max_sv_length = 49,    
             
                 reference_fa = reference_fa,
                 reference_fai = reference_fai,
@@ -184,7 +189,7 @@ workflow SV_Integration_PlotPrme {
 }
 
 
-# Writes to a separate file every sample column.
+# Selects only the autosomes and writes to a separate file every sample column.
 #
 # Remark: we keep every record, not just those genotyped as present, to support
 # all types of analysis downstream.
@@ -198,7 +203,8 @@ task SplitBcfBySample {
     input {
         Array[String] samples
         
-        String remote_workpackage_11_dir
+        File cohort_bcf
+        File cohort_csi
         String remote_outdir
         
         String docker_image
@@ -222,10 +228,13 @@ task SplitBcfBySample {
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
         
-        gcloud storage cp ~{remote_workpackage_11_dir}/merged.'bcf*' .
         echo ~{sep="," samples} | tr ',' '\n' | sort | uniq > samples.txt
-        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --output-type b --output . merged.bcf
-        rm -f merged.bcf*
+        REGIONS_STRING="chr1"
+        for CHR in $(seq 2 22); do
+            REGIONS_STRING="${REGIONS_STRING},chr${CHR}"
+        done
+        ${TIME_COMMAND} bcftools +split --samples-file samples.txt --regions ${REGIONS_STRING} --output-type b --output . ~{cohort_bcf}
+        rm -f ~{cohort_bcf}*
         for FILE in $(ls *.bcf); do
             bcftools index --threads ${N_THREADS} -f ${FILE}
         done
@@ -273,12 +282,10 @@ task ComplementBed {
         N_SOCKETS="$(lscpu | grep '^Socket(s):' | awk '{print $NF}')"
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
 
         
         ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
-        ${TIME_COMMAND} bedtools complement -i sorted.bed -L -g ~{reference_fai} > complement.bed
+        ${TIME_COMMAND} bedtools complement -i sorted.bed -g ~{reference_fai} > complement.bed
     >>>
     
     output {
@@ -322,8 +329,8 @@ task PrecisionRecallAnalysis {
         File in_flag
         
         String docker_image
-        Int n_cpu = 2
-        Int ram_size_gb = 4
+        Int n_cpu = 3
+        Int ram_size_gb = 6
         Int disk_size_gb = 20
         Int preemptible_number
     }
@@ -348,7 +355,7 @@ task PrecisionRecallAnalysis {
         # ----------------------- Steps of the pipeline ------------------------
         
         # Returns a BED file that excludes every gap from the AGP file of the
-        # reference.
+        # reference, and that excludes every chromosome that is not an autosome.
         #
         function GetReferenceGaps() {
             local INPUT_AGP=$1
@@ -360,6 +367,8 @@ task PrecisionRecallAnalysis {
             bedtools sort -i in.bed -faidx ~{reference_fai} > out.bed
             mv out.bed in.bed
             bedtools complement -i in.bed -g ~{reference_fai} > out.bed
+            mv out.bed in.bed
+            awk 'BEGIN { FS="\t"; OFS="\t"; } { if ($1 ~ /^chr([1-9]|1[0-9]|2[0-2])$/) print $0 }' in.bed > out.bed
             mv out.bed in.bed
             
             mv in.bed ${OUTPUT_BED}
@@ -381,29 +390,35 @@ task PrecisionRecallAnalysis {
             mv ${INPUT_VCF_GZ} ${SAMPLE_ID}_in.vcf.gz
             mv ${INPUT_TBI} ${SAMPLE_ID}_in.vcf.gz.tbi
             
+            # Removing records in reference gaps
+            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type b ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.vcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+
+            # Keeping only records in the dipcall BED
+            ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+            rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
+
             # Splitting multiallelic records into biallelic records
-            ${TIME_COMMAND} bcftools norm --multiallelics - --output-type b ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.bcf
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
-            
-            # Removing SNVs, records with unresolved REF/ALT, records that are
-            # not marked as present, and records with a FILTER. 
-            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
+            ${TIME_COMMAND} bcftools norm --multiallelics -any --output-type b ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.bcf
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.bcf ${SAMPLE_ID}_in.bcf ; bcftools index --threads ${N_THREADS} -f ${SAMPLE_ID}_in.bcf
             
-            # Removing records in reference gaps
-            ${TIME_COMMAND} bcftools filter --regions-file ${NOT_GAPS_BED} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
+            # Removing SNVs, replacement records, records that are not marked
+            # as ALT, records with a FILTER, and records with unresolved
+            # REF/ALT.
+            #
+            # Remark: `GT="alt"` does not include partially-missing genotypes 
+            # like `./1`, which are instead classified as "mis". It is an 
+            # attempt to be conservative in keeping only calls with a fully-
+            # resolved genotype.
+            ${TIME_COMMAND} bcftools filter --exclude '(STRLEN(REF)=1 && STRLEN(ALT)=1) || (STRLEN(REF)>1 && STRLEN(ALT)>1) ||  GT!="alt" || (FILTER!="PASS" && FILTER!=".") || REF="*" || ALT="*"' --output-type z ${SAMPLE_ID}_in.bcf --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.bcf* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the dipcall BED
-            ${TIME_COMMAND} bcftools filter --regions-file ~{sample_dipcall_bed} --regions-overlap pos --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
-            
             # Making sure SVLEN and SVTYPE are consistently annotated
-            truvari anno svinfo --minsize 1 ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
+            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvtypeSvlen ${SAMPLE_ID}_in.vcf.gz | bgzip > ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
-            # Keeping only records in the given length range
-            ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
+            # Keeping only INS and DEL in the given length range
+            ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='${MIN_SV_LENGTH}' && ABS(SVLEN)<='${MAX_SV_LENGTH} --output-type z ${SAMPLE_ID}_in.vcf.gz --output ${SAMPLE_ID}_out.vcf.gz
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
             
             mv ${SAMPLE_ID}_in.vcf.gz ${SAMPLE_ID}_truth.vcf.gz
@@ -417,8 +432,8 @@ task PrecisionRecallAnalysis {
             local INPUT_VCF=$2
             local OUTPUT_PREFIX=$3
             
-            BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
-            BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
+            local BED_FLAG_TRUVARI="--includebed ~{sample_dipcall_bed}"
+            local BED_FLAG_VCFDIST="--bed ~{sample_dipcall_bed}"
             if [ ${INPUT_VCF#*.} = vcf.gz ]; then
                 cp ${INPUT_VCF} ${OUTPUT_PREFIX}_input.vcf.gz
                 cp ${INPUT_VCF}.tbi ${OUTPUT_PREFIX}_input.vcf.gz.tbi
@@ -447,7 +462,7 @@ task PrecisionRecallAnalysis {
                 mv ./${OUTPUT_PREFIX}_truvari_not_tr/summary.json ./${SAMPLE_ID}_${OUTPUT_PREFIX}_not_tr.txt
             else
                 # Assumed to be the only job running, so using all cores.
-                rm -f ./${OUTPUT_PREFIX}_vcfdist_*
+                rm -rf ./${OUTPUT_PREFIX}_vcfdist_*
                 ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_input.vcf.gz ${SAMPLE_ID}_truth.vcf.gz ~{reference_fa} --max-threads ${N_THREADS} --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} ${BED_FLAG_VCFDIST} --prefix ./${OUTPUT_PREFIX}_vcfdist_all/
                 ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_tr.vcf.gz ${SAMPLE_ID}_truth_tr.vcf.gz ~{reference_fa} --max-threads ${N_THREADS} --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} ${BED_FLAG_VCFDIST} --prefix ./${OUTPUT_PREFIX}_vcfdist_tr/
                 ${TIME_COMMAND} vcfdist ${OUTPUT_PREFIX}_not_tr.vcf.gz ${SAMPLE_ID}_truth_not_tr.vcf.gz ~{reference_fa} --max-threads ${N_THREADS} --max-ram $(( ~{ram_size_gb} - 2 )) ${SV_STRING_VCFDIST} ${FILTER_STRING_VCFDIST} ${BED_FLAG_VCFDIST} --prefix ./${OUTPUT_PREFIX}_vcfdist_not_tr/
@@ -465,7 +480,7 @@ task PrecisionRecallAnalysis {
 
         # --------------------------- Main program -----------------------------
         
-        FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length}"
+        FILTER_STRING_TRUVARI="--sizemin ~{min_sv_length} --sizefilt ~{min_sv_length} --sizemax ~{max_sv_length} --pick single"
         FILTER_STRING_VCFDIST="--sv-threshold ~{min_sv_length} --largest-variant ~{max_sv_length}"
         # See https://github.com/TimD1/vcfdist/wiki/02-Parameters-and-Usage
         # Remark: `--max-supercluster-size` has to be >= `--largest-variant + 2`
@@ -481,7 +496,6 @@ task PrecisionRecallAnalysis {
         # Canonizing the dipcall VCF
         bcftools index --threads ${N_THREADS} -f -t ~{sample_dipcall_vcf_gz}
         CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-        rm -f ~{sample_dipcall_vcf_gz}
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_tr.vcf.gz &
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_not_tr.vcf.gz &
         wait
@@ -492,8 +506,8 @@ task PrecisionRecallAnalysis {
         # Localizing the VCF to benchmark
         gcloud storage cp ~{remote_outdir}/samples/~{sample_id}.'bcf*' .
         
-        # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}.bcf --output out.bcf
+        # Keeping only INS and DEL in the given length range
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type b ~{sample_id}.bcf --output out.bcf
         rm -f ~{sample_id}.bcf* ; mv out.bcf ~{sample_id}.bcf ; bcftools index --threads ${N_THREADS} -f ~{sample_id}.bcf
         
         # Keeping only records that are genotyped as present. This is important,
@@ -575,8 +589,6 @@ task BenchTrio {
         N_CORES_PER_SOCKET="$(lscpu | grep '^Core(s) per socket:' | awk '{print $NF}')"
         N_THREADS=$(( 2 * ${N_SOCKETS} * ${N_CORES_PER_SOCKET} ))
         export BCFTOOLS_PLUGINS="~{docker_dir}/bcftools-1.22/plugins"
-        GSUTIL_UPLOAD_THRESHOLD="-o GSUtil:parallel_composite_upload_threshold=150M"
-        GSUTIL_DELAY_S="600"
         
         
         
@@ -597,15 +609,41 @@ task BenchTrio {
             
             # 2.1 +trio-dnm2
             ${TIME_COMMAND} bcftools +trio-dnm2 --use-NAIVE --chrX GRCh38 --ped ped.tsv --output-type z ${INPUT_VCF_GZ} --output ${SAMPLE_ID}_annotated.vcf.gz
-            NUMERATOR=$( bcftools view --no-header --include 'FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
-            DENOMINATOR=$( bcftools view --no-header --include 'GT[0]="alt" && COUNT(GT="mis")=0' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
-            echo -e "${NUMERATOR},${DENOMINATOR}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
+            local   NUMERATOR_1=$( bcftools view --no-header --include 'COUNT(GT="mis")=0 && GT[0]="alt" && FORMAT/DNM[0]=1' ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            local DENOMINATOR_1=$( bcftools view --no-header --include 'COUNT(GT="mis")=0 && GT[0]="alt"'                    ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            local   NUMERATOR_2=$( bcftools view --no-header --include 'COUNT(GT="mis")=0 && FORMAT/DNM[0]=1'                ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            local DENOMINATOR_2=$( bcftools view --no-header --include 'COUNT(GT="mis")=0'                                   ${SAMPLE_ID}_annotated.vcf.gz | wc -l )
+            echo -e "${NUMERATOR_1},${DENOMINATOR_1},${NUMERATOR_2},${DENOMINATOR_2}" > ${SAMPLE_ID}_dnm1_${SUFFIX}.txt
+            rm -f ${SAMPLE_ID}_annotated.vcf.gz*
             
             # 2.2 Simple count (and saving the whole matrix for future analysis)
-            #${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${INPUT_VCF_GZ} | bgzip > ${SAMPLE_ID}_annotated.vcf.gz
-            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,0\n' ${INPUT_VCF_GZ} > ${SAMPLE_ID}_matrix_${SUFFIX}.txt
+            ${TIME_COMMAND} truvari anno numneigh --sizemin 1 --refdist 1000 ${INPUT_VCF_GZ} | bgzip > ${SAMPLE_ID}_annotated.vcf.gz
+            ${TIME_COMMAND} bcftools query --format '[%GT,][%SQ,][%GQ,][%DP,][%AD,][%KS,]%INFO/SVTYPE,%INFO/SVLEN,%INFO/NumNeighbors\n' ${SAMPLE_ID}_annotated.vcf.gz > ${SAMPLE_ID}_matrix_${SUFFIX}.txt
             ${TIME_COMMAND} java -cp ~{docker_dir} CountDeNovoSimple ${SAMPLE_ID}_matrix_${SUFFIX}.txt > ${SAMPLE_ID}_dnm2_${SUFFIX}.txt
             rm -f ${SAMPLE_ID}_annotated.vcf.gz*
+        }
+
+
+        # Replaces with a `0` every occurrence of a `.` in a genotype.
+        #
+        # Remark: `bcftools +setGT trio.vcf.gz -- --target-gt . --new-gt 0` is
+        # wrong, since it transforms any GT that contains `.` (including e.g.
+        # `./1`) into `0/0`.
+        #
+        function MissingToRef() {
+            local INPUT_VCF_GZ=$1
+            local OUTPUT_VCF_GZ=$2
+
+            date 1>&2
+            bcftools +setGT ${INPUT_VCF_GZ} --output-type u -- --target-gt q --new-gt c:'0/1' --include 'GT="./1"' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'1/0' --include 'GT="1/."' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0/0' --include 'GT="./." | GT="0/." | GT="./0"' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0|1' --include 'GT=".|1"' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'1|0' --include 'GT="1|."' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0|0' --include 'GT="0|." | GT=".|0"' | \
+                            bcftools +setGT --output-type u -- --target-gt q --new-gt c:'0'   --include 'GT="."' | \
+                            bcftools view --output-type z --output ${OUTPUT_VCF_GZ}
+            date 1>&2
         }
         
         
@@ -624,9 +662,8 @@ task BenchTrio {
             gcloud storage cp ~{remote_indir}/${PROBAND_ID}.'bcf*' ~{remote_indir}/${FATHER_ID}.'bcf*' ~{remote_indir}/${MOTHER_ID}.'bcf*' .
         fi
         
-        # Ensuring a consistent format
-        TEST=$(ls *.vcf.gz && echo 0 || echo 1)
-        if [ ${TEST} -eq 1 ]; then
+        # Ensuring a consistent file format
+        if ls *.bcf > /dev/null 2>&1 ; then
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}*.bcf) --output ${PROBAND_ID}_in.vcf.gz &
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}*.bcf) --output ${FATHER_ID}_in.vcf.gz &
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}*.bcf) --output ${MOTHER_ID}_in.vcf.gz &
@@ -650,10 +687,10 @@ task BenchTrio {
         # into a ./., affecting the number of records over which Mendelian
         # error is computed.
         
-        # Keeping only records in the given length range
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output ${PROBAND_ID}_out.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output ${FATHER_ID}_out.vcf.gz &
-        ${TIME_COMMAND} bcftools filter --include 'ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output ${MOTHER_ID}_out.vcf.gz &
+        # Keeping only INS and DEL in the given length range
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${PROBAND_ID}_in.vcf.gz --output ${PROBAND_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${FATHER_ID}_in.vcf.gz --output ${FATHER_ID}_out.vcf.gz &
+        ${TIME_COMMAND} bcftools filter --include '(SVTYPE="INS" || SVTYPE="DEL") && ABS(SVLEN)>='~{min_sv_length}' && ABS(SVLEN)<='~{max_sv_length} --output-type z ${MOTHER_ID}_in.vcf.gz --output ${MOTHER_ID}_out.vcf.gz &
         wait
         rm -f ${PROBAND_ID}_in.vcf.gz* ${FATHER_ID}_in.vcf.gz* ${MOTHER_ID}_in.vcf.gz*
         mv ${PROBAND_ID}_out.vcf.gz ${PROBAND_ID}_in.vcf.gz
@@ -666,9 +703,9 @@ task BenchTrio {
         
         # Merging records by ID, since the records in every VCF originate from
         # the same cohort VCF, which had distinct IDs.
-        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt > trio.vcf.gz
+        ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt --output trio.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t trio.vcf.gz
-        rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
+        rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_* list.txt
         ls -laht
         
         # Benchmarking: original merged VCF.
@@ -683,15 +720,15 @@ task BenchTrio {
         Benchmark not_tr.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_not_tr
         
         # Benchmarking: VCF with missing->ref.
-        ${TIME_COMMAND} bcftools +setGT trio.vcf.gz --output-type z -- --target-gt . --new-gt 0 > trio_no_missing.vcf.gz
+        MissingToRef trio.vcf.gz trio_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t trio_no_missing.vcf.gz
         Benchmark trio_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_all_no_missing
         
-        ${TIME_COMMAND} bcftools +setGT tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > tr_no_missing.vcf.gz
+        MissingToRef tr.vcf.gz tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t tr_no_missing.vcf.gz
         Benchmark tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_tr_no_missing
         
-        ${TIME_COMMAND} bcftools +setGT not_tr.vcf.gz --output-type z -- --target-gt . --new-gt 0 > not_tr_no_missing.vcf.gz
+        MissingToRef not_tr.vcf.gz not_tr_no_missing.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t not_tr_no_missing.vcf.gz
         Benchmark not_tr_no_missing.vcf.gz ${PROBAND_ID} ~{min_sv_length}bp_~{max_sv_length}bp_not_tr_no_missing
         

@@ -840,7 +840,6 @@ task PrecisionRecallAnalysis {
         # Canonizing the dipcall VCF
         bcftools index --threads ${N_THREADS} -f -t ~{sample_dipcall_vcf_gz}
         CanonizeDipcallVcf ~{sample_id} ~{sample_dipcall_vcf_gz} ~{sample_dipcall_vcf_gz}.tbi ~{min_sv_length} ~{max_sv_length} not_gaps.bed
-        rm -f ~{sample_dipcall_vcf_gz}
         ${TIME_COMMAND} bcftools view --regions-file ~{tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_tr.vcf.gz &
         ${TIME_COMMAND} bcftools view --regions-file ~{not_tandem_bed} --regions-overlap pos --output-type z ~{sample_id}_truth.vcf.gz --output ~{sample_id}_truth_not_tr.vcf.gz &
         wait
@@ -1017,8 +1016,7 @@ task BenchTrio {
         fi
         
         # Ensuring a consistent file format
-        TEST=$(ls *.vcf.gz && echo 0 || echo 1)
-        if [ ${TEST} -eq 1 ]; then
+        if ls *.bcf > /dev/null 2>&1 ; then
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${PROBAND_ID}_*.bcf) --output ${PROBAND_ID}_in.vcf.gz &
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${FATHER_ID}_*.bcf) --output ${FATHER_ID}_in.vcf.gz &
             ${TIME_COMMAND} bcftools view --output-type z $(ls ${MOTHER_ID}_*.bcf) --output ${MOTHER_ID}_in.vcf.gz &
@@ -1054,7 +1052,7 @@ task BenchTrio {
         # the same cohort VCF, which had distinct IDs.
         ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge id --output-type z --file-list list.txt --output trio.vcf.gz
         ${TIME_COMMAND} bcftools index --threads ${N_THREADS} -f -t trio.vcf.gz
-        rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_*
+        rm -f ${PROBAND_ID}_* ${FATHER_ID}_* ${MOTHER_ID}_* list.txt
         ls -laht
         
         # Benchmarking: original merged VCF.
