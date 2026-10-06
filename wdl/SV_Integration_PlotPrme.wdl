@@ -38,7 +38,6 @@ workflow SV_Integration_PlotPrme {
         File tandem_bed
         
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_workpackages:latest"
-        Int preemptible_number = 4
     }
     parameter_meta {
         cohort_bcf: "The all-chromosomes cohort VCF to benchmark"
@@ -212,7 +211,6 @@ task SplitBcfBySample {
         Int n_cpu = 2
         Int ram_size_gb = 8
         Int disk_size_gb = 50
-        Int preemptible_number
     }
     parameter_meta {
         remote_outdir: "The result of the split is stored in this bucket location."
@@ -255,7 +253,7 @@ task SplitBcfBySample {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " SSD"
-        preemptible: preemptible_number
+        preemptible: 0
     }
 }
 
@@ -269,7 +267,6 @@ task ComplementBed {
         String docker_image
         Int n_cpu = 1
         Int ram_size_gb = 4
-        Int preemptible_number
     }
     parameter_meta {
     }
@@ -299,7 +296,7 @@ task ComplementBed {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: preemptible_number
+        preemptible: 4
     }
 }
 
@@ -334,7 +331,6 @@ task PrecisionRecallAnalysis {
         Int n_cpu = 3
         Int ram_size_gb = 6
         Int disk_size_gb = 20
-        Int preemptible_number
     }
     parameter_meta {  
         min_sv_length: "The input VCF is first hard-filtered based on SVLEN, and fed to the chosen benchmarking tool."
@@ -527,7 +523,7 @@ task PrecisionRecallAnalysis {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: preemptible_number
+        preemptible: 2
     }
 }
 
@@ -750,6 +746,6 @@ task BenchTrio {
         cpu: n_cpu
         memory: ram_size_gb + "GB"
         disks: "local-disk " + disk_size_gb + " HDD"
-        preemptible: preemptible_number
+        preemptible: 2
     }
 }

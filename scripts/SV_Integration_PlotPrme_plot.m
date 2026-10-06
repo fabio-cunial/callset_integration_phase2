@@ -2,7 +2,7 @@ FONT_SIZE=18;
 LABELS={'15x', '30x'};
 DELTA=0.4;
 
-EVAL_THRESHOLD='50bp';
+EVAL_THRESHOLD='50bp_10000bp';
 
 
 
@@ -22,9 +22,9 @@ for i=[1:5]
 	%plot(X,F,'.g'); 
 	plot(X,C,'.m');
 endfor
-AVG_PRECISION_15X=mean(A(1:5,1))
-AVG_RECALL_15X=mean(A(1:5,2))
-AVG_GT_CONC_15X=mean(A(1:5,4))
+ALL_AVG_PRECISION_15X=mean(A(1:5,1))
+ALL_AVG_RECALL_15X=mean(A(1:5,2))
+ALL_AVG_GT_CONC_15X=mean(A(1:5,4))
 
 % 30x
 for i=[6:10]
@@ -122,17 +122,16 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-ALL_AVG_ME_CONTROLS_15X=mean(B(1:3,2)./(B(1:3,1)+B(1:3,2)))
 for i=[4:7]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-ALL_AVG_ME_AOU_15X=mean(B(4:7,2)./(B(4:7,1)+B(4:7,2)))
+ALL_AVG_ME_15X=mean(B(1:7,2)./(B(1:7,1)+B(1:7,2)))
 for i=[8:10]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-ALL_AVG_ME_AOU_30X=mean(B(8:10,2)./(B(8:10,1)+B(8:10,2)))
+ALL_AVG_ME_30X=mean(B(8:10,2)./(B(8:10,1)+B(8:10,2)))
 ylabel('Mendelian error rate'); xticks([1:3]); xticklabels(LABELS); title('All records, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
 
 % Inside TRs
@@ -143,17 +142,16 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-TR_AVG_ME_CONTROLS_15X=mean(B(1:3,2)./(B(1:3,1)+B(1:3,2)))
 for i=[4:6]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-TR_AVG_ME_AOU_15X=mean(B(4:6,2)./(B(4:6,1)+B(4:6,2)))
+TR_AVG_ME_15X=mean(B(1:6,2)./(B(1:6,1)+B(1:6,2)))
 for i=[7:9]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-TR_AVG_ME_AOU_30X=mean(B(7:9,2)./(B(7:9,1)+B(7:9,2)))
+TR_AVG_ME_30X=mean(B(7:9,2)./(B(7:9,1)+B(7:9,2)))
 ylabel('Mendelian error rate'); xticks([1:3]); xticklabels(LABELS); title('Inside TRs, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
 
 % Outside TRs
@@ -164,17 +162,16 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_ME_CONTROLS_15X=mean(B(1:3,2)./(B(1:3,1)+B(1:3,2)))
 for i=[4:6]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_ME_AOU_15X=mean(B(4:6,2)./(B(4:6,1)+B(4:6,2)))
+NOT_TR_AVG_ME_15X=mean(B(1:6,2)./(B(1:6,1)+B(1:6,2)))
 for i=[7:9]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,2)./(B(i,1)+B(i,2)); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_ME_AOU_30X=mean(B(7:9,2)./(B(7:9,1)+B(7:9,2)))
+NOT_TR_AVG_ME_30X=mean(B(7:9,2)./(B(7:9,1)+B(7:9,2)))
 ylabel('Mendelian error rate'); xticks([1:3]); xticklabels(LABELS); title('Outside TRs, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
 
 
@@ -192,17 +189,16 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-ALL_AVG_DENOVO_CONTROLS_15X=mean(B(1:3,1)./B(1:3,2))
 for i=[4:6]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-ALL_AVG_DENOVO_AOU_15X=mean(B(4:6,1)./B(4:6,2))
+ALL_AVG_DENOVO_15X=mean(B(1:6,1)./B(1:6,2))
 for i=[7:9]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-ALL_AVG_DENOVO_AOU_30X=mean(B(7:9,1)./B(7:9,2))
+ALL_AVG_DENOVO_30X=mean(B(7:9,1)./B(7:9,2))
 ylabel('De novo rate'); xticks([1:3]); xticklabels(LABELS); title('All records, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
 
 % Inside TRs
@@ -213,17 +209,16 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-TR_AVG_DENOVO_CONTROLS_15X=mean(B(1:3,1)./B(1:3,2))
 for i=[4:6]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-TR_AVG_DENOVO_AOU_15X=mean(B(4:6,1)./B(4:6,2))
+TR_AVG_DENOVO_15X=mean(B(1:6,1)./B(1:6,2))
 for i=[7:9]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-TR_AVG_DENOVO_AOU_30X=mean(B(7:9,1)./B(7:9,2))
+TR_AVG_DENOVO_30X=mean(B(7:9,1)./B(7:9,2))
 ylabel('De novo rate'); xticks([1:3]); xticklabels(LABELS); title('Inside TRs, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
 
 % Outside TRs
@@ -234,15 +229,14 @@ for i=[1:3]
     X=1 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_DENOVO_CONTROLS_15X=mean(B(1:3,1)./B(1:3,2))
 for i=[4:6]
     X=2 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_DENOVO_AOU_15X=mean(B(4:6,1)./B(4:6,2))
+NOT_TR_AVG_DENOVO_15X=mean(B(1:6,1)./B(1:6,2))
 for i=[7:9]
     X=3 -DELTA/2 + rand(1,1).*DELTA;
     Y=B(i,1)./B(i,2); plot(X,Y,'.b');
 endfor
-NOT_TR_AVG_DENOVO_AOU_30X=mean(B(7:9,1)./B(7:9,2))
+NOT_TR_AVG_DENOVO_30X=mean(B(7:9,1)./B(7:9,2))
 ylabel('De novo rate'); xticks([1:3]); xticklabels(LABELS); title('Outside TRs, whole genome.'); grid on; axis([0,4,0,0.15]); axis square; set(gca,'fontsize',FONT_SIZE);
