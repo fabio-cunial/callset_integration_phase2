@@ -203,13 +203,13 @@ task SplitBcfBySample {
         String docker_image
         Int n_cpu = 2
         Int ram_size_gb = 8
-        Int disk_size_gb = 50
     }
     parameter_meta {
         remote_outdir: "The result of the split is stored in this bucket location."
     }
     
     String docker_dir = "/callset_integration"
+    Int disk_size_gb = 10 + ceil( (1.0+length(samples)/10.0)*size(cohort_bcf,"GB") )
     
     command <<<
         set -euxo pipefail
