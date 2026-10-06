@@ -42,6 +42,7 @@ workflow SV_Integration_PlotPrme {
     parameter_meta {
         cohort_bcf: "The all-chromosomes cohort VCF to benchmark"
         precision_recall_bench_method: "0=truvari bench, 1=vcfdist."
+        mendelian_error_n_trios: "0=skip all trio analyses (set `mendelian_error_samples=[]` in this case)."
     }
     
     call ComplementBed {
