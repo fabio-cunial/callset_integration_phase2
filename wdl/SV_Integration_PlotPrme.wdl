@@ -48,8 +48,7 @@ workflow SV_Integration_PlotPrme {
         input:
             tandem_bed = tandem_bed,
             reference_fai = reference_fai,
-            docker_image = docker_image,
-            preemptible_number = preemptible_number
+            docker_image = docker_image
     }
     
     
@@ -60,8 +59,7 @@ workflow SV_Integration_PlotPrme {
             cohort_bcf = cohort_bcf,
             cohort_csi = cohort_csi,
             remote_outdir = remote_outdir+"/samples",
-            docker_image = docker_image,
-            preemptible_number = preemptible_number
+            docker_image = docker_image
     }
     
     # 1. Mendelian error analysis
@@ -77,8 +75,7 @@ workflow SV_Integration_PlotPrme {
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split.out_flag],
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
         call BenchTrio as me_bench_20 {
             input:
@@ -91,8 +88,7 @@ workflow SV_Integration_PlotPrme {
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split.out_flag],
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
         call BenchTrio as me_bench_50 {
             input:
@@ -105,8 +101,7 @@ workflow SV_Integration_PlotPrme {
                 tandem_bed = ComplementBed.sorted_bed,
                 not_tandem_bed = ComplementBed.complement_bed,
                 in_flag = [split.out_flag],
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
     }
     
@@ -132,8 +127,7 @@ workflow SV_Integration_PlotPrme {
                 
                 in_flag = split.out_flag,
                 
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
         call PrecisionRecallAnalysis as pr_analysis_20 {
             input:
@@ -155,8 +149,7 @@ workflow SV_Integration_PlotPrme {
                 
                 in_flag = split.out_flag,
                 
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
         call PrecisionRecallAnalysis as pr_analysis_50 {
             input:
@@ -178,8 +171,7 @@ workflow SV_Integration_PlotPrme {
                 
                 in_flag = split.out_flag,
                 
-                docker_image = docker_image,
-                preemptible_number = preemptible_number
+                docker_image = docker_image
         }
     }
     
@@ -568,7 +560,6 @@ task BenchTrio {
         Int n_cpu = 4
         Int ram_size_gb = 8
         Int disk_size_gb = 20
-        Int preemptible_number
     }
     parameter_meta {
         ped_tsv_row: "The row (one-based) in `ped_tsv` that corresponds to this trio."
