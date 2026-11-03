@@ -750,4 +750,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_TransferIntersampleAnnotations.wdl
   testParameterFiles:
+- name: SV_Integration_GetDiscoveryAnnotations
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_GetDiscoveryAnnotations.wdl
+  testParameterFiles:
 
