@@ -745,5 +745,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_GetTrainingRecords.wdl
   testParameterFiles:
-
+- name: SV_Integration_TransferIntersampleAnnotations 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SV_Integration_TransferIntersampleAnnotations.wdl
+  testParameterFiles:
 
