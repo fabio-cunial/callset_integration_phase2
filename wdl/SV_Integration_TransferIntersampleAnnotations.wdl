@@ -40,7 +40,7 @@ workflow SV_Integration_TransferIntersampleAnnotations {
 # Performance with 4 cores and 8 GB of RAM:
 #
 # TASK                      % CPU       RAM     TIME
-# 
+# bcftools annotate         170%        2G      3h         
 #
 task Impl {
     input {
