@@ -319,7 +319,7 @@ public class Rsquare {
     /**
      * Removes from the buffer the first few expired shorts that end before 
      * `pos` (zero-based). The procedure stops at the first short that is not 
-     * expired, so it is just best-effort heuristic.
+     * expired, so it is just a best-effort heuristic.
      * 
      * Remark: at the end of the procedure, `activeShort` may contain some
      * expired shorts.
@@ -466,7 +466,7 @@ public class Rsquare {
     private static final void writeToBed(int longIndex, BufferedWriter bw) throws IOException {
         bw.write( chrId+"\t" +                              // CHROM
                   (activeLong[longIndex][0]-1)+"\t" +       // P
-                  activeLong[longIndex][0]+"\t" +           // P+1
+                  activeLong[longIndex][0]+"\t" +           // P+1, to avoid empty intervals that may interfere with bedtools intersect.
                   activeLongIds[longIndex][0]+"\t" +        // ID
                   activeLong[longIndex][3]+"\t" +           // type
                   activeLong[longIndex][4]+"\t" +           // length
