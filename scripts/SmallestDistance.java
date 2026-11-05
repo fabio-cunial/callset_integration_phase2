@@ -85,7 +85,7 @@ public class SmallestDistance {
         final int DISTANCE_TYPE = Integer.parseInt(args[5]);
         final String OUTPUT_BED = args[6];
 
-        final int QUANTUM = 1000;  // Arbitrary
+        final int QUANTUM = 10000;  // Arbitrary
 
         int p1, p2, p3, p4;
         int pos, svtype, svlen;

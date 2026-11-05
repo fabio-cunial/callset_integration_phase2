@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l SmallestDistance.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_GetDiscoveryAnnotations.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_TransferIntersampleAnnotations.wdl
 java -jar ${WOMTOOL_PATH} validate -l SV_Integration_GetTrainingRecords.wdl

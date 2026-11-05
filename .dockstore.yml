@@ -755,4 +755,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SV_Integration_GetDiscoveryAnnotations.wdl
   testParameterFiles:
+- name: SmallestDistance
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/SmallestDistance.wdl
+  testParameterFiles:
 
