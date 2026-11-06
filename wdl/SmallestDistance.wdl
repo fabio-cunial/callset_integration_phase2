@@ -109,7 +109,7 @@ task SmallestDistance {
             gcloud storage cp ~{remote_outdir}/matrices/${MATRIX_FILENAME} .
         else
             date 1>&2
-            bcftools view --output-type u ~{input_bcf} ~{chromosome_id} | bcftools +fill-tags --output-type u ~{input_bcf} -- -t AF | bcftools query --format '%POS\t%INFO/SVLEN\t%INFO/AF\t%ID\t%INFO/SVTYPE\n' | gzip -4 -c > ${MATRIX_FILENAME}
+            bcftools view --output-type u ~{input_bcf} ~{chromosome_id} | bcftools +fill-tags --output-type u - -- -t AF | bcftools query --format '%POS\t%INFO/SVLEN\t%INFO/AF\t%ID\t%INFO/SVTYPE\n' | gzip -4 -c > ${MATRIX_FILENAME}
             date 1>&2
             gcloud storage cp ${MATRIX_FILENAME} ~{remote_outdir}/matrices/
             zcat ${MATRIX_FILENAME} | head -n 10 1>&2 || true
