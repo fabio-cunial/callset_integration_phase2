@@ -60,8 +60,8 @@ workflow SmallestDistance {
 #
 # TOOL                                       CPU        RAM         TIME
 # 
-# bcftools query | awk | gzip -1                                      
-# SmallestDistance.java                     
+# bcftools | gzip                                                   1m
+# SmallestDistance.java                      170%      130M         2s
 #
 task SmallestDistance {
     input {
