@@ -82,13 +82,12 @@ task SmallestDistance {
         String docker_image
         Int n_cpu = 4
         Int mem_gb = 8
-        Int preemptible_number = 0
+        Int disk_size_gb = 100
     }
     parameter_meta {
         n_cpu: "There can be 4 concurrent processes in a pipe."
     }
 
-    Int disk_size_gb = 10 + 2*( ceil(size(input_bcf,"GB")) )
     String docker_dir = "/callset_integration"
 
     command <<<
@@ -133,7 +132,7 @@ task SmallestDistance {
         cpu: n_cpu
         memory: mem_gb + " GiB"
         disks: "local-disk " +  disk_size_gb + " SSD"
-        preemptible: preemptible_number
+        preemptible: 0
         docker: docker_image
     }
 }
