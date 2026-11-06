@@ -16,7 +16,10 @@ the legend.
 
 The X axis is limited to 0..MAX_X and bins are BIN_WIDTH bp long.
 
-Usage: plot_smallest_distance.py output.png input1.bed [input2.bed ...]
+Usage: plot_smallest_distance.py output.png PREFIX P Q R input1.bed [input2.bed ...]
+
+PREFIX, P, Q, R are only used in the title of the plot: "PREFIX: Length>=P bp,
+AF>=Q, POS distance <=R Mbp".
 
 Every input is a BED produced by `SmallestDistance.java` (e.g. one per
 chromosome), with format:
@@ -66,27 +69,30 @@ def plot_curve(ax, distances, label, color):
     # <= X) whose distance falls in a bin ending at or before X.
     cdf = np.cumsum(counts) / max(len(distances), 1)
     ax.step(edges[1:], cdf, where="pre", color=color, linewidth=2,
-            label=f"{label} (found={len(found)}, not found={n_missing})")
+            label=f"{label} (with neighbor={len(found)}, without neighbor={n_missing})")
 
 
 def main():
     output_png = sys.argv[1]
-    data = load(sys.argv[2:])
+    title_prefix = sys.argv[2]
+    min_length, min_af, max_pos_distance_mbp = sys.argv[3], sys.argv[4], sys.argv[5]
+    data = load(sys.argv[6:])
     svtype, to_any, to_del, to_ins = data[:, 0], data[:, 1], data[:, 2], data[:, 3]
     is_ins = svtype == TYPE_INS
     is_del = svtype == TYPE_DEL
 
     fig, ax = plt.subplots(figsize=(8, 8))
-    plot_curve(ax, to_any[is_ins], "INS -> any", "#f4a0a0")
-    plot_curve(ax, to_ins[is_ins], "INS -> INS", "#b01010")
-    plot_curve(ax, to_any[is_del], "DEL -> any", "#9cc4ee")
-    plot_curve(ax, to_del[is_del], "DEL -> DEL", "#1050b0")
+    plot_curve(ax, to_any[is_ins], r"INS $\rightarrow$ any", "#f4a0a0")
+    plot_curve(ax, to_ins[is_ins], r"INS $\rightarrow$ INS", "#b01010")
+    plot_curve(ax, to_any[is_del], r"DEL $\rightarrow$ any", "#9cc4ee")
+    plot_curve(ax, to_del[is_del], r"DEL $\rightarrow$ DEL", "#1050b0")
+    ax.set_title(r"$\geq$" + min_length + r"bp, AF$\geq$" + min_af + r", POS distance $\leq$" + max_pos_distance_mbp + "Mbp, " + title_prefix)
     ax.set_xlim(0, MAX_X)
     ax.set_ylim(0, 1)
     ax.set_axisbelow(True)
     ax.grid(True, color="lightgray", linewidth=0.8)
-    ax.set_xlabel("X: smallest distance (bp)")
-    ax.set_ylabel("Fraction of calls with distance <= X")
+    ax.set_xlabel("Smallest distance (bp)")
+    ax.set_ylabel(r"Fraction of calls with distance $\leq$ d")
     ax.legend(loc="lower right")
     fig.tight_layout()
     fig.savefig(output_png, dpi=150)
