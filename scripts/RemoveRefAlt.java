@@ -12,8 +12,6 @@ import java.io.*;
  *
  * This program is typically used to compress a VCF that contains only ultralong
  * calls.
- *
- * Remark: POS values are not checked to be consistent with the reference.
  */
 public class RemoveRefAlt {
     
@@ -58,26 +56,17 @@ public class RemoveRefAlt {
                 str=br.readLine();
                 continue;
             }
-            ref=tokens[3]; alt=tokens[4]; 
-            if (alt.equalsIgnoreCase("<INS>")) {
-                // Discarded: symbolic INS, even if they might have an SVLEN,
-                // are not verifiable downstream.
-                nDiscarded++;
-                str=br.readLine();
-                continue;
-            }
-            info=tokens[7];
+            ref=tokens[3]; alt=tokens[4]; info=tokens[7];
             c=ref.charAt(0);
-            refIsDna = ref.length()>=1 && (c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n');
+            refIsDna = c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n';
             c=alt.charAt(0);
-            altIsDna = alt.length()>=1 && (c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n');
+            altIsDna = c=='A' || c=='C' || c=='G' || c=='T' || c=='N' || c=='a' || c=='c' || c=='g' || c=='t' || c=='n';
             
             // Forcing QUAL
             tokens[5]=FORCE_QUAL;
             tokens[6]="PASS";
             
             // Computing SVLEN
-            info=tokens[7];
             svlenStr=getInfoField(info,"SVLEN");
             if (svlenStr==null) {
                 // NOP: unknown SVLEN.
@@ -95,6 +84,13 @@ public class RemoveRefAlt {
             if (info.indexOf("SVTYPE=DEL")>=0) { 
                 if (info.indexOf("SVLEN=")<0) info+=";SVLEN="+svlen;
                 alt="<DEL-"+svlen+">";
+                ref="N";
+                nEdited++;
+            }
+            else if (info.indexOf("SVTYPE=INS")>=0 && !altIsDna) { 
+                // Symbolic <INS> are kept
+                if (info.indexOf("SVLEN=")<0) info+=";SVLEN="+svlen;
+                alt="<INS-"+svlen+">";
                 ref="N";
                 nEdited++;
             }
@@ -116,7 +112,7 @@ public class RemoveRefAlt {
                 ref="N";
                 nEdited++;
             }
-            tokens[3]=ref; tokens[4]=alt;
+            tokens[3]=ref; tokens[4]=alt; tokens[7]=info;
             
             // Outputting
             System.out.print(tokens[0]);
