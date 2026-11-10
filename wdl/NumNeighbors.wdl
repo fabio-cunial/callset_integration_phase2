@@ -99,6 +99,33 @@ task Impl {
         EFFECTIVE_RAM_MB=$(( ~{mem_gb}*1024 - 512 ))
         TIME_COMMAND="/usr/bin/time --verbose"
 
+
+        function buildTsv() {
+            local TYPE=$1
+
+            if [ ${TYPE} == "ALL" ]; then
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'ABS(SVLEN)>='~{min_long_length} --output-type z ~{input_bcf} ~{chromosome_id} --output ${TYPE}.vcf.gz
+            else
+                ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'SVTYPE=="'${TYPE}'" && ABS(SVLEN)>='~{min_long_length} --output-type z ~{input_bcf} ~{chromosome_id} --output ${TYPE}.vcf.gz
+            fi            
+            ${TIME_COMMAND} bcftools index -t ${TYPE}.vcf.gz
+            date 1>&2
+            ${TIME_COMMAND} truvari anno numneigh --sizemin 0 --refdist ~{max_distance_bp} ${TYPE}.vcf.gz | bedtools coverage -header -a - -b tr.bed > coverage.tsv
+            date 1>&2
+            rm -f ${TYPE}.vcf.gz*
+            awk -F'\t' -v OFS='\t' '/^#/ { print; next } $NF >='~{min_overlap_fraction}' { NF -= 4; print }' coverage.tsv | bcftools query --format '%INFO/SVTYPE\t%INFO/SVLEN\t%INFO/NumNeighbors\n' > ${RUN_ID}_${TYPE}_tr.tsv
+            date 1>&2
+            head -n 10 ${RUN_ID}_${TYPE}_tr.tsv 1>&2 || true
+            date 1>&2
+            awk -F'\t' -v OFS='\t' '/^#/ { print; next } $NF <'~{min_overlap_fraction}' { NF -= 4; print }' coverage.tsv | bcftools query --format '%INFO/SVTYPE\t%INFO/SVLEN\t%INFO/NumNeighbors\n' > ${RUN_ID}_${TYPE}_not_tr.tsv
+            date 1>&2
+            head -n 10 ${RUN_ID}_${TYPE}_not_tr.tsv 1>&2 || true
+            rm -f coverage.tsv
+        }
+
+
+        # --------------------------- Main program -----------------------------
+
         RUN_ID="~{chromosome_id}_~{min_long_length}_~{max_distance_bp}_~{min_overlap_fraction}"
 
         if [ ~{tr_bed_slack_bp} -gt 0 ]; then
@@ -106,19 +133,10 @@ task Impl {
         else
             mv ~{tr_bed} tr.bed
         fi
-        ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'ABS(SVLEN)>='~{min_long_length} --output-type z ~{input_bcf} ~{chromosome_id} --output chromosome.vcf.gz
-        ${TIME_COMMAND} bcftools index -t chromosome.vcf.gz
-        date 1>&2
-        ${TIME_COMMAND} truvari anno numneigh --sizemin 0 --refdist ~{max_distance_bp} chromosome.vcf.gz | bedtools coverage -header -a - -b tr.bed > coverage.tsv
-        date 1>&2
-        awk -F'\t' -v OFS='\t' '/^#/ { print; next } $NF >='~{min_overlap_fraction}' { NF -= 4; print }' coverage.tsv | bcftools query --format '%INFO/SVTYPE\t%INFO/SVLEN\t%INFO/NumNeighbors\n' > ${RUN_ID}_tr.tsv
-        date 1>&2
-        head -n 10 ${RUN_ID}_tr.tsv 1>&2 || true
-        date 1>&2
-        awk -F'\t' -v OFS='\t' '/^#/ { print; next } $NF <'~{min_overlap_fraction}' { NF -= 4; print }' coverage.tsv | bcftools query --format '%INFO/SVTYPE\t%INFO/SVLEN\t%INFO/NumNeighbors\n' > ${RUN_ID}_not_tr.tsv
-        date 1>&2
-        head -n 10 ${RUN_ID}_not_tr.tsv 1>&2 || true
-        gcloud storage cp ${RUN_ID}'*.tsv' ~{remote_outdir}/
+        buildTsv ALL
+        buildTsv DEL
+        buildTsv INS
+        gcloud storage cp ${RUN_ID}'_*.tsv' ~{remote_outdir}/
     >>>
     
     output {
