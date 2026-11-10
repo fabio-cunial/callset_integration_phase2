@@ -57,11 +57,11 @@ workflow NumNeighbors {
 
 # Performance on chr22:
 #
-# TOOL                                           CPU        RAM         TIME
+# TOOL                                            CPU        RAM         TIME
 # 
-# bcftools view
-# truvari anno numneigh | bedtools coverage
-# awk | bcftools query
+# bcftools view                                  100%       300M          26s
+# truvari anno numneigh | bedtools coverage       50%       200M          13s
+# awk | bcftools query                                                     5s
 #
 task Impl {
     input {

@@ -7,8 +7,10 @@ Plots cumulative distribution functions of the smallest distances computed by
 - DEL to a call of any type;
 - DEL to DEL.
 
-A single plot shows the four curves (INS in shades of red, DEL in shades of
-blue; the lighter shade is "to any"). Each curve gives, for every X bin, the
+A single plot shows the curves for a TR BED and a non-TR BED of >=20bp calls,
+and for a TR BED and a non-TR BED of >=50bp calls (INS in shades of red, DEL in
+shades of blue; TR curves use a lighter shade than non-TR curves; >=20bp curves
+are solid, >=50bp curves are dashed). Each curve gives, for every X bin, the
 fraction of all calls of that type whose distance is <= X. Calls with no call of
 the given type within the max distance (value -1) count in the denominator but
 never in the numerator, so a curve may not reach 1; their number is reported in
@@ -16,13 +18,11 @@ the legend.
 
 The X axis is limited to 0..MAX_X and bins are BIN_WIDTH bp long.
 
-Usage: plot_smallest_distance.py output.png PREFIX P Q R input1.bed [input2.bed ...]
+Usage: SmallestDistance.py output.png title tr_20.bed non_tr_20.bed tr_50.bed non_tr_50.bed
 
-PREFIX, P, Q, R are only used in the title of the plot: "PREFIX: Length>=P bp,
-AF>=Q, POS distance <=R Mbp".
+`title` is used verbatim as the title of the plot.
 
-Every input is a BED produced by `SmallestDistance.java` (e.g. one per
-chromosome), with format:
+All inputs are BEDs produced by `SmallestDistance.java`, with format:
 
 CHROM, first, last+1, ID, type, length,
 to_any, to_any_overlaps, to_del, to_del_overlaps, to_ins, to_ins_overlaps,
@@ -50,17 +50,21 @@ COL_TO_DEL = 8
 COL_TO_INS = 10
 
 
-def load(paths):
+# Colors: (INS, DEL)
+COLORS_NON_TR = ("#b01010", "#1050b0")
+COLORS_TR = ("#f4a0a0", "#9cc4ee")
+
+
+def load(path):
     rows = []
-    for path in paths:
-        with open(path) as f:
-            for line in f:
-                tokens = line.rstrip("\n").split("\t")
-                rows.append((int(tokens[COL_TYPE]), int(tokens[COL_TO_ANY]), int(tokens[COL_TO_DEL]), int(tokens[COL_TO_INS])))
+    with open(path) as f:
+        for line in f:
+            tokens = line.rstrip("\n").split("\t")
+            rows.append((int(tokens[COL_TYPE]), int(tokens[COL_TO_ANY]), int(tokens[COL_TO_DEL]), int(tokens[COL_TO_INS])))
     return np.array(rows, dtype=np.int64).reshape(-1, 4)
 
 
-def plot_curve(ax, distances, label, color):
+def plot_curve(ax, distances, label, color, linestyle):
     found = distances[distances >= 0]
     n_missing = len(distances) - len(found)
     edges = np.arange(0, MAX_X + BIN_WIDTH, BIN_WIDTH)
@@ -68,32 +72,40 @@ def plot_curve(ax, distances, label, color):
     # Fraction of ALL calls (including the ones with distance -1, which are never
     # <= X) whose distance falls in a bin ending at or before X.
     cdf = np.cumsum(counts) / max(len(distances), 1)
-    ax.step(edges[1:], cdf, where="pre", color=color, linewidth=2,
-            label=f"{label} (with neighbor={len(found)}, without neighbor={n_missing})")
+    ax.step(edges[1:], cdf, where="pre", color=color, linestyle=linestyle, linewidth=2, label=f"{label}")   #label=f"{label} (with neighbor={len(found)}, without neighbor={n_missing})")
+
+
+def plot_file(ax, path, name, colors, linestyle):
+    data = load(path)
+    svtype, to_any, to_del, to_ins = data[:, 0], data[:, 1], data[:, 2], data[:, 3]
+    is_ins = svtype == TYPE_INS
+    is_del = svtype == TYPE_DEL
+    #plot_curve(ax, to_any[is_ins], name + r", INS $\rightarrow$ any", colors[0], linestyle)
+    plot_curve(ax, to_ins[is_ins], name + r", INS $\rightarrow$ INS", colors[0], linestyle)
+    #plot_curve(ax, to_any[is_del], name + r", DEL $\rightarrow$ any", colors[1], linestyle)
+    plot_curve(ax, to_del[is_del], name + r", DEL $\rightarrow$ DEL", colors[1], linestyle)
 
 
 def main():
     output_png = sys.argv[1]
-    title_prefix = sys.argv[2]
-    min_length, min_af, max_pos_distance_mbp = sys.argv[3], sys.argv[4], sys.argv[5]
-    data = load(sys.argv[6:])
-    svtype, to_any, to_del, to_ins = data[:, 0], data[:, 1], data[:, 2], data[:, 3]
-    is_ins = svtype == TYPE_INS
-    is_del = svtype == TYPE_DEL
+    title = sys.argv[2]
+    tr_bed_20, non_tr_bed_20 = sys.argv[3], sys.argv[4]
+    tr_bed_50, non_tr_bed_50 = sys.argv[5], sys.argv[6]
 
-    fig, ax = plt.subplots(figsize=(8, 8))
-    plot_curve(ax, to_any[is_ins], r"INS $\rightarrow$ any", "#f4a0a0")
-    plot_curve(ax, to_ins[is_ins], r"INS $\rightarrow$ INS", "#b01010")
-    plot_curve(ax, to_any[is_del], r"DEL $\rightarrow$ any", "#9cc4ee")
-    plot_curve(ax, to_del[is_del], r"DEL $\rightarrow$ DEL", "#1050b0")
-    ax.set_title(r"$\geq$" + min_length + r"bp, AF$\geq$" + min_af + r", POS distance $\leq$" + max_pos_distance_mbp + "Mbp, " + title_prefix)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    plot_file(ax, non_tr_bed_20, r"$\geq$20bp, non-TR", COLORS_NON_TR, "--")
+    plot_file(ax, tr_bed_20, r"$\geq$20bp, TR", COLORS_TR, "--")
+    plot_file(ax, non_tr_bed_50, r"$\geq$50bp, non-TR", COLORS_NON_TR, "-")
+    plot_file(ax, tr_bed_50, r"$\geq$50bp, TR", COLORS_TR, "-")
+    ax.set_title(title)
     ax.set_xlim(0, MAX_X)
     ax.set_ylim(0, 1)
+    ax.set_box_aspect(1)  # Square axes
     ax.set_axisbelow(True)
     ax.grid(True, color="lightgray", linewidth=0.8)
     ax.set_xlabel("Smallest distance (bp)")
     ax.set_ylabel(r"Fraction of calls with distance $\leq$ d")
-    ax.legend(loc="lower right")
+    ax.legend(loc="lower right", fontsize="small")
     fig.tight_layout()
     fig.savefig(output_png, dpi=150)
 
