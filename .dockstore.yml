@@ -760,4 +760,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/SmallestDistance.wdl
   testParameterFiles:
+- name: NumNeighbors 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/NumNeighbors.wdl
+  testParameterFiles:
 
