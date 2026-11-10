@@ -12,12 +12,12 @@ workflow NumNeighbors {
         File input_csi
 
         File tr_bed
-        Int tr_bed_slack_bp
+        Int tr_bed_slack_bp = 0
         File reference_fai
 
-        Int min_long_length
-        Int max_distance_bp
-        Float min_overlap_fraction
+        Int min_long_length = 50
+        Int max_distance_bp = 1000
+        Float min_overlap_fraction = 0.9
 
         String remote_outdir
 
@@ -101,7 +101,11 @@ task Impl {
 
         RUN_ID="~{chromosome_id}_~{min_long_length}_~{max_distance_bp}_~{min_overlap_fraction}"
 
-        ${TIME_COMMAND} bedtools slop -b ~{tr_bed_slack_bp} -i ~{tr_bed} -g ~{reference_fai} > tr.bed
+        if [ ~{tr_bed_slack_bp} -gt 0 ]; then
+            ${TIME_COMMAND} bedtools slop -b ~{tr_bed_slack_bp} -i ~{tr_bed} -g ~{reference_fai} > tr.bed
+        else
+            mv ~{tr_bed} tr.bed
+        fi
         ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --drop-genotypes --include 'ABS(SVLEN)>='~{min_long_length} --output-type z ~{input_bcf} ~{chromosome_id} --output chromosome.vcf.gz
         ${TIME_COMMAND} bcftools index -t chromosome.vcf.gz
         date 1>&2
