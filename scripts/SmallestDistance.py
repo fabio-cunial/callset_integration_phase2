@@ -92,7 +92,7 @@ def main():
     tr_bed_20, non_tr_bed_20 = sys.argv[3], sys.argv[4]
     tr_bed_50, non_tr_bed_50 = sys.argv[5], sys.argv[6]
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(5, 5))
     plot_file(ax, non_tr_bed_20, r"$\geq$20bp, non-TR", COLORS_NON_TR, "--")
     plot_file(ax, tr_bed_20, r"$\geq$20bp, TR", COLORS_TR, "--")
     plot_file(ax, non_tr_bed_50, r"$\geq$50bp, non-TR", COLORS_NON_TR, "-")
@@ -105,9 +105,9 @@ def main():
     ax.grid(True, color="lightgray", linewidth=0.8)
     ax.set_xlabel("Smallest distance (bp)")
     ax.set_ylabel(r"Fraction of calls with distance $\leq$ d")
-    ax.legend(loc="lower right", fontsize="small")
+    ax.legend(loc="upper right", fontsize="small")
     fig.tight_layout()
-    fig.savefig(output_png, dpi=150)
+    fig.savefig(output_png, dpi=150, bbox_inches="tight", pad_inches=0.05)
 
 
 if __name__ == "__main__":

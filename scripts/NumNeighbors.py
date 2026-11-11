@@ -85,7 +85,7 @@ def main():
     data = [load(os.path.join(indir, c[0])) for c in curves]
     bins = get_bins()
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(5, 5))
     for (name, label, color, linestyle), values in zip(curves, data):
         plot_curve(ax, values, bins, label, color, linestyle)
     ax.set_title(title)
@@ -99,7 +99,7 @@ def main():
     ax.set_ylabel(r"Fraction of calls with $\geq$ n neighbors")
     ax.legend(loc="upper right", fontsize="small")
     fig.tight_layout()
-    fig.savefig(output_png, dpi=150)
+    fig.savefig(output_png, dpi=150, bbox_inches="tight", pad_inches=0.05)
 
 
 if __name__ == "__main__":
