@@ -170,6 +170,8 @@ task Rsquare {
             N_RECORDS_IN_VCF=$(bcftools index --nrecords ~{input_csi})
             echo "Number of records in the VCF: ${N_RECORDS_IN_VCF}" >> ${RUN_ID}.log
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M Rsquare ${MATRIX_FILENAME} ~{chromosome_id} ${N_SAMPLES_KEPT} ~{min_long_length} ~{max_short_length} ~{max_distance_bp} ~{min_af} ${RUN_ID}.bed >> ${RUN_ID}.log
+            ${TIME_COMMAND} sort -k1,1 -k2,2n --output ${RUN_ID}_sorted.bed ${RUN_ID}.bed
+            rm ${RUN_ID}.bed; mv ${RUN_ID}_sorted.bed ${RUN_ID}.bed
             gcloud storage mv ${RUN_ID}.bed ${RUN_ID}.log ~{remote_outdir}/
         fi
     >>>

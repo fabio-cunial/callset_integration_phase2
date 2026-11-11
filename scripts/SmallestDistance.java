@@ -43,8 +43,7 @@ public class SmallestDistance {
      * pos,first,last,type,length
      * 
      * where:
-     * - `pos` is the one-based POS from the VCF (stored just for printing
-     *   the output);
+     * - `pos` is the one-based POS from the VCF;
      * - `[first..last]` is the interval of zero-based, inclusive reference 
      *   positions that are affected by the variant.
      */
@@ -75,6 +74,9 @@ public class SmallestDistance {
      * @param args 4 max bp distance to compare two variants;
      * @param args 5 one of the DISTANCE_* constants;
      * @param args 6 output BED; see `writeToBed()` for format.
+     * 
+     * Remark: output records are not necessarily sorted by their first 
+     * position.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_TSV_GZ = args[0];
@@ -348,9 +350,10 @@ public class SmallestDistance {
         int i;
 
         bw.write( chrId+"\t" +                              // CHROM
-                  activeLong[longIndex][1]+"\t" +           // first
+                  // first
+                  (activeLong[longIndex][3]==TYPE_INS?activeLong[longIndex][1]-1:activeLong[longIndex][1])+"\t" +
                   // last+1, avoiding empty intervals that may interfere with bedtools intersect.
-                  (activeLong[longIndex][2]+1==activeLong[longIndex][1]?activeLong[longIndex][1]+1:activeLong[longIndex][2]+1)+"\t" +
+                  (activeLong[longIndex][3]==TYPE_INS?activeLong[longIndex][1]:activeLong[longIndex][2]+1)+"\t" +
                   activeLongIds[longIndex][0]+"\t" +        // ID
                   activeLong[longIndex][3]+"\t" +           // type
                   activeLong[longIndex][4]                  // length

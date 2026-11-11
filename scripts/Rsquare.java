@@ -38,8 +38,7 @@ public class Rsquare {
      * pos,first,last,type,length,  sample1,count1, sample2,counts2, ..., sampleK,countK
      * 
      * where:
-     * - `pos` is the one-based POS from the VCF (stored just for printing
-     *   the output);
+     * - `pos` is the one-based POS from the VCF;
      * - `[first..last]` is the interval of zero-based, inclusive reference 
      *   positions that are affected by the variant;
      * - `countX` is in {0,1,2}.
@@ -100,11 +99,14 @@ public class Rsquare {
      * variants below this AF are not printed in output;
      * @param args 7 output BED with format: 
      * 
-     * CHROM, P, P+1, ID, type, length, AC, N, R^2, ACs, Ns, IDs
+     * CHROM, A, B, ID, type, length, AC, N, R^2, ACs, Ns, IDs
      * 
-     * where `P` is the one-based POS from the VCF minus one, `N` is the number 
-     * of samples with GT=ALT and R^2=-1 iff the long cannot be compared to any
-     * short.
+     * where `[A..B)` is the zero-based, half-open BED interval of the positions
+     * affected by the variant, `N` is the number of samples with GT=ALT and
+     * R^2=-1 iff the long cannot be compared to any short.
+     * 
+     * Remark: output records are not necessarily sorted by their first 
+     * position.
      */
     public static void main(String[] args) throws IOException {
         final String INPUT_TSV_GZ = args[0];
@@ -465,8 +467,10 @@ public class Rsquare {
 
     private static final void writeToBed(int longIndex, BufferedWriter bw) throws IOException {
         bw.write( chrId+"\t" +                              // CHROM
-                  (activeLong[longIndex][0]-1)+"\t" +       // P
-                  activeLong[longIndex][0]+"\t" +           // P+1, to avoid empty intervals that may interfere with bedtools intersect.
+                  // first
+                  (activeLong[longIndex][3]==TYPE_INS?activeLong[longIndex][1]-1:activeLong[longIndex][1])+"\t" +
+                  // last+1, avoiding empty intervals that may interfere with bedtools intersect.
+                  (activeLong[longIndex][3]==TYPE_INS?activeLong[longIndex][1]:activeLong[longIndex][2]+1)+"\t" +
                   activeLongIds[longIndex][0]+"\t" +        // ID
                   activeLong[longIndex][3]+"\t" +           // type
                   activeLong[longIndex][4]+"\t" +           // length

@@ -121,6 +121,8 @@ task SmallestDistance {
             N_RECORDS_IN_VCF=$(bcftools index --nrecords ~{input_csi})
             echo "Number of records in the VCF: ${N_RECORDS_IN_VCF}" >> ${RUN_ID}.log
             ${TIME_COMMAND} java -cp ~{docker_dir} -Xmx${EFFECTIVE_RAM_MB}M SmallestDistance ${MATRIX_FILENAME} ~{chromosome_id} ~{min_long_length} ~{min_af} ~{max_distance_bp} ~{distance_type} ${RUN_ID}.bed >> ${RUN_ID}.log
+            ${TIME_COMMAND} sort -k1,1 -k2,2n --output ${RUN_ID}_sorted.bed ${RUN_ID}.bed
+            rm ${RUN_ID}.bed; mv ${RUN_ID}_sorted.bed ${RUN_ID}.bed
             gcloud storage mv ${RUN_ID}.bed ${RUN_ID}.log ~{remote_outdir}/
         fi
     >>>
