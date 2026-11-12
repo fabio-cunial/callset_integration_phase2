@@ -2,7 +2,7 @@
 #
 # Collects and plots the output of `SmallestDistance.wdl`.
 #
-REMOTE_BUCKET="gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e"
+REMOTE_BUCKET="..."
 REMOTE_TR_BED="${REMOTE_BUCKET}/scratch/cunial_intersample_vcf/v2/plot_hwe/GRCh38_AllTandemRepeatsandHomopolymers_slop5.bed"
 MIN_OVERLAP_FRACTION="0.9"
 

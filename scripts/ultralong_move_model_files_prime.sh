@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-REMOTE_BUCKET_URI="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108"
+REMOTE_BUCKET_URI="gs://..."
 REMOTE_DESTINATION_URI_15x="${REMOTE_BUCKET_URI}/v3/15x/workpackage_1_ultralong_annotated_fourth_attempt/merged/scored_final_model"
 REMOTE_DESTINATION_URI_30x="${REMOTE_BUCKET_URI}/v3/30x/workpackage_1_ultralong_annotated_fourth_attempt/merged/scored_final_model"
 

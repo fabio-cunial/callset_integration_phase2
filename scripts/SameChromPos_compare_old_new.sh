@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-REMOTE_INDIR_OLD="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/v3/15x/workpackage_3_second_attempt"
-REMOTE_INDIR_NEW="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/v3/15x/testing_bcftools_annotate_fix_workpackage_3"
-REMOTE_TR_BED="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/references/hg38/human_GRCh38_no_alt_analysis_set.trf.bed"
+REMOTE_INDIR_OLD="gs://..."
+REMOTE_INDIR_NEW="gs://..."
+REMOTE_TR_BED="gs://..."
 SAMPLE_IDS="HG00097 HG00099 HG00126 HG00128 HG00133 HG00140 HG00146 HG002 HG00232 HG00235"
 
 set -euxo pipefail

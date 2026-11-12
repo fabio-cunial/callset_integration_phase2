@@ -19,7 +19,7 @@ public class FillTablePhase2 {
      *    7: 03_pbsv_vcf
      *    8: 03_sniffles_tbi
      *    9: 03_sniffles_vcf
-     * 1: gs://fc-secure-8f7d6a20-04ce-40d7-8c88-aececeac3e09/CCS/terra-f6a059a8/outputs/T2T
+     * 1: gs://...
      */
     public static void main(String[] args) throws Exception {
         final String INPUT_FILE = args[0];

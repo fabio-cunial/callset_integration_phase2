@@ -7,13 +7,6 @@ MAX_SV_LENGTH="10000"
 
 
 function Download() {
-    # gsutil -m cp gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/scratch/cunial_intersample_vcf/v2/regenotyping_analysis_v2_50bp/128_samples/kanpig/HG00097_kanpig.vcf.'gz*' .
-#     gsutil cp gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/submissions/0a354214-9225-4416-97b5-73a86057ad06/runDipcall/31377972-e48a-4785-83f1-6635edf5f615/call-dipcall/attempt-2/glob-5b09b846642a9bb3e1843523e167602a/HG00097_hap2_hprc_r2_v1.0.1.dipcall.vcf.gz ./HG00097_dipcall.vcf.gz
-#     tabix HG00097_dipcall.vcf.gz
-#     gsutil cp gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/submissions/0a354214-9225-4416-97b5-73a86057ad06/runDipcall/31377972-e48a-4785-83f1-6635edf5f615/call-dipcall/attempt-2/glob-6a71e0052edde14f09e7720a93686506/HG00097_hap2_hprc_r2_v1.0.1.dipcall.bed ./HG00097_dipcall.bed
-#     gsutil cp gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/submissions/28a86f40-dd3b-407c-b3c3-45ea0d785756/SV_Integration_RegenotypingAnalysis/ec034476-86b6-4fe9-ad3b-5334f2945c3a/call-ComplementBed/cacheCopy/sorted.bed ./tr.bed
-#     gsutil cp gs://fc-secure-95bbd6eb-6d63-49aa-a980-47f3c1342b1e/submissions/28a86f40-dd3b-407c-b3c3-45ea0d785756/SV_Integration_RegenotypingAnalysis/ec034476-86b6-4fe9-ad3b-5334f2945c3a/call-ComplementBed/cacheCopy/complement.bed ./not_tr.bed
-    
     SAMPLE_ID="HG00097"
     SAMPLE_VCF_GZ="HG00097_kanpig.vcf.gz"
     SAMPLE_TBI="HG00097_kanpig.vcf.gz.tbi"

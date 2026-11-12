@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-REMOTE_DIR="gs://fc-7f861a33-ddb4-4b2f-8d10-5679c9df6108/v3/15x/workpackage_1"
+REMOTE_DIR="gs://..."
 set -x
 
 rm -f n_chrx_f.txt
