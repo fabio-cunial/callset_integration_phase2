@@ -2,6 +2,7 @@
 #
 # Collects and plots the output of `Rsquare.wdl`.
 #
+RUN_ID="all_50_49_1000000_0.001"
 REMOTE_BUCKET="..."
 REMOTE_INDIR="${REMOTE_BUCKET}/scratch/cunial_intersample_vcf/v3/rsquare_analysis"
 REMOTE_TR_BED="${REMOTE_BUCKET}/scratch/cunial_intersample_vcf/v2/plot_hwe/GRCh38_AllTandemRepeatsandHomopolymers_slop5.bed"
@@ -13,7 +14,7 @@ set -euxo pipefail
 
 function buildInput() {
     mkdir ./chromosomes/
-    gcloud storage cp ${REMOTE_INDIR}/'*.bed' ./chromosomes/
+    gcloud storage cp ${REMOTE_INDIR}/'chr*_'${RUN_ID}'.bed' ./chromosomes/
     cat $(ls ./chromosomes/*.bed | sort -V) > all.bed
     rm -rf ./chromosomes/
     bedtools coverage -a all.bed -b tr.bed > coverage.tsv

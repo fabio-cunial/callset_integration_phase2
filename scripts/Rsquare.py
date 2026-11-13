@@ -311,7 +311,13 @@ def main():
     ap.add_argument("svtype", type=str.upper, choices=SVTYPES,
                     help="plot only the records of this type, or of every "
                          "type with ALL (case-insensitive)")
-    ap.add_argument("--out", help="output PNG (default: rsquare.<svtype>.png)")
+    ap.add_argument("--mode", type=int, choices=(0, 1), default=0,
+                    help="0 (default): the full 2x2 figure. 1: only the TR "
+                         "panels, one row with R^2 vs AF (and its marginal) on "
+                         "the left and R^2 vs length on the right, each with "
+                         "the same size, bins and color scale as in mode 0")
+    ap.add_argument("--out", help="output PNG (default: rsquare.<svtype>.png, "
+                                  "or rsquare.<svtype>.tr.png in mode 1)")
     ap.add_argument("--x-bins", type=int, default=32,
                     help="target number of log-spaced bins on the x axis of "
                          "each heatmap, i.e. AC bins on the top row and length "
@@ -420,8 +426,17 @@ def main():
     column_width = PANEL + MARGINAL_GAP + MARGINAL
     col_x = (MARGIN_LEFT, MARGIN_LEFT + column_width + GUTTER)
     fig_w = col_x[1] + column_width + MARGIN_RIGHT
-    fig_h = MARGIN_BOTTOM + 2 * PANEL + ROW_GAP + MARGIN_TOP
-    row_y = (MARGIN_BOTTOM + PANEL + ROW_GAP, MARGIN_BOTTOM)  # AF row, length row
+    tr_only = args.mode == 1
+    if tr_only:
+        # One row: AF panel (plus marginal) in the left slot, length panel in
+        # the right slot, both at the size they have in mode 0.
+        fig_h = MARGIN_BOTTOM + PANEL + MARGIN_TOP
+        row_y = (MARGIN_BOTTOM, MARGIN_BOTTOM)
+        drawn = strata[:1]  # the TR stratum is the first one
+    else:
+        fig_h = MARGIN_BOTTOM + 2 * PANEL + ROW_GAP + MARGIN_TOP
+        row_y = (MARGIN_BOTTOM + PANEL + ROW_GAP, MARGIN_BOTTOM)  # AF row, length row
+        drawn = strata
     fig = plt.figure(figsize=(fig_w, fig_h), facecolor=theme["surface"])
 
     def add_axes(x, y, w, h, **kwargs):
@@ -431,7 +446,7 @@ def main():
 
     # Every panel shares the R^2 axis and every row shares its x axis, so a
     # band, a column or a cell lines up everywhere it appears.
-    for c, stratum in enumerate(strata):
+    for c, stratum in enumerate(drawn):
         first = strata[0].get("axes", {})
         ax = add_axes(col_x[c], row_y[0], PANEL, PANEL,
                       sharex=first.get("af"), sharey=first.get("af"))
@@ -439,7 +454,7 @@ def main():
             "af": ax,
             "dist": add_axes(col_x[c] + PANEL + MARGINAL_GAP, row_y[0], MARGINAL,
                              PANEL, sharey=ax),  # own x range: see r2_fractions
-            "len": add_axes(col_x[c], row_y[1], PANEL, PANEL,
+            "len": add_axes(col_x[1] if tr_only else col_x[c], row_y[1], PANEL, PANEL,
                             sharex=first.get("len"), sharey=ax),
         }
 
@@ -449,7 +464,7 @@ def main():
     x_draw = (x_edges - 0.5) / n_alleles
     len_draw = len_edges - 0.5
 
-    for c, stratum in enumerate(strata):
+    for c, stratum in enumerate(drawn):
         ax, ax_dist, ax_len = (stratum["axes"][k] for k in ("af", "dist", "len"))
         left = c == 0
         n_calls = len(stratum["ac"])
@@ -508,16 +523,22 @@ def main():
         if left:
             ax.set_ylabel(Y_LABEL)
             ax_len.set_ylabel(Y_LABEL)
+        elif tr_only:
+            ax_len.set_ylabel(Y_LABEL)
 
         # ---- header ---------------------------------------------------------
         header = " ".join(filter(None, (args.title_prefix, stratum["label"])))
         if not args.no_median and n_calls:
             header += f", median $R^2$ {median_all:.2f}"
         # Centered over the heatmap alone, not over heatmap and marginal.
-        ax.text(0.5, HEADER_Y, header, transform=ax.transAxes, ha="center",
-                va="bottom", color=theme["primary"], fontsize=10)
+        # In mode 1 the length panel sits at the top of the figure, so it
+        # carries the same header.
+        for panel in ((ax, ax_len) if tr_only else (ax,)):
+            panel.text(0.5, HEADER_Y, header, transform=panel.transAxes,
+                       ha="center", va="bottom", color=theme["primary"],
+                       fontsize=10)
 
-    out = args.out or f"rsquare.{args.svtype}.png"
+    out = args.out or f"rsquare.{args.svtype}{'.tr' if tr_only else ''}.png"
     # Crop the figure to its outermost artists, with no surface border around
     # them. The pad is just wider than half a spine, which would otherwise be
     # cut off along the edge.
@@ -550,7 +571,7 @@ def main():
         # Two tables per stratum, one per heatmap; each carries a final `all`
         # row, which is that stratum's marginal.
         stem = os.path.splitext(out)[0]
-        for stratum in strata:
+        for stratum in drawn:
             tag = stratum["tag"]
             dump_counts(f"{stem}.{tag}.counts.tsv", stratum["counts"], x_edges,
                         y_edges, "ac_lo", "ac_hi",
