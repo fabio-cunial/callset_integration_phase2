@@ -19,17 +19,17 @@ for REGION in all tr not_tr; do
     rm -f precision_recall_15x_20bp_${REGION}.csv
     for SAMPLE in ${PRECISION_RECALL_SAMPLES_15x}; do
         FILE="truvari/precision_recall/${SAMPLE}_truvari_20bp_${REGION}.txt"
-        P=$(grep precision ${FILE} | cut -w -f 3)
-        R=$(grep recall ${FILE} | cut -w -f 3)
-        F=$(grep f1 ${FILE} | cut -w -f 3)
-        C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+        P=$(grep precision ${FILE} | awk '{print $2}')
+        R=$(grep recall ${FILE} | awk '{print $2}')
+        F=$(grep f1 ${FILE} | awk '{print $2}')
+        C=$(grep gt_concordance ${FILE} | awk '{print $2}')
         ROW="${P}${R}${F}${C}"
         for MIN in ${N_SAMPLES}; do
             FILE="${MIN}_samples/precision_recall/${SAMPLE}_kanpig_20bp_${REGION}.txt"
-            P=$(grep precision ${FILE} | cut -w -f 3)
-            R=$(grep recall ${FILE} | cut -w -f 3)
-            F=$(grep f1 ${FILE} | cut -w -f 3)
-            C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+            P=$(grep precision ${FILE} | awk '{print $2}')
+            R=$(grep recall ${FILE} | awk '{print $2}')
+            F=$(grep f1 ${FILE} | awk '{print $2}')
+            C=$(grep gt_concordance ${FILE} | awk '{print $2}')
             ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> precision_recall_15x_20bp_${REGION}.csv
@@ -38,17 +38,17 @@ for REGION in all tr not_tr; do
     rm -f precision_recall_15x_50bp_${REGION}.csv
     for SAMPLE in ${PRECISION_RECALL_SAMPLES_15x}; do
         FILE="truvari/precision_recall/${SAMPLE}_truvari_50bp_${REGION}.txt"
-        P=$(grep precision ${FILE} | cut -w -f 3)
-        R=$(grep recall ${FILE} | cut -w -f 3)
-        F=$(grep f1 ${FILE} | cut -w -f 3)
-        C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+        P=$(grep precision ${FILE} | awk '{print $2}')
+        R=$(grep recall ${FILE} | awk '{print $2}')
+        F=$(grep f1 ${FILE} | awk '{print $2}')
+        C=$(grep gt_concordance ${FILE} | awk '{print $2}')
         ROW="${P}${R}${F}${C}"
         for MIN in ${N_SAMPLES}; do
             FILE="${MIN}_samples/precision_recall/${SAMPLE}_kanpig_50bp_${REGION}.txt"
-            P=$(grep precision ${FILE} | cut -w -f 3)
-            R=$(grep recall ${FILE} | cut -w -f 3)
-            F=$(grep f1 ${FILE} | cut -w -f 3)
-            C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+            P=$(grep precision ${FILE} | awk '{print $2}')
+            R=$(grep recall ${FILE} | awk '{print $2}')
+            F=$(grep f1 ${FILE} | awk '{print $2}')
+            C=$(grep gt_concordance ${FILE} | awk '{print $2}')
             ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> precision_recall_15x_50bp_${REGION}.csv
@@ -57,17 +57,17 @@ for REGION in all tr not_tr; do
     rm -f precision_recall_30x_20bp_${REGION}.csv
     for SAMPLE in ${PRECISION_RECALL_SAMPLES_30x}; do
         FILE="truvari/precision_recall/${SAMPLE}_truvari_20bp_${REGION}.txt"
-        P=$(grep precision ${FILE} | cut -w -f 3)
-        R=$(grep recall ${FILE} | cut -w -f 3)
-        F=$(grep f1 ${FILE} | cut -w -f 3)
-        C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+        P=$(grep precision ${FILE} | awk '{print $2}')
+        R=$(grep recall ${FILE} | awk '{print $2}')
+        F=$(grep f1 ${FILE} | awk '{print $2}')
+        C=$(grep gt_concordance ${FILE} | awk '{print $2}')
         ROW="${P}${R}${F}${C}"
         for MIN in ${N_SAMPLES}; do
             FILE="${MIN}_samples/precision_recall/${SAMPLE}_kanpig_20bp_${REGION}.txt"
-            P=$(grep precision ${FILE} | cut -w -f 3)
-            R=$(grep recall ${FILE} | cut -w -f 3)
-            F=$(grep f1 ${FILE} | cut -w -f 3)
-            C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+            P=$(grep precision ${FILE} | awk '{print $2}')
+            R=$(grep recall ${FILE} | awk '{print $2}')
+            F=$(grep f1 ${FILE} | awk '{print $2}')
+            C=$(grep gt_concordance ${FILE} | awk '{print $2}')
             ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> precision_recall_30x_20bp_${REGION}.csv
@@ -76,17 +76,17 @@ for REGION in all tr not_tr; do
     rm -f precision_recall_30x_50bp_${REGION}.csv
     for SAMPLE in ${PRECISION_RECALL_SAMPLES_30x}; do
         FILE="truvari/precision_recall/${SAMPLE}_truvari_50bp_${REGION}.txt"
-        P=$(grep precision ${FILE} | cut -w -f 3)
-        R=$(grep recall ${FILE} | cut -w -f 3)
-        F=$(grep f1 ${FILE} | cut -w -f 3)
-        C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+        P=$(grep precision ${FILE} | awk '{print $2}')
+        R=$(grep recall ${FILE} | awk '{print $2}')
+        F=$(grep f1 ${FILE} | awk '{print $2}')
+        C=$(grep gt_concordance ${FILE} | awk '{print $2}')
         ROW="${P}${R}${F}${C}"
         for MIN in ${N_SAMPLES}; do
             FILE="${MIN}_samples/precision_recall/${SAMPLE}_kanpig_50bp_${REGION}.txt"
-            P=$(grep precision ${FILE} | cut -w -f 3)
-            R=$(grep recall ${FILE} | cut -w -f 3)
-            F=$(grep f1 ${FILE} | cut -w -f 3)
-            C=$(grep gt_concordance ${FILE} | cut -w -f 3)
+            P=$(grep precision ${FILE} | awk '{print $2}')
+            R=$(grep recall ${FILE} | awk '{print $2}')
+            F=$(grep f1 ${FILE} | awk '{print $2}')
+            C=$(grep gt_concordance ${FILE} | awk '{print $2}')
             ROW="${ROW}${P}${R}${F}${C}"
         done
         echo ${ROW} >> precision_recall_30x_50bp_${REGION}.csv

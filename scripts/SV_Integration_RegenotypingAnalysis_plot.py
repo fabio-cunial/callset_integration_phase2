@@ -26,7 +26,7 @@ DELTA = 0.4
 EVAL_THRESHOLDS = ["50bp", "20bp"]
 REGIONS = [("tr", "TR regions"), ("not_tr", "non-TR regions")]
 # Call-length range and chromosome covered by each threshold's CSVs.
-TITLE_PREFIXES = {"20bp": "[20..50) bp, chr6", "50bp": "[50..10001) bp, chr6"}
+TITLE_PREFIXES = {"20bp": "[20..50) bp, chr6", "50bp": "[50..10000] bp, chr6"}
 
 # Okabe-Ito categorical hues: distinguishable under protan/deutan/tritan vision,
 # unlike the matplotlib defaults (whose green and orange collapse for protanopes).
@@ -57,6 +57,8 @@ def load(name):
             if not line:
                 continue
             rows.append([float(x) for x in line.split(",") if x != ""])
+    if not rows:
+        sys.exit("Error: %s is empty" % os.path.join(INPUT_DIR, name))
     return np.array(rows, dtype=float)
 
 
