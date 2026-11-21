@@ -169,8 +169,6 @@ task Impl {
             for MIN_COVERAGE_FRACTION in ~{min_coverage_fractions}; do
                 FilterFullyAlignedSequences ${SAMPLE_ID} ${MIN_COVERAGE_FRACTION} ${HAP_ID}
             done
-            ${TIME_COMMAND} samtools sort -@ ${N_THREADS} -m ${EFFECTIVE_RAM_MB_PER_THREAD}M --no-PG -o ${SAMPLE_ID}_${HAP_ID}_remapped_alignments.bam ${SAMPLE_ID}_${HAP_ID}_remapped_alignments.sam
-            rm -f ${SAMPLE_ID}_${HAP_ID}_remapped_alignments.sam
         }
 
 
@@ -209,7 +207,7 @@ task Impl {
                 echo "${SAMPLE_ID} has ${N_ALIGNED_SEQUENCES} remapped sequences covered >=${MIN_COVERAGE_FRACTION} by an alignment (${PERCENT}%)." 2>&1
             done
             rm -f ${SAMPLE_ID}_hap*_*.txt
-            gcloud storage mv ${SAMPLE_ID}_remapped.fa ${SAMPLE_ID}'_*_'remapped_aligned.txt ${SAMPLE_ID}_hap1_remapped_alignments.bam ${SAMPLE_ID}_hap2_remapped_alignments.bam ~{remote_outdir}/
+            gcloud storage mv ${SAMPLE_ID}_remapped.fa ${SAMPLE_ID}'_*_'remapped_aligned.txt ${SAMPLE_ID}_hap1_remapped_alignments.sam ${SAMPLE_ID}_hap2_remapped_alignments.sam ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
         done 3< chunk.csv
     >>>
