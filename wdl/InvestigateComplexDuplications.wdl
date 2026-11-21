@@ -36,9 +36,8 @@ workflow InvestigateComplexDuplications {
 
 
 # TOOL                                                CPU     RAM     TIME
-# minimap2 ref indexing
-# truvari anno remap                                  
-# minimap2 haps
+# truvari anno remap                                 300%     20G       3m
+# minimap2 haps                                      200%     13G       2m
 # 
 task Impl {
     input {
@@ -52,8 +51,8 @@ task Impl {
         String min_coverage_fractions
 
         String docker_image
-        Int n_cpu = 4
-        Int mem_gb = 32
+        Int n_cpu = 3
+        Int mem_gb = 25
         Int disk_size_gb = 50
         Int preemptible_number = 0
     }
@@ -113,7 +112,7 @@ task Impl {
             ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length 3000000000 --cov-threshold ~{truvari_anno_remap_cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ${SAMPLE_ID}_in.vcf -o ${SAMPLE_ID}_out.vcf
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
 
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%ALT\n' --include 'INFO/remap_classification=="tandem" || INFO/remap_classification=="tandem_complex" || INFO/remap_classification=="tandem_inverted"' ${SAMPLE_ID}_in.vcf | awk -F'\t' '{ printf ">%s,%s,%s,%s,%s,%s\n%s\n", $1, $2, $3, $4, $5, $6, $7 }' > ${SAMPLE_ID}_out.fa
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%remap_classification\t%remap_coords\t%remap_ori\t%remap_perc\t%remap_segments\t%remap_local_rescue\t%ALT\n' --include 'INFO/remap_classification=="tandem" || INFO/remap_classification=="tandem_complex" || INFO/remap_classification=="tandem_inverted"' ${SAMPLE_ID}_in.vcf | awk -F'\t' '{ printf ">%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n%s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13 }' > ${SAMPLE_ID}_out.fa
             rm -f ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_out.fa ${OUTPUT_FA}
