@@ -765,4 +765,10 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/NumNeighbors.wdl
   testParameterFiles:
+- name: InvestigateComplexDuplications 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InvestigateComplexDuplications.wdl
+  testParameterFiles:
+
 
