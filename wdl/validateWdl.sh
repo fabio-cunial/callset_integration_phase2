@@ -3,6 +3,7 @@
 set -x
 WOMTOOL_PATH="/Users/fcunial/apps/cromwell/womtool-84.jar"
 
+java -jar ${WOMTOOL_PATH} validate -l InvestigateComplexDuplicationsPrime.wdl
 java -jar ${WOMTOOL_PATH} validate -l InvestigateComplexDuplications.wdl
 java -jar ${WOMTOOL_PATH} validate -l NumNeighbors.wdl
 java -jar ${WOMTOOL_PATH} validate -l SmallestDistance.wdl

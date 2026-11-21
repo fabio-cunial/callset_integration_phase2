@@ -770,5 +770,9 @@ workflows:
   publish: True
   primaryDescriptorPath: /wdl/InvestigateComplexDuplications.wdl
   testParameterFiles:
-
+- name: InvestigateComplexDuplicationsPrime 
+  subclass: wdl
+  publish: True
+  primaryDescriptorPath: /wdl/InvestigateComplexDuplicationsPrime.wdl
+  testParameterFiles:
 
