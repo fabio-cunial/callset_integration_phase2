@@ -196,7 +196,7 @@ task Impl {
             GetRemapSequences ${SAMPLE_ID} ${SAMPLE_ID}.bcf ${SAMPLE_ID}_remapped.fa
             N_REMAPPED_SEQUENCES=$(wc -l < ${SAMPLE_ID}_remapped.fa)
             N_REMAPPED_SEQUENCES=$(( ${N_REMAPPED_SEQUENCES} / 2 ))
-            echo "${SAMPLE_ID} has ${N_REMAPPED_SEQUENCES} remapped sequences"
+            echo "${SAMPLE_ID} has ${N_REMAPPED_SEQUENCES} remapped sequences" 2>&1
             if [ ${N_REMAPPED_SEQUENCES} -eq 0 ]; then
                 DelocalizeSample ${SAMPLE_ID}
                 continue
@@ -207,7 +207,7 @@ task Impl {
                 cat ${SAMPLE_ID}_hap1_${MIN_COVERAGE_FRACTION}.txt ${SAMPLE_ID}_hap2_${MIN_COVERAGE_FRACTION}.txt | sort | uniq > ${SAMPLE_ID}_${MIN_COVERAGE_FRACTION}_remapped_aligned.txt
                 N_ALIGNED_SEQUENCES=$(wc -l < ${SAMPLE_ID}_${MIN_COVERAGE_FRACTION}_remapped_aligned.txt)
                 PERCENT=$( bc <<< "scale=2; (${N_ALIGNED_SEQUENCES}*100)/${N_REMAPPED_SEQUENCES}" )
-                echo "${SAMPLE_ID} has ${N_ALIGNED_SEQUENCES} remapped sequences covered >=${MIN_COVERAGE_FRACTION} by an alignment (${PERCENT}%)."
+                echo "${SAMPLE_ID} has ${N_ALIGNED_SEQUENCES} remapped sequences covered >=${MIN_COVERAGE_FRACTION} by an alignment (${PERCENT}%)." 2>&1
             done
             rm -f ${SAMPLE_ID}_hap*_*.txt
             gcloud storage mv ${SAMPLE_ID}_remapped.fa ${SAMPLE_ID}'_*_'remapped_aligned.txt ${SAMPLE_ID}_hap1_remapped_alignments.bam ${SAMPLE_ID}_hap2_remapped_alignments.bam ~{remote_outdir}/
