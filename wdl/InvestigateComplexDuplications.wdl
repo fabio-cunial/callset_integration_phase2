@@ -113,7 +113,7 @@ task Impl {
             ${TIME_COMMAND} truvari anno remap --threads ${N_THREADS} --aligner minimap2 --min-length 1 --max-length 3000000000 --cov-threshold ~{truvari_anno_remap_cov_threshold} -r ./ref_files/${REF_FA_BASENAME} ${SAMPLE_ID}_in.vcf -o ${SAMPLE_ID}_out.vcf
             mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
 
-            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%ALT\n' --include 'INFO/remap_classification=="tandem" || INFO/remap_classification=="tandem_complex" || INFO/remap_classification=="tandem_inverted"' ${SAMPLE_ID}_in.vcf | awk -F'\t' '{ printf ">%s,%s,%s\n%s\n", $1, $2, $3, $4 }' > ${SAMPLE_ID}_out.fa
+            ${TIME_COMMAND} bcftools query --format '%CHROM\t%POS\t%ID\t%SUPP_PBSV\t%SUPP_SNIFFLES\t%SUPP_PAV\t%ALT\n' --include 'INFO/remap_classification=="tandem" || INFO/remap_classification=="tandem_complex" || INFO/remap_classification=="tandem_inverted"' ${SAMPLE_ID}_in.vcf | awk -F'\t' '{ printf ">%s,%s,%s,%s,%s,%s\n%s\n", $1, $2, $3, $4, $5, $6, $7 }' > ${SAMPLE_ID}_out.fa
             rm -f ${SAMPLE_ID}_in.vcf
 
             mv ${SAMPLE_ID}_out.fa ${OUTPUT_FA}
