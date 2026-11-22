@@ -303,6 +303,11 @@ task Impl {
             # Splitting multiallelic records into biallelic records
             ${TIME_COMMAND} bcftools norm --multiallelics -any --output-type v ${SAMPLE_ID}_${CALLER_ID}_in.vcf --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf
             rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+
+            # Ensuring that SVLEN has the correct type for VETS downstream
+            bcftools view --header-only ${SAMPLE_ID}_${CALLER_ID}_in.vcf | sed 's/ID=SVLEN,Number=A,/ID=SVLEN,Number=1,/g' > ${SAMPLE_ID}_${CALLER_ID}_header.txt
+            ${TIME_COMMAND} bcftools reheader --header ${SAMPLE_ID}_${CALLER_ID}_header.txt --output ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
+            rm -f ${SAMPLE_ID}_${CALLER_ID}_in.vcf ; mv ${SAMPLE_ID}_${CALLER_ID}_out.vcf ${SAMPLE_ID}_${CALLER_ID}_in.vcf
             
             # Removing SNVs, if any.
             if [ ${CALLER_ID} = 'pav' ]; then
