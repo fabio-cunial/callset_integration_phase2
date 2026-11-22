@@ -72,7 +72,7 @@ task Impl {
         String remote_outdir
         
         File training_resource_bed
-        String resource_matching_strategy = "START_POSITION_AND_GIVEN_REPRESENTATION"
+        String resource_matching_strategy = "START_POSITION_AND_MINIMAL_REPRESENTATION"
 
         Array[String] annotations
         File training_python_script
