@@ -15,7 +15,7 @@ workflow InvestigateComplexDuplicationsPrime {
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
     parameter_meta {
-        chunk_tsv: "Format: sample_id, ultralong_bcf, hap1_fa, hap2_fa, truth_vcf_gz, truth_tbi"
+        chunk_tsv: "Format: `sample_id, ultralong_bcf, hap1_fa, hap2_fa, truth_vcf_gz, truth_tbi`, where the truth VCFs are assumed to contain all SV types (to allow comparing query INS to truth INS and DUP)."
     }
 
     call Impl {
@@ -98,7 +98,8 @@ task Impl {
 
 
         # -------------------------- Main program ------------------------------
-
+    
+        INFINITY="3000000000"
         MIN_SV_LENGTH="5000"  # Arbitrary
 
         # Preparing the reference for `truvari anno remap`.
@@ -129,7 +130,7 @@ task Impl {
                 continue
             fi
             rm -rf ./${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} truvari bench --refdist 3000000000 --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax 3000000000 --pctovl 0 --pctseq ~{truvari_bench_similarity_threshold} --pctsize ~{truvari_bench_similarity_threshold} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} truvari bench --refdist ${INFINITY} --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax ${INFINITY} --dup-to-ins --pctovl 0 --pctseq ~{truvari_bench_similarity_threshold} --max-resolve ${INFINITY} --pctsize ~{truvari_bench_similarity_threshold} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
             rm -f ${SAMPLE_ID}_ins_remapped.vcf.gz*
             ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(INFO/StartDistance)<=ABS(INFO/SVLEN) && ABS(INFO/EndDistance)<=ABS(INFO/SVLEN)' --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${SAMPLE_ID}_ins_found.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/ ; tabix -f ${SAMPLE_ID}_ins_found.vcf.gz
