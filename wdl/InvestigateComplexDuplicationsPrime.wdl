@@ -77,12 +77,12 @@ task Impl {
             local ULTRALONG_BCF=$(echo ${LINE} | cut -d , -f 2)
             local HAP1_FA=$(echo ${LINE} | cut -d , -f 3)
             local HAP2_FA=$(echo ${LINE} | cut -d , -f 4)
-            local DIPCALL_VCF_GZ=$(echo ${LINE} | cut -d , -f 5)
-            local DIPCALL_TBI=$(echo ${LINE} | cut -d , -f 6)
+            local TRUTH_VCF_GZ=$(echo ${LINE} | cut -d , -f 5)
+            local TRUTH_TBI=$(echo ${LINE} | cut -d , -f 6)
 
             gcloud storage cp ${ULTRALONG_BCF} ${SAMPLE_ID}.bcf
-            gcloud storage cp ${DIPCALL_VCF_GZ} ${SAMPLE_ID}_truth.vcf.gz
-            gcloud storage cp ${DIPCALL_TBI} ${SAMPLE_ID}_truth.vcf.gz.tbi
+            gcloud storage cp ${TRUTH_VCF_GZ} ${SAMPLE_ID}_truth.vcf.gz
+            gcloud storage cp ${TRUTH_TBI} ${SAMPLE_ID}_truth.vcf.gz.tbi
         }
 
 
@@ -130,7 +130,8 @@ task Impl {
                 continue
             fi
             rm -rf ./${SAMPLE_ID}_truvari/
-            ${TIME_COMMAND} truvari bench --refdist ${INFINITY} --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax ${INFINITY} --dup-to-ins --pctovl 0 --pctseq ~{truvari_bench_similarity_threshold} --max-resolve ${INFINITY} --pctsize ~{truvari_bench_similarity_threshold} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
+            # --chunksize must be >= --refdist
+            ${TIME_COMMAND} truvari bench --refdist ${INFINITY} --chunksize ${INFINITY} --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax ${INFINITY} --dup-to-ins --pctovl 0 --pctseq ~{truvari_bench_similarity_threshold} --max-resolve ${INFINITY} --pctsize ~{truvari_bench_similarity_threshold} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
             rm -f ${SAMPLE_ID}_ins_remapped.vcf.gz*
             ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(INFO/StartDistance)<=ABS(INFO/SVLEN) && ABS(INFO/EndDistance)<=ABS(INFO/SVLEN)' --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${SAMPLE_ID}_ins_found.vcf.gz
             rm -rf ${SAMPLE_ID}_truvari/ ; tabix -f ${SAMPLE_ID}_ins_found.vcf.gz
