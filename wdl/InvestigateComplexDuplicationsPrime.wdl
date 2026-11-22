@@ -10,7 +10,6 @@ workflow InvestigateComplexDuplicationsPrime {
         File reference_fai
 
         Float truvari_anno_remap_cov_threshold = 0.8
-        Float truvari_bench_similarity_threshold = 0.9
 
         String docker_image = "us.gcr.io/broad-dsp-lrma/fcunial/callset_integration_phase2_ultralong_remap:latest"
     }
@@ -27,7 +26,6 @@ workflow InvestigateComplexDuplicationsPrime {
             reference_fai = reference_fai,
 
             truvari_anno_remap_cov_threshold = truvari_anno_remap_cov_threshold,
-            truvari_bench_similarity_threshold = truvari_bench_similarity_threshold,
 
             docker_image = docker_image
     }
@@ -47,7 +45,6 @@ task Impl {
         File reference_fai
 
         Float truvari_anno_remap_cov_threshold
-        Float truvari_bench_similarity_threshold
 
         String docker_image
         Int n_cpu = 3
@@ -101,6 +98,7 @@ task Impl {
     
         INFINITY="3000000000"
         MIN_SV_LENGTH="5000"  # Arbitrary
+        TRUVARI_BENCH_SIMILARITY_THRESHOLD="0.7"  # Arbitrary lower bound
 
         # Preparing the reference for `truvari anno remap`.
         #
@@ -131,14 +129,14 @@ task Impl {
             fi
             rm -rf ./${SAMPLE_ID}_truvari/
             # --chunksize must be >= --refdist
-            ${TIME_COMMAND} truvari bench --refdist ${INFINITY} --chunksize ${INFINITY} --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax ${INFINITY} --dup-to-ins --pctovl 0 --pctseq ~{truvari_bench_similarity_threshold} --max-resolve ${INFINITY} --pctsize ~{truvari_bench_similarity_threshold} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
+            ${TIME_COMMAND} truvari bench --reference ./ref_files/${REF_FA_BASENAME} --refdist ${INFINITY} --chunksize ${INFINITY} --sizemin ${MIN_SV_LENGTH} --sizefilt ${MIN_SV_LENGTH} --sizemax ${INFINITY} --dup-to-ins --pctovl 0 --pctseq ${TRUVARI_BENCH_SIMILARITY_THRESHOLD} --max-resolve ${INFINITY} --pctsize ${TRUVARI_BENCH_SIMILARITY_THRESHOLD} -b ${SAMPLE_ID}_truth.vcf.gz -c ${SAMPLE_ID}_ins_remapped.vcf.gz -o ./${SAMPLE_ID}_truvari/
             rm -f ${SAMPLE_ID}_ins_remapped.vcf.gz*
-            ${TIME_COMMAND} bcftools view --threads ${N_THREADS} --include 'ABS(INFO/StartDistance)<=ABS(INFO/SVLEN) && ABS(INFO/EndDistance)<=ABS(INFO/SVLEN)' --output-type z ${SAMPLE_ID}_truvari/tp-comp.vcf.gz --output ${SAMPLE_ID}_ins_found.vcf.gz
-            rm -rf ${SAMPLE_ID}_truvari/ ; tabix -f ${SAMPLE_ID}_ins_found.vcf.gz
-            N_FOUND_INS=$( bcftools index --nrecords ${SAMPLE_ID}_ins_found.vcf.gz )
+            ${TIME_COMMAND} bcftools query --format '%ID\t%INFO/SVLEN\t%INFO/TruScore\t%INFO/PctSeqSimilarity\t%INFO/PctSizeSimilarity\t%INFO/PctRecOverlap\t%INFO/StartDistance\t%INFO/EndDistance\t%INFO/SizeDiff\n' ${SAMPLE_ID}_truvari/tp-comp.vcf.gz > ${SAMPLE_ID}_ins_remapped_tp.tsv
+            rm -rf ${SAMPLE_ID}_truvari/
+            N_FOUND_INS=$( wc -l < ${SAMPLE_ID}_ins_remapped_tp.tsv )
             PERCENT=$( bc <<< "scale=2; (${N_FOUND_INS}*100)/${N_REMAPPED_INS}" )
-            echo "${SAMPLE_ID} has ${N_FOUND_INS} true remapped sequences out of ${N_REMAPPED_INS} (${PERCENT}%)" 1>&2
-            gcloud storage mv ${SAMPLE_ID}_ins_found.vcf.gz ~{remote_outdir}/
+            echo "${SAMPLE_ID} has ${N_FOUND_INS} \"true\" remapped sequences (ignoring distance) out of ${N_REMAPPED_INS} (${PERCENT}%)" 1>&2
+            gcloud storage mv ${SAMPLE_ID}_ins_remapped_tp.tsv ~{remote_outdir}/
             DelocalizeSample ${SAMPLE_ID}
         done 3< chunk.csv
     >>>
