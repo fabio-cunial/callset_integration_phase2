@@ -89,7 +89,7 @@ task Impl {
         String extract_extra_args = ""
     }
     parameter_meta {
-        resource_matching_strategy: "The default value is in theory the most appropriate for SVs. For available values, see: https://gatk.broadinstitute.org/hc/en-us/articles/54698831670043-ExtractVariantAnnotations-BETA#--resource-matching-strategy"
+        resource_matching_strategy: "The default value is in theory the most appropriate for SVs, since it compares POS, REF and ALT, rather than just POS or just POS and ALT. For available values, see: https://gatk.broadinstitute.org/hc/en-us/articles/54698831670043-ExtractVariantAnnotations-BETA#--resource-matching-strategy"
         extract_extra_args: "Extra arguments for `ExtractVariantAnnotations`. Use e.g. `-XL chr1 -XL chr2 -XL chr3 -XL chr4 -XL chr5` to discard chromosomes for plotting ROC curves."
     }
     
