@@ -121,7 +121,7 @@ task Impl {
                        ) print $0 \
                  }' ~{reference_agp} > gaps_unsorted.bed
             bedtools sort -i gaps_unsorted.bed -faidx ~{reference_fai} > gaps.bed
-            bedtools complement -L -i gaps.bed -g ~{reference_fai} > not_gaps.bed
+            bedtools complement -i gaps.bed -g ~{reference_fai} > not_gaps.bed
             
             # Intersecting non-gap regions with the training BED
             bedtools sort -i ~{training_resource_bed} -faidx ~{reference_fai} > training_resource_sorted.bed

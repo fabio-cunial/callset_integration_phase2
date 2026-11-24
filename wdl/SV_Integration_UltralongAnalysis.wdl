@@ -220,7 +220,7 @@ task ComplementBed {
 
         
         ${TIME_COMMAND} bedtools sort -i ~{tandem_bed} -faidx ~{reference_fai} > sorted.bed
-        ${TIME_COMMAND} bedtools complement -i sorted.bed -L -g ~{reference_fai} > complement.bed
+        ${TIME_COMMAND} bedtools complement -i sorted.bed -g ~{reference_fai} > complement.bed
     >>>
     
     output {

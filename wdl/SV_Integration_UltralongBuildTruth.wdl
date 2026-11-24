@@ -197,7 +197,7 @@ task Impl {
             if [ ~{svimasm_ins_use_gaps} -eq 1 ]; then
                 gcloud storage cp ${DIPCALL_BED} ./${SAMPLE_ID}_dipcall.bed
                 ${TIME_COMMAND} bedtools sort -i ${SAMPLE_ID}_dipcall.bed -g ~{reference_fai} > ${SAMPLE_ID}_dipcall_sorted.bed
-                ${TIME_COMMAND} bedtools complement -L -i ${SAMPLE_ID}_dipcall_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
+                ${TIME_COMMAND} bedtools complement -i ${SAMPLE_ID}_dipcall_sorted.bed -g ~{reference_fai} > ${SAMPLE_ID}_gaps.bed
                 rm -f ${SAMPLE_ID}_dipcall.bed ${SAMPLE_ID}_dipcall_sorted.bed
                 N_GAPS=$(wc -l < ${SAMPLE_ID}_gaps.bed)
                 echo "The dipcall BED of ${SAMPLE_ID} has ${N_GAPS} gaps" 1>&2

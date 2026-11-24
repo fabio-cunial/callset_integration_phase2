@@ -177,7 +177,7 @@ task Impl {
 
         # Initializing BED files
         mv ~{tr_bed} ./tr.bed
-        bedtools complement -L -i tr.bed -g ~{reference_fai} > not_tr.bed
+        bedtools complement -i tr.bed -g ~{reference_fai} > not_tr.bed
 
         # Counting
         SV_TYPES_PRIMARY="DEL INS DUP INV"
