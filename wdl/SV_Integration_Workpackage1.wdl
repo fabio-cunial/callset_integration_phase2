@@ -441,12 +441,18 @@ task Impl {
             
             # Remark: the order of the callers in `bcftools merge` affects the
             # value of the SAMPLE column emitted by `truvari collapse --intra`.
-            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --output-type z ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz --output ${SAMPLE_ID}_out.vcf
+            ${TIME_COMMAND} bcftools merge --threads ${N_THREADS} --merge none --info-rules - --force-samples --output-type v ${SAMPLE_ID}_pav_sv.vcf.gz ${SAMPLE_ID}_pbsv_sv.vcf.gz ${SAMPLE_ID}_sniffles_sv.vcf.gz --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_*_sv.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
-            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type z ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf.gz
-            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+            ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
+            # Updating SVLEN, since `bcftools merge` might have trimmed a 
+            # longest common suffix from explicit REF and ALT. This is needed,
+            # since SVLEN can be a feature of XGBoost downstream.
+            ${TIME_COMMAND} java -cp ~{docker_dir} AddSvtypeSvlen ${SAMPLE_ID}_in.vcf | bgzip --compress-level 1 > ${SAMPLE_ID}_out.vcf.gz
+            rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf.gz ${SAMPLE_ID}_in.vcf.gz ; bcftools index --threads ${N_THREADS} -f -t ${SAMPLE_ID}_in.vcf.gz
+
             ${TIME_COMMAND} truvari collapse --input ${SAMPLE_ID}_in.vcf.gz --intra --keep maxqual --refdist 500 --pctseq 0.90 --pctsize 0.90 --sizemin 0 --sizemax ${INFINITY} --output ${SAMPLE_ID}_out.vcf --removed-output /dev/null
             rm -f ${SAMPLE_ID}_in.vcf.gz* ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
             
@@ -486,6 +492,11 @@ task Impl {
             
             ${TIME_COMMAND} bcftools norm --threads ${N_THREADS} --multiallelics -any --output-type v ${SAMPLE_ID}_in.vcf --output ${SAMPLE_ID}_out.vcf
             rm -f ${SAMPLE_ID}_in.vcf ; mv ${SAMPLE_ID}_out.vcf ${SAMPLE_ID}_in.vcf
+
+            # Remark: we assume that `ultralong_collapse_mode=0`; in this case,
+            # `bcftools merge` does not trim common REF/ALT suffixes, since 
+            # every record is either an explicit INS or a symbolic ALT. So SVLEN
+            # remains correct.
             
             # Removing SVLEN from symbolic ALTs, in order not to interfere with
             # `truvari collapse`.
