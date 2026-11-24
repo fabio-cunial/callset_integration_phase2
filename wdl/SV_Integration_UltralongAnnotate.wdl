@@ -1098,8 +1098,7 @@ END
             local TRACK_ID=$5
             local OVERLAP_FRACTION=$6
 
-            ${TIME_COMMAND} bedtools intersect -wa -u -f ${OVERLAP_FRACTION} -a ${INTERVAL_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t1\n",$4); }' > ${SAMPLE_ID}_interval_track.tsv
-            ${TIME_COMMAND} bedtools intersect -wa -v -f ${OVERLAP_FRACTION} -a ${INTERVAL_BED} -b ${TRACK_BED} | awk 'BEGIN { FS="\t"; OFS="\t"; } { printf("%s\t0\n",$4); }' >> ${SAMPLE_ID}_interval_track.tsv
+            ${TIME_COMMAND} bedtools coverage -a ${INTERVAL_BED} -b ${TRACK_BED} | awk -F'\t' -v OFS='\t' -v min_overlap_fraction=${OVERLAP_FRACTION} '{ if ($NF >= min_overlap_fraction) { printf("%s\t1\n",$4); } else { printf("%s\t0\n",$4); } }' > ${SAMPLE_ID}_interval_track.tsv
             sort -k 1,1 -k 2,2n ${SAMPLE_ID}_interval_track.tsv | bgzip > ${SAMPLE_ID}_interval_track.tsv.gz
             sort -k 1,1 ${SAMPLE_ID}_interval_track.tsv > ${SAMPLE_ID}_interval_track_sorted.tsv
             rm -f ${SAMPLE_ID}_interval_track.tsv
